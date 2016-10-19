@@ -1,0 +1,118 @@
+
+var config = require('../config');
+var work = require('../work');
+var util = require('../util');
+
+var configState = "NOTFOUND";
+
+
+function makeEvent()
+{
+    var list = [];
+    function ev(onfunc)
+    {
+        list.push(onfunc);
+    }
+    ev.fire = function()
+    {
+        var promise = Promise.resolve();
+        for(let func of list)
+            promise = promise.then(() => func());
+        return promise;
+    };
+    ev.rfire = function()
+    {
+        var promise = Promise.resolve();
+        for(var i = list.length -1 ; i>= 0; i--)
+        {
+            let func = list[i];
+            promise = promise.then(() => func());
+        }
+        return promise;
+    };
+    return ev;
+}
+
+function fireNotFound()
+{
+    if (configState === "NOTFOUND")
+        return Promise.resolve();
+
+    configState = "NOTFOUND";
+    return cfg.onNotFound.rfire();
+}
+
+function fireInvalid()
+{
+    if (configState === "INVALID")
+        return Promise.resolve();
+
+    configState = "INVALID";
+    return cfg.onInvalid.fire();
+}
+
+function fireLoad()
+{
+    return cfg.onLoad.fire()
+    .then(function(){
+        util.log("ftp-kr.json: loaded");
+        configState = "LOADED";
+    })
+    .catch(function(err){
+        util.error(err);
+        util.open(config.PATH);
+        return Promise.reject("INVALID");
+    });
+}
+
+function onLoadError(err)
+{
+    switch (err)
+    {
+    case "NOTFOUND":
+        util.log("ftp-kr.json: not found");
+        return fireNotFound();
+
+    case "INVALID":
+        util.log("ftp-kr.json: invalid");
+        return fireInvalid();
+    }
+}
+
+
+var cfg = module.exports = {
+    test: function()
+    {
+        configState;
+    },
+    load: function()
+    {
+        return work.compile.add(
+            ()=>work.ftp.add(
+                ()=> work.load.add(
+                    ()=>config.load().then(fireLoad)
+                ).end()
+            ).end()
+        ).catch((err) => onLoadError(err));
+    },
+
+    unload: function()
+    {
+    },
+
+    onLoad:makeEvent(),
+    onInvalid:makeEvent(),
+    onNotFound:makeEvent(),
+
+    commands: {
+        'ftpkr.init': function(){
+            work.compile.add(
+                ()=>work.ftp.add(
+                    ()=> work.load.add(
+                        ()=>config.init().then(fireLoad)
+                    ).end()
+                ).end()
+            ).catch((err) => onLoadError(err));
+        }
+    }
+};

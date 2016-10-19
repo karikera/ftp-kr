@@ -1,0 +1,82 @@
+{
+    "name": "ftp-kr",
+    "displayName": "ftp-kr",
+    "description": "FTP sync for ME!",
+    "version": "0.0.3",
+    "publisher": "ruakr",
+    "repository": "https://github.com/karikera/ftp-kr.git", 
+    "engines": {
+        "vscode": "^1.5.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [
+	    "workspaceContains:.vscode/ftp-kr.json",
+        "onCommand:ftpkr.init"
+    ],
+    "main": "./extension",
+    "contributes": {
+        "commands": [
+        {
+            "command": "ftpkr.init",
+            "title": "ftp-kr Init"
+        },
+        {
+            "command": "ftpkr.makejson",
+            "title": "ftp-kr Make Json"
+        },
+        {
+            "command": "ftpkr.closureCompile",
+            "title": "ftp-kr Closure Compile"
+        },
+        {
+            "command": "ftpkr.closureCompileAll",
+            "title": "ftp-kr Closure Compile All"
+        },
+        {
+            "command": "ftpkr.uploadAll",
+            "title": "ftp-kr Upload All"
+        },
+        {
+            "command": "ftpkr.downloadAll",
+            "title": "ftp-kr Download All"
+        },
+        {
+            "command": "ftpkr.upload",
+            "title": "ftp-kr Upload This"
+        },
+        {
+            "command": "ftpkr.download",
+            "title": "ftp-kr Download This"
+        },
+        {
+            "command": "ftpkr.cleanAll",
+            "title": "ftp-kr Clean All"
+        }],
+        "menus": {
+            "explorer/context": [
+            {
+                "command": "ftpkr.upload",
+                "title": "ftp-kr Upload",
+                "group": "ftp-kr"
+            },
+            {
+                "command": "ftpkr.download",
+                "title": "ftp-kr Download",
+                "group": "ftp-kr"
+            }]
+        }
+    },
+    "scripts": {
+        "postinstall": "node ./node_modules/vscode/bin/install"
+    },
+    "devDependencies": {
+        "typescript": "^2.0.3",
+        "vscode": "^1.0.0",
+        "mocha": "^2.3.3",
+        "eslint": "^3.6.0",
+        "@types/node": "^6.0.40",
+        "@types/mocha": "^2.2.32"
+    }
+}

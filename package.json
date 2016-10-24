@@ -2,9 +2,12 @@
     "name": "ftp-kr",
     "displayName": "ftp-kr",
     "description": "FTP sync for ME!",
-    "version": "0.0.3",
+    "version": "0.0.4",
     "publisher": "ruakr",
-    "repository": "https://github.com/karikera/ftp-kr.git", 
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/karikera/ftp-kr.git"
+    }, 
     "engines": {
         "vscode": "^1.5.0"
     },
@@ -70,6 +73,10 @@
     },
     "scripts": {
         "postinstall": "node ./node_modules/vscode/bin/install"
+    },
+    "dependencies" : {
+        "ftp": "0.3.11",
+        "glob": "7.1.0"
     },
     "devDependencies": {
         "typescript": "^2.0.3",

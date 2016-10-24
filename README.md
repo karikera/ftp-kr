@@ -4,6 +4,8 @@ This is FTP + Closure Compiler Extension for ME!
 
 I'm not good at english, Sorry for my bad english ㅠㅠ
 
+Start with `ftp-kr Init` command! (When exists workspace)
+
 ## Functions
 FTP Functions:
 * Real-Time FTP synchronization(You can off it!)
@@ -42,5 +44,10 @@ Closure Compiler Functions:
 ### 0.0.3
 
 * Add git repository address!
+
+### 0.0.4
+
+* Fix init command error when not exists .vscode folder
+* Fix init command not found error (npm package dependency error)
 
 **Enjoy!**

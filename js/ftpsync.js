@@ -371,6 +371,7 @@ var sync = {
     saveSync: function()
     {
         if(!syncDataPath) return;
+        fs.mkdir("/.vscode");
         return fs.createSync(syncDataPath, JSON.stringify(vfs.serialize(), null, 4));
     },
     /**

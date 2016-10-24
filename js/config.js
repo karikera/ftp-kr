@@ -1,4 +1,9 @@
 
+var fs = require("./fs");
+var util = require("./util");
+
+const CONFIG_PATH = "/.vscode/ftp-kr.json";
+
 var CONFIG_BASE = {
     "host": "localhost",
     "username": "anonymous",
@@ -26,9 +31,6 @@ var CONFIG_BASE = {
     }
 };
 
-var fs = require("./fs");
-var util = require("./util");
-const CONFIG_PATH = "/.vscode/ftp-kr.json";;
 
 var REGEXP_MAP = {
     ".": "\\.", 

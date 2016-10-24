@@ -2,6 +2,7 @@
     "name": "ftp-kr",
     "displayName": "ftp-kr",
     "description": "FTP sync for ME!",
+    "license": "MIT",
     "version": "0.0.4",
     "publisher": "ruakr",
     "repository": {
@@ -75,7 +76,7 @@
         "postinstall": "node ./node_modules/vscode/bin/install"
     },
     "dependencies" : {
-        "ftp": "0.3.11",
+        "ftp": "0.3.10",
         "glob": "7.1.0"
     },
     "devDependencies": {

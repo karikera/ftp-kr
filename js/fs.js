@@ -83,16 +83,19 @@ function callbackToPromise(call)
 }
 function mkdirParent(dirPath, callback) 
 {
-    //Call the standard fs.mkdir
     return fs.mkdir(dirPath, function (error) 
     {
-        //When it fail in this way, do the custom steps
-        if (error && error.errno === 34) 
+        if (error)
         {
-            //Create all the parents recursively
-            return mkdirParent(path.dirname(dirPath), () => fs.mkdir(dirPath, callback));
+            switch(error.errno)
+            {
+            case 34:
+                return mkdirParent(path.dirname(dirPath), () => fs.mkdir(dirPath, callback));
+            case -4075:
+                callback();
+                break;
+            }
         }
-        //Manually run the callback since we used our own callback to do all these
         callback && callback(error);
     });
 };
@@ -183,13 +186,14 @@ var nfs = module.exports = {
     },
 
     /**
-     * @param {string} path
+     * @param {string} filepath
      * @param {string} data
      * @returns {Promise}
      */
-    create: function(path, data)
+    create: function(filepath, data)
     {
-        return callbackToPromise((callback)=>fs.writeFile(nfs.workspace + path, data, "utf-8", callback));
+        return nfs.mkdirp(path.dirname(filepath))
+        .then(() => callbackToPromise((callback)=>fs.writeFile(nfs.workspace + filepath, data, "utf-8", callback)));
     },
 
     /**
@@ -212,12 +216,12 @@ var nfs = module.exports = {
     },
 
     /**
-     * @param {string} path
+     * @param {string} filepath
      * @returns {Promise}
      */
-    initJson: function(dirpath, defaultValue)
+    initJson: function(filepath, defaultValue)
     {
-        return nfs.json(dirpath).then(function(data){
+        return nfs.json(filepath).then(function(data){
             var changed = false;
             for (var p in defaultValue)
             {
@@ -226,13 +230,12 @@ var nfs = module.exports = {
                 changed = true;
             }
             if (!changed) return;
-            return nfs.create(dirpath, JSON.stringify(data, null, 4))
+            return nfs.create(filepath, JSON.stringify(data, null, 4))
             .then(()=> data);
         })
         .catch(function(){
-            nfs.mkdir(".vscode");
-            nfs.create(dirpath, JSON.stringify(defaultValue, null, 4));
-            return Object.create(defaultValue);
+            return nfs.create(filepath, JSON.stringify(defaultValue, null, 4))
+            .then(() => Object.create(defaultValue));
         });
     }
 };

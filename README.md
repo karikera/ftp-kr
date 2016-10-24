@@ -47,7 +47,10 @@ Closure Compiler Functions:
 
 ### 0.0.4
 
-* Fix init command error when not exists .vscode folder
 * Fix init command not found error (npm package dependency error)
+* Fix init command error when not exists .vscode folder
+* Fix ignorePath error of init command when use twice
+* Fix download all command
+* Decide to use MIT license
 
 **Enjoy!**

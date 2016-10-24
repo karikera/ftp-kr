@@ -46,6 +46,14 @@ function regexpchanger(chr)
 {
     return REGEXP_MAP[chr];
 }
+function setConfig(newobj)
+{
+    for(var p in newobj)
+    {
+        var v = newobj[p];
+        config[p] = (v instanceof Object) ? Object.create(v) : v;
+    }
+}
 
 var config = module.exports = {
     PATH: CONFIG_PATH,
@@ -94,7 +102,7 @@ var config = module.exports = {
             if (!obj.username)
                 throw Error("Need username");
             
-            for(var p in obj) config[p] = obj[p];
+            setConfig(obj);
 
             if (config.remotePath.endsWith("/"))
                 config.remotePath = config.remotePath.substr(0, config.remotePath.length-1);
@@ -141,7 +149,4 @@ var config = module.exports = {
     }
 };
 
-for(var p in CONFIG_BASE)
-{
-    config[p] = CONFIG_BASE[p];
-}
+setConfig(CONFIG_BASE);

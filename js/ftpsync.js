@@ -247,18 +247,19 @@ FtpFileSystem.prototype.syncTestUpload = function(path)
 /**
  * @param {string} path
  * @param {!Object.<string, boolean>} list
- * @param {string} command
+ * @param {boolean} download
  */
-function _listNotExists(path, list, command)
+function _listNotExists(path, list, download)
 {
-    function next(npath)
-    {
-        promise = promise.then(() => _listNotExists(npath, list, command));
-    }
-    var promise = Promise.resolve();
-    return new Promise(function(resolve, reject){
-        fs.list(path)
-        .then((fslist) => {
+    var command = download ? "download" : "delete"; 
+    var promise = new Promise(function(resolve, reject){
+        var promise = Promise.resolve();
+        function next(npath)
+        {
+            promise = promise.then(() => _listNotExists(npath, list, download));
+        }
+        function onfslist(fslist)
+        {
             vfs.ftpList(path)
             .then((dir) => {
                 var willDel = {};
@@ -268,30 +269,37 @@ function _listNotExists(path, list, command)
                 delete willDel[".."];
                 for(var file of fslist)
                 {
-                    if (!(file in willDel)) continue;
-                    
                     delete willDel[file];
-                    if (dir.files[file] instanceof f.Directory)
-                        next(path + "/" + file);
                 }
-                for (var p in willDel) list[path + "/" + p] = command;
+                for (let p in willDel)
+                {
+                    if (download) list[path + "/" + p] = command;
+                    if (dir.files[p] instanceof f.Directory) next(path + "/" + p);
+                    if (!download) promise = promise.then(() => list[path + "/" + p] = command);
+                }
                 resolve(promise);
             })
             .catch((err) => reject(err))
-        })
-        .catch(() => {resolve()});
-    });
+        }
+        fs.list(path)
+        .then(onfslist)
+        .catch(() => {
+            if (!download) resolve();
+            else onfslist([]);
+        });
+    }); 
+    return promise;
 }
 
 /**
  * @param {string} path
- * @param {string} command
+ * @param {boolean} download
  * @return {!Promise.<Object.<string, boolean>>}
  */
-FtpFileSystem.prototype.syncTestNotExists = function(path, command)
+FtpFileSystem.prototype.syncTestNotExists = function(path, download)
 {
     var list = {};
-    return _listNotExists(path, list, command)
+    return _listNotExists(path, list, download)
     .then(() => list);
 };
 
@@ -349,7 +357,7 @@ var sync = {
      */
     syncTestClean: function()
     {
-        return vfs.syncTestNotExists("", "delete");
+        return vfs.syncTestNotExists("", false);
     },
     /**
      * @returns {!Promise.<Object.<string, string>>}
@@ -363,7 +371,7 @@ var sync = {
      */
     syncTestDownload: function()
     {
-        return vfs.syncTestNotExists("", "download");
+        return vfs.syncTestNotExists("", true);
     },
     /**
      * @returns {void}

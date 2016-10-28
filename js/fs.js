@@ -115,6 +115,9 @@ var nfs = module.exports = {
         var fullpath = path.resolve(localpath).replace(/\\/g, '/');
         if (!fullpath.startsWith(nfs.workspace))
             throw new Error(localpath+" not in workspace");
+        var workpath = fullpath.substr(nfs.workspace.length);
+        if (!workpath.startsWith("/"))
+            throw new Error(localpath+" not in workspace");
         return fullpath.substr(nfs.workspace.length);        
     },
 
@@ -124,6 +127,7 @@ var nfs = module.exports = {
      */
     list: function(path)
     {
+        if (!path.startsWith("/")) return Promise.reject(new Error("Wield workspace path "+path));
         return callbackToPromise((callback)=>fs.readdir(nfs.workspace + path, callback));
     },
     /**
@@ -132,6 +136,7 @@ var nfs = module.exports = {
      */
     stat: function(path)
     {
+        if (!path.startsWith("/")) return Promise.reject(new Error("Wield workspace path "+path));
         return callbackToPromise((callback)=>fs.stat(nfs.workspace + path, callback));
     },
     /**
@@ -140,6 +145,7 @@ var nfs = module.exports = {
      */
     mkdir: function(path)
     {
+        if (!path.startsWith("/")) return Promise.reject(new Error("Wield workspace path "+path));
         return callbackToPromise((callback)=>fs.mkdir(nfs.workspace + path, callback));
     },
     /**
@@ -148,6 +154,7 @@ var nfs = module.exports = {
      */
     mkdirp: function(path)
     {
+        if (!path.startsWith("/")) return Promise.reject(new Error("Wield workspace path "+path));
         return callbackToPromise((callback)=>mkdirParent(nfs.workspace + path, callback));
     },
     /**
@@ -156,6 +163,7 @@ var nfs = module.exports = {
      */
     lstat: function(path)
     {
+        if (!path.startsWith("/")) return Promise.reject(new Error("Wield workspace path "+path));
         return callbackToPromise((callback)=>fs.lstat(nfs.workspace + path, callback));
     },
     /**
@@ -164,6 +172,7 @@ var nfs = module.exports = {
      */
     open: function(path)
     {
+        if (!path.startsWith("/")) return Promise.reject(new Error("Wield workspace path "+path));
         return callbackToPromise((callback)=>fs.readFile(nfs.workspace + path, "utf-8", callback));
     },
 
@@ -173,6 +182,7 @@ var nfs = module.exports = {
      */
     exists: function(path)
     {
+        if (!path.startsWith("/")) return Promise.reject(new Error("Wield workspace path "+path));
         return new Promise((resolve) => fs.exists(nfs.workspace + path, resolve));
     },
 
@@ -203,6 +213,7 @@ var nfs = module.exports = {
      */
     createSync: function(path, data)
     {
+        if (!path.startsWith("/")) throw new Error("Wield workspace path "+path);
         return fs.writeFileSync(nfs.workspace + path, data, "utf-8");
     },
 
@@ -212,6 +223,7 @@ var nfs = module.exports = {
      */
     delete: function(path)
     {
+        if (!path.startsWith("/")) return Promise.reject(new Error("Wield workspace path "+path));
         return callbackToPromise((callback)=>fs.unlink(nfs.workspace + path, callback));
     },
 
@@ -234,7 +246,7 @@ var nfs = module.exports = {
             .then(()=> data);
         })
         .catch(function(){
-            return nfs.create(filepath, JSON.stringify(defaultValue, null, 4))
+            return (filepath, JSON.stringify(defaultValue, null, 4))
             .then(() => Object.create(defaultValue));
         });
     }

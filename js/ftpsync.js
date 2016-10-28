@@ -387,14 +387,11 @@ var sync = {
      */
     load: function()
     {
-        var promise;
-        if (syncDataPath) promise = Promise.resolve();
-        else promise = fs.create(syncDataPath, JSON.stringify(vfs.serialize(), null, 4)).catch(()=>{});
-        return promise
-        .then(() => {
-            syncDataPath = "/.vscode/ftp-kr.sync."+config.host+"."+config.remotePath.replace(/\//g, ".")+".json";;
-            return fs.open(syncDataPath);
-        })
+        if (!syncDataPath)
+        {
+            syncDataPath = "/.vscode/ftp-kr.sync."+config.host+"."+config.remotePath.replace(/\//g, ".")+".json";
+        }
+        return fs.open(syncDataPath)
         .catch(()=>null)
         .then(function(data){
             try

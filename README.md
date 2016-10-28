@@ -53,4 +53,7 @@ Closure Compiler Functions:
 * Fix download all command
 * Decide to use MIT license
 
+### 0.0.5
+* Fix creating dot ended directory when open
+
 **Enjoy!**

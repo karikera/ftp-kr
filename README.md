@@ -56,4 +56,7 @@ Closure Compiler Functions:
 ### 0.0.5
 * Fix creating dot ended directory when open
 
+### 0.0.6
+* Fix init error
+
 **Enjoy!**

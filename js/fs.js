@@ -246,7 +246,7 @@ var nfs = module.exports = {
             .then(()=> data);
         })
         .catch(function(){
-            return (filepath, JSON.stringify(defaultValue, null, 4))
+            return nfs.create(filepath, JSON.stringify(defaultValue, null, 4))
             .then(() => Object.create(defaultValue));
         });
     }

@@ -42,6 +42,8 @@ function FtpFileSystem()
 
 /** @type {number} */
 f.State.prototype.lmtime = 0;
+/** @type {boolean} */
+f.State.prototype.ignoreWatcher = false;
 
 FtpFileSystem.prototype = Object.create(f.FileSystem.prototype);
 
@@ -89,7 +91,15 @@ FtpFileSystem.prototype.ftpUpload = function(path, ignoreDirectory)
     return fs.stat(path)
     .then(function(stats){
         var oldfile = that.get(path);
-        if (oldfile && +stats.mtime === oldfile.lmtime) return oldfile;
+        if (oldfile)
+        {
+            if(+stats.mtime === oldfile.lmtime) return oldfile;
+            if (oldfile.ignoreWatcher)
+            {
+                oldfile.ignoreWatcher = false;
+                if (config.autosync) return oldfile;
+            }
+        }
 
         if (stats.isDirectory())
         {
@@ -138,6 +148,7 @@ FtpFileSystem.prototype.ftpDownload = function(path)
     {
         if (file === null) return fs.delete(path);
         var promise;
+        if (config.autosync) file.ignoreWatcher = true;
         if (file instanceof f.Directory) promise = fs.mkdir(path);
         else promise = ftp.download(fs.workspace + path, path);
         return promise
@@ -422,15 +433,6 @@ var sync = {
     delete:function(path)
     {
         return vfs.ftpDelete(path);
-    },
-    /**
-     * @param {string} path
-     * @param {boolean=} ignoreDirectory
-     * @returns {!Promise}
-     */
-    upload:function(path, ignoreDirectory)
-    {
-        return vfs.ftpUpload(path, ignoreDirectory);
     },
 };
 

@@ -57,6 +57,9 @@ Closure Compiler Functions:
 * Fix creating dot ended directory when open
 
 ### 0.0.6
-* Fix init error
+* Fix init command
+
+### 0.0.7
+* Fix download all command
 
 **Enjoy!**

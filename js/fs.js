@@ -127,7 +127,7 @@ var nfs = module.exports = {
      */
     list: function(path)
     {
-        if (!path.startsWith("/")) return Promise.reject(new Error("Wield workspace path "+path));
+        if (path !== "" && !path.startsWith("/")) return Promise.reject(new Error("Wield workspace path "+path));
         return callbackToPromise((callback)=>fs.readdir(nfs.workspace + path, callback));
     },
     /**
@@ -136,7 +136,7 @@ var nfs = module.exports = {
      */
     stat: function(path)
     {
-        if (!path.startsWith("/")) return Promise.reject(new Error("Wield workspace path "+path));
+        if (path !== "" && !path.startsWith("/")) return Promise.reject(new Error("Wield workspace path "+path));
         return callbackToPromise((callback)=>fs.stat(nfs.workspace + path, callback));
     },
     /**
@@ -146,7 +146,16 @@ var nfs = module.exports = {
     mkdir: function(path)
     {
         if (!path.startsWith("/")) return Promise.reject(new Error("Wield workspace path "+path));
-        return callbackToPromise((callback)=>fs.mkdir(nfs.workspace + path, callback));
+        return new Promise(function(resolve, reject){
+            fs.mkdir(nfs.workspace + path, function(err){
+                if (err)
+                {
+                    if (err.errno === -4075) resolve();
+                    else reject(err);
+                }
+                else resolve();
+            });
+        });
     },
     /**
      * @param {string} path

@@ -105,7 +105,7 @@ function reserveSyncTask(tasks)
         .then((data) => fs.delete(TASK_FILE_PATH).then(() => ftpsync.exec(data)));
     })
     .catch(function (err){
-        fs.delete(TASK_FILE_PATH);
+        fs.delete(TASK_FILE_PATH).catch(()=>{});
         throw err;
     });
 }

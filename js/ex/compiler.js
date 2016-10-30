@@ -3,6 +3,7 @@ var vscode = require('vscode');
 var workspace = vscode.workspace;
 var window = vscode.window;
 
+var cfg = require('./config');
 var fs = require('../fs');
 var work = require('../work');
 var closure = require('../closure');
@@ -35,27 +36,27 @@ module.exports = {
     commands: {
         'ftpkr.makejson':function (){
             var makejson = fs.worklize(getSelectedPath() + "make.json");
-            fs.exists(makejson)
+            return fs.exists(makejson)
             .then((res) => {if(!res) return fs.initJson(makejson, MAKEJSON_DEFAULT); })
             .then(() => util.open(makejson))
             .catch(util.error);
         },
         'ftpkr.closureCompile':function (){
-            work.compile.add(
-                () => workspace.saveAll()
-                .then(function(){
+            return cfg.loadTest()
+            .then(() => workspace.saveAll())
+            .then(() => work.compile.add(() => {
                     if (!window.activeTextEditor) return;
                     return closure.make(getSelectedPath() + "make.json");
                 })
-            )
-            .catch(util.error);
+                .catch(util.error)
+            );
         },
         'ftpkr.closureCompileAll': function(){
-            work.compile.add(
-                () => workspace.saveAll()
-                .then(() => closure.all())
-            )
-            .catch(util.error);
+            return cfg.loadTest()
+            .then(() => workspace.saveAll())
+            .then(() => work.compile.add(() => closure.all())
+                .catch(util.error)
+            );
         }
     }
 };

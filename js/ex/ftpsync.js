@@ -35,7 +35,12 @@ function processWatcher(path, upload)
     try
     {
         if (path == config.PATH)
-            cfg.load().then(() => commit()).catch(util.error);
+        {
+            var promise = cfg.load();
+            if (watcherMode !== 'CONFIG')
+                promise = promise.then(() => commit());
+            promise.catch(util.error);
+        }
         else
             commit();
     }
@@ -85,7 +90,7 @@ function attachWatcher(mode)
  * @param {!Object.<string, string>} tasks
  * @return {!Promise}
  */
-function reserveSyncTask(tasks)
+function reserveSyncTaskWith(tasks, infocallback)
 {
     if (util.isEmptyObject(tasks))
     {
@@ -94,20 +99,33 @@ function reserveSyncTask(tasks)
     }
     return fs.create(TASK_FILE_PATH,JSON.stringify(tasks, null , 1))
     .then(() => util.open(TASK_FILE_PATH))
-    .then(() => util.info("This will be occurred. Are you OK?", "OK"))
+    .then(infocallback)
     .then((res) => {
-        if (res !== "OK")
+        if (res !== "OK" && res !== "Retry")
         {
             fs.delete(TASK_FILE_PATH);
             return;
         }
         return fs.json(TASK_FILE_PATH)
-        .then((data) => fs.delete(TASK_FILE_PATH).then(() => ftpsync.exec(data)));
+        .then((data) => fs.delete(TASK_FILE_PATH).then(() => ftpsync.exec(data)))
+        .then((failed) => {
+            if (!failed) return;
+            return reserveSyncTaskWith(failed.tasks, ()=>util.errorConfirm("ftp-kr execution failed: "+failed.count, "Retry"));            
+        });
     })
     .catch(function (err){
         fs.delete(TASK_FILE_PATH).catch(()=>{});
         throw err;
     });
+}
+
+/**
+ * @param {!Object.<string, string>} tasks
+ * @return {!Promise}
+ */
+function reserveSyncTask(tasks)
+{
+    return reserveSyncTaskWith(tasks, ()=>util.info("This will be occurred. Are you OK?", "OK"));
 }
 
 
@@ -144,7 +162,7 @@ module.exports = {
 
     commands: {
         'ftpkr.upload': function(file) {
-            Promise.resolve()
+            return cfg.loadTest()
             .then(() => fileOrEditorFile(file))
             .then(
                 (path) => work.ftp.add(
@@ -154,7 +172,7 @@ module.exports = {
             .catch(util.error);
         },
         'ftpkr.download': function(file) {
-            Promise.resolve()
+            return cfg.loadTest()
             .then(() => fileOrEditorFile(file))
             .then(
                 (path) => work.ftp.add(
@@ -164,7 +182,7 @@ module.exports = {
             .catch(util.error);
         },
         'ftpkr.uploadAll': function() {
-            Promise.resolve() 
+            return cfg.loadTest()
             .then(() => workspace.saveAll())
             .then(
                 () => work.ftp.add(
@@ -175,10 +193,10 @@ module.exports = {
         },
 
         'ftpkr.downloadAll': function() {
-            Promise.resolve() 
+            return cfg.loadTest()
             .then(() => workspace.saveAll())
             .then(
-                work.ftp.add(
+                () => work.ftp.add(
                     () => ftpsync.syncTestDownload()
                     .then((tasks) => reserveSyncTask(tasks))
                 )
@@ -187,10 +205,10 @@ module.exports = {
         },
 
         'ftpkr.cleanAll': function() {
-            Promise.resolve() 
+            return cfg.loadTest()
             .then(() => workspace.saveAll())
             .then(
-                work.ftp.add(
+                () => work.ftp.add(
                     () => ftpsync.syncTestClean()
                     .then((tasks) => reserveSyncTask(tasks))
                 )

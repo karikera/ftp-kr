@@ -3,8 +3,24 @@ var Client = require("ftp");
 var config = require('./config');
 var util = require('./util');
 var ofs = require('fs');
+var iconv = require('iconv-lite');
 
 var client = null;
+
+function bin2str(bin)
+{
+    var buf = iconv.encode(bin, 'binary');
+    return iconv.decode(buf, config.fileNameEncoding);
+}
+function str2bin(str)
+{
+    var buf = iconv.encode(str, config.fileNameEncoding);
+    return iconv.decode(buf, 'binary');
+}
+function toftpPath(workpath)
+{
+    return str2bin(config.remotePath+workpath);
+}
 
 /**
  * @returns {Promise}
@@ -20,11 +36,16 @@ function init()
     return new Promise(function(resolve, reject){
         client = new Client;
         client.on("ready", function(){
+            var socket = client._socket;
+            var oldwrite = socket.write;
+            socket.write = function(str){
+                return oldwrite.call(socket, str, 'binary');
+            };
             updateDestroyTimeout();
             resolve();
         });
         client.on("error", function(e){
-            reject(e.message);
+            reject(e);
             if (client)
             {
                 client.end();
@@ -52,7 +73,7 @@ function _simpleFtpFunction(name, workpath, ignorecode, callback)
     {
         util.setState(name +" "+workpath);
         util.log(name +": "+workpath);
-        var ftppath = config.remotePath+workpath;
+        var ftppath = toftpPath(workpath);
         callback(ftppath, function(err){
             util.setState("");
             updateDestroyTimeout();
@@ -106,7 +127,7 @@ function _upload(workpath, localpath)
     {
         util.setState("upload "+workpath);
         util.log("upload: "+workpath);
-        var ftppath = config.remotePath+workpath;
+        var ftppath = toftpPath(workpath);
 
         function success()
         {
@@ -166,7 +187,7 @@ function _download(localpath, workpath)
     {
         util.setState("download "+workpath);
         util.log("download: "+workpath);
-        var ftppath = config.remotePath+workpath;
+        var ftppath = toftpPath(workpath);
 
         function success()
         {
@@ -200,7 +221,7 @@ function _list(workpath)
     {
         util.setState("list "+workpath);
         util.log("list: "+workpath);
-        var ftppath = config.remotePath+workpath;
+        var ftppath = toftpPath(workpath);
         if (!ftppath) ftppath = ".";
 
         client.list(ftppath, false, function(err, list){
@@ -211,6 +232,28 @@ function _list(workpath)
                 util.log("list fail: "+workpath);
                 reject(_errorWrap(err));
                 return;
+            }
+            var errfiles = [];
+            for (var i = 0; i<list.length; i++)
+            {
+                var file = list[i];
+                var fn = file.name = bin2str(file.name);
+                if (!config.ignoreWrongFileEncoding)
+                {
+                    if (fn.indexOf('�') !== -1 || fn.indexOf('?') !== -1)
+                        errfiles.push(fn);
+                }
+            }
+            if (errfiles.length)
+            {
+                util.errorConfirm("Invalid encoding detected. Please set fileNameEncoding correctly\n"+errfiles.join('\n'), 'Open config', 'Ignore after')
+                .then(function(res){
+                    switch(res)
+                    {
+                    case 'Open config': util.open(config.PATH); break; 
+                    case 'Ignore after': config.ignoreWrongFileEncoding = true; break;
+                    }
+                });
             }
             resolve(list);
         });

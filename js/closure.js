@@ -192,8 +192,9 @@ var exports = {
      */
     all: function(){
         util.clearLog();
-        return glob("**/make.json")
-        .then((files) => util.cascadingPromise(build, files.map((path) => workspace.rootPath+"/"+path)))
+        return glob(workspace.rootPath+"/**/make.json")
+        .then((files) => util.cascadingPromise(build, files))
+        .then(() => util.log('FINISH ALL'))
         .catch((err) => util.log(err))
     },
     /**

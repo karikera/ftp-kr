@@ -62,4 +62,11 @@ Closure Compiler Functions:
 ### 0.0.7
 * Fix download all command
 
+### 0.0.8
+* Add fileNameEncoding option!
+* Fix being mute with wrong connection
+* Fix Upload All command
+* Fix Closure Compile All command
+* Do not stop batch work even occured error
+
 **Enjoy!**

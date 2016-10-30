@@ -119,8 +119,8 @@ FtpFileSystem.prototype.ftpUpload = function(path, ignoreDirectory)
                 promise = ftp.mkdir(path);
             // catch(); , 디렉토리를 추적하며, 상태를 확인해야한다.
             return promise.then(() => {
+                dir = that.mkdir(path, +stats.mtime);
                 dir.lmtime = +stats.mtime;
-                that.mkdir(path, +stats.mtime);
                 return dir;
             });
         }
@@ -146,7 +146,7 @@ FtpFileSystem.prototype.ftpDownload = function(path)
 {
     function onfile(file)
     {
-        if (file === null) return fs.delete(path);
+        if (!file) return fs.delete(path);
         var promise;
         if (config.autosync) file.ignoreWatcher = true;
         if (file instanceof f.Directory) promise = fs.mkdir(path);
@@ -157,7 +157,7 @@ FtpFileSystem.prototype.ftpDownload = function(path)
     }
 
     var file = this.get(path);
-    if (file !== null) return onfile(file);
+    if (file) return onfile(file);
     return this.ftpStat(path).then(onfile);
 };
 
@@ -186,6 +186,13 @@ FtpFileSystem.prototype.ftpList = function(path)
         var dir = that.refresh(path, ftpfiles);
         that.refreshed[path].resolve(dir);
         return dir;
+    })
+    .catch(function(err){
+        var prom = that.refreshed[path];
+        prom.catch(() => {});
+        prom.reject(err);
+        that.refreshed[path] = null;
+        throw err;
     });
 };
 
@@ -325,6 +332,8 @@ var sync = {
      */
     exec: function(task)
     {
+        var errorCount = 0;
+        var failedTasks = {};
         function addWork(file, exec)
         {
             switch (exec)
@@ -333,10 +342,18 @@ var sync = {
             case 'download': promise = promise.then(() => vfs.ftpDownload(file)); break;
             case 'delete': promise = promise.then(() => vfs.ftpDelete(file)); break;
             }
+            promise = promise.catch((err) => {
+                failedTasks[file] = exec;
+                console.error(err);
+                util.log(err);
+                errorCount ++;
+            });
         }
         var promise = Promise.resolve();
         for (var file in task) addWork(file, task[file]);
-        return promise;
+        return promise.then(() => {
+            if (errorCount) return {tasks:failedTasks, count:errorCount};
+        });
     },
     /**
      * @param {string} path

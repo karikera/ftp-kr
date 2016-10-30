@@ -342,7 +342,9 @@ FileSystem.prototype.delete = function(path){
  * @returns {Directory}
  */
 FileSystem.prototype.mkdir = function(path, mtime){
-    return this.get(path, mtime);
+    var dir = this.get(path, mtime);
+    dir.mtime = mtime;
+    return dir;
 };
 
 /**

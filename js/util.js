@@ -104,23 +104,41 @@ var util = {
     },
     /**
      * @function
-     * @param {...string} info
+     * @param {string} info
+     * @param {...string} items
      * @returns {!Promise}
      */
-    info: function (info)
+    info: function (info, items)
     {
         return window.showInformationMessage.apply(window, arguments);
     },
     /**
      * @function
-     * @param {Error} err
+     * @param {Error|string} err
      * @returns {void}
      */
     error: function (err)
     {
-        window.showErrorMessage(err.message);
         console.error(err);
         util.log(err);
+        window.showErrorMessage(err instanceof Error ? err.message : err.toString());
+    },
+    /**
+     * @function
+     * @param {Error|string} err
+     * @param {...string} items
+     * @returns {void}
+     */
+    errorConfirm: function (err, items)
+    {
+        var args = Array.prototype.slice.apply(arguments);
+        if (err instanceof Error)
+            args[0] = err.message;
+        else
+            err = new Error(err);
+        console.error(err);
+        util.log(err);
+        return window.showErrorMessage.apply(window, args);
     },
     /**
      * @function
@@ -140,7 +158,7 @@ var util = {
      */
     open: function(path)
     {
-        return workspace.openTextDocument(fs.workspace + path)
+       return workspace.openTextDocument(fs.workspace + path)
         .then((doc) => window.showTextDocument(doc));
     },
 
@@ -153,6 +171,10 @@ var util = {
      */
     cascadingPromise: function(func, params)
     {
+        if (params.length == 0)
+        {
+            return Promise.resolve([]);
+        }
         var response = [];
         var promise = func(params[0]);
         
@@ -170,7 +192,7 @@ var util = {
         return promise.then(function(res){
             response.push(res);
             return response;
-        });
+        }).catch((err) => { return Promise.reject(err); }); /// This is fix freeze error, I can't understand
     },
 
     /**

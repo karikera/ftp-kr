@@ -172,7 +172,7 @@ var nfs = module.exports = {
      */
     lstat: function(path)
     {
-        if (!path.startsWith("/")) return Promise.reject(new Error("Wield workspace path "+path));
+        if (path !== "" && !path.startsWith("/")) return Promise.reject(new Error("Wield workspace path "+path));
         return callbackToPromise((callback)=>fs.lstat(nfs.workspace + path, callback));
     },
     /**

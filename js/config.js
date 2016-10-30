@@ -5,11 +5,13 @@ var util = require("./util");
 const CONFIG_PATH = "/.vscode/ftp-kr.json";
 
 var CONFIG_BASE = {
-    "host": "localhost",
-    "username": "anonymous",
-    "password": "anonymous@",
+    "host": "",
+    "username": "",
+    "password": "",
     "remotePath": "",
     "port": 21,
+    "fileNameEncoding": "utf8", 
+    "ignoreWrongFileEncoding": false,
     "autosync": true,
     "ignore":[
         "/.git",
@@ -96,11 +98,17 @@ var config = module.exports = {
         try
         {
             if (!(obj instanceof Object))
-                throw TypeError("Invalid json data type: "+ typeof obj);
+            {
+                throw new TypeError("Invalid json data type: "+ typeof obj);
+            }
             if (!obj.host)
-                throw Error("Need host");
+            {
+                throw new Error("Need host");
+            }
             if (!obj.username)
-                throw Error("Need username");
+            {
+                throw new Error("Need username");
+            }
             
             setConfig(obj);
 
@@ -145,6 +153,11 @@ var config = module.exports = {
         return fs.json(CONFIG_PATH)
         .catch(()=>fs.initJson(CONFIG_PATH, CONFIG_BASE))
         .then((obj) => config.set(obj))
+        .catch(function(err){
+            util.error(err);
+            util.open(CONFIG_PATH);
+            return Promise.reject('INVALID');
+        })
         .then(() => util.open(CONFIG_PATH));
     }
 };

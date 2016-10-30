@@ -72,18 +72,25 @@ function onLoadError(err)
     case "NOTFOUND":
         util.log("ftp-kr.json: not found");
         return fireNotFound();
-
     case "INVALID":
         util.log("ftp-kr.json: invalid");
         return fireInvalid();
+    default:
+        util.error(err);
+        return;
     }
 }
 
 
 var cfg = module.exports = {
-    test: function()
+    loadTest: function()
     {
-        configState;
+        if (configState !== 'LOADED')
+        {
+            util.open(config.PATH);
+            return Promise.reject(new Error("Need to fix"));
+        } 
+        return Promise.resolve();
     },
     load: function()
     {
@@ -106,7 +113,7 @@ var cfg = module.exports = {
 
     commands: {
         'ftpkr.init': function(){
-            work.compile.add(
+            return work.compile.add(
                 ()=>work.ftp.add(
                     ()=> work.load.add(
                         ()=>config.init().then(fireLoad)

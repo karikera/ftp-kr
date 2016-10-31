@@ -12,7 +12,8 @@ var CONFIG_BASE = {
     "port": 21,
     "fileNameEncoding": "utf8", 
     "ignoreWrongFileEncoding": false,
-    "autosync": true,
+    "autoUpload": true,
+    "autoDelete": false,
     "ignore":[
         "/.git",
         "/.vscode/ftp-kr.task.json",
@@ -150,8 +151,7 @@ var config = module.exports = {
      */
     init: function()
     {
-        return fs.json(CONFIG_PATH)
-        .catch(()=>fs.initJson(CONFIG_PATH, CONFIG_BASE))
+        return fs.initJson(CONFIG_PATH, CONFIG_BASE)
         .then((obj) => config.set(obj))
         .catch(function(err){
             util.error(err);

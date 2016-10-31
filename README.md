@@ -63,10 +63,15 @@ Closure Compiler Functions:
 * Fix download all command
 
 ### 0.0.8
-* Add fileNameEncoding option!
+* Add config.fileNameEncoding option!
 * Fix being mute with wrong connection
 * Fix Upload All command
 * Fix Closure Compile All command
 * Do not stop batch work even occured error
+
+### 0.0.9
+* Split config.autosync -> config.autoUpload & config.autoDelete
+* Set default value of config.autoDelete as false
+* Init command will add new config field
 
 **Enjoy!**

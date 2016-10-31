@@ -97,7 +97,7 @@ FtpFileSystem.prototype.ftpUpload = function(path, ignoreDirectory)
             if (oldfile.ignoreWatcher)
             {
                 oldfile.ignoreWatcher = false;
-                if (config.autosync) return oldfile;
+                if (config.autoUpload) return oldfile;
             }
         }
 
@@ -148,7 +148,7 @@ FtpFileSystem.prototype.ftpDownload = function(path)
     {
         if (!file) return fs.delete(path);
         var promise;
-        if (config.autosync) file.ignoreWatcher = true;
+        if (config.autoUpload) file.ignoreWatcher = true;
         if (file instanceof f.Directory) promise = fs.mkdir(path);
         else promise = ftp.download(fs.workspace + path, path);
         return promise

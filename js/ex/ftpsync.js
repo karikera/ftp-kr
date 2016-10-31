@@ -18,17 +18,17 @@ const TASK_FILE_PATH = "/.vscode/ftp-kr.task.json";
 cfg.onLoad(function(){
     return ftpsync.load()
     .then(() => ftpsync.refresh(""))
-    .then(() => attachWatcher(config.autosync ? "FULL" : "CONFIG"));
+    .then(() => attachWatcher(config.autoUpload || config.autoDelete ? "FULL" : "CONFIG"));
 });
 cfg.onInvalid(() => attachWatcher("CONFIG"));
 cfg.onNotFound(() => attachWatcher(""));
 
 
-function processWatcher(path, upload)
+function processWatcher(path, upload, autoSync)
 {
     function commit()
     {
-        if (!config.autosync) return;
+        if (!autoSync) return;
         if (config.checkIgnorePath(path)) return;
         work.ftp.add(()=>upload(path)).catch(util.error);
     }
@@ -71,17 +71,17 @@ function attachWatcher(mode)
     watcher.onDidChange((e) => {
         var path = fs.worklize(e.fsPath);
         if (deleteParent && path.startsWith(deleteParent+ "/")) return;
-        processWatcher(path, (path) => ftpsync.upload(path, true));
+        processWatcher(path, (path) => ftpsync.upload(path, true), config.autoUpload);
     });
     watcher.onDidCreate((e) => {
         var path = fs.worklize(e.fsPath);
         if (deleteParent && deleteParent === path) deleteParent = "";
-        processWatcher(path, ftpsync.upload);
+        processWatcher(path, ftpsync.upload, config.autoUpload);
     });
     watcher.onDidDelete((e) => {
         var path = fs.worklize(e.fsPath);
         deleteParent = path;
-        processWatcher(path, ftpsync.delete);
+        processWatcher(path, ftpsync.delete, config.autoDelete);
     });
 }
 

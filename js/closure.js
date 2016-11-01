@@ -36,9 +36,11 @@ function iheritOptions(orig, newo, ex)
         {
             var j = value.indexOf("%", i);
             if (j === -1) break;
+            var tx = value.substring(i, j);
             j++;
             var k = value.indexOf("%", j);
             if (k === -1) break;
+            nvalue += tx;
             var varname = value.substring(j, k);
             if (varname in ex) nvalue += ex[varname];
             else nvalue += "%" + varname + "%";

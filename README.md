@@ -74,4 +74,7 @@ Closure Compiler Functions:
 * Set default value of config.autoDelete as false
 * Init command will add new config field
 
+### 0.0.10
+* Fix closure compiler variable option remapping
+
 **Enjoy!**

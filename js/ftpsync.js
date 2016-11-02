@@ -4,6 +4,7 @@ var fs = require('./fs');
 var ftp = require("./ftp");
 var util = require('./util');
 var f = require('./filesystem');
+var stripJsonComments = require('strip-json-comments');
 
 /**
  * @param {fs.Stat} localStat
@@ -407,6 +408,8 @@ var sync = {
     saveSync: function()
     {
         if(!syncDataPath) return;
+        if (config.state !== 'LOADED') return;
+        if (!config.createSyncCache) return;
         fs.mkdir("/.vscode");
         return fs.createSync(syncDataPath, JSON.stringify(vfs.serialize(), null, 4));
     },
@@ -415,19 +418,15 @@ var sync = {
      */
     load: function()
     {
-        if (!syncDataPath)
-        {
-            syncDataPath = "/.vscode/ftp-kr.sync."+config.host+"."+config.remotePath.replace(/\//g, ".")+".json";
-        }
+        syncDataPath = "/.vscode/ftp-kr.sync."+config.host+"."+config.remotePath.replace(/\//g, ".")+".json";
         return fs.open(syncDataPath)
         .catch(()=>null)
         .then(function(data){
             try
             {
-                if (data !== null) vfs.deserialize(JSON.parse(data));
+                if (data !== null) vfs.deserialize(JSON.parse(stripJsonComments(data)));
                 else vfs.reset();
                 vfs.refreshed = {};
-                config.loaded = true;
             }
             catch(nerr)
             {

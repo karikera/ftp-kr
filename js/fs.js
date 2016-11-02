@@ -1,6 +1,7 @@
 
 var fs = require("fs");
 var path = require('path');
+var stripJsonComments = require('strip-json-comments');
 
 /**
  * @constructor
@@ -201,7 +202,7 @@ var nfs = module.exports = {
      */
     json: function(path)
     {
-        return nfs.open(path).then((data) => JSON.parse(data));
+        return nfs.open(path).then((data) => JSON.parse(stripJsonComments(data)));
     },
 
     /**

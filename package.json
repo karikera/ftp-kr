@@ -3,7 +3,7 @@
     "displayName": "ftp-kr",
     "description": "FTP sync for ME!",
     "license": "MIT",
-    "version": "0.0.10",
+    "version": "0.0.11",
     "publisher": "ruakr",
     "repository": {
         "type": "git",
@@ -58,6 +58,14 @@
             "command": "ftpkr.cleanAll",
             "title": "ftp-kr Clean All"
         }],
+         "jsonValidation": [{
+            "fileMatch": "ftp-kr.json",
+            "url": "./schema/ftp-kr.schema.json"
+        },
+        {
+            "fileMatch": "make.json",
+            "url": "./schema/make.schema.json"
+        }],
         "menus": {
             "explorer/context": [
             {
@@ -78,7 +86,8 @@
     "dependencies" : {
         "ftp": "0.3.10",
         "glob": "7.1.0",
-        "iconv-lite": "0.4.13"
+        "iconv-lite": "0.4.13",
+        "strip-json-comments": "2.0.1"
     },
     "devDependencies": {
         "typescript": "^2.0.3",

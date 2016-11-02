@@ -201,7 +201,7 @@ var util = {
      * @param {Array.<?>} params
      * @returns {!Promise}
      */
-    ascadingPromiseAuto: function(func, params)
+    cascadingPromiseAuto: function(func, params)
     {
         if (!("length" in params))
         {

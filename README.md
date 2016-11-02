@@ -77,4 +77,10 @@ Closure Compiler Functions:
 ### 0.0.10
 * Fix closure compiler variable option remapping
 
+### 0.0.11
+* Add config.createSyncCache option! default is true
+* Implement array option inheritance for closure compiler settings!
+* Add json schema
+* Make Json command will add new config field
+
 **Enjoy!**

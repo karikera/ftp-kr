@@ -9,6 +9,7 @@ var glob = require("./glob");
 var MakeFile = require("./make");
 var config = require('./config');
 var vscode = require("vscode");
+var stripJsonComments = require('strip-json-comments');
 
 var workspace = vscode.workspace;
 
@@ -26,9 +27,13 @@ var closurecompiler = ftpkrRoot + "/compiler-latest/closure-compiler-v20160911.j
  */
 function iheritOptions(orig, newo, ex)
 {
+    var conststr = [];
+    var arrlist = [];
+
+
     function convert(value)
     {
-        if (typeof value !== "string") return value+"";
+        if (typeof value !== "string") return value;
         
         var nvalue = "";
         var i = 0;
@@ -42,11 +47,60 @@ function iheritOptions(orig, newo, ex)
             if (k === -1) break;
             nvalue += tx;
             var varname = value.substring(j, k);
-            if (varname in ex) nvalue += ex[varname];
+            if (varname in ex)
+            {
+                var val = ex[varname];
+                if (val instanceof Array)
+                {
+                    if (val.length === 1)
+                    {
+                        nvalue += val[0];
+                    }
+                    else
+                    {
+                        conststr.push(nvalue);
+                        nvalue = '';
+                        arrlist.push(val);
+                    }
+                }
+                else
+                    nvalue += val;
+            }
             else nvalue += "%" + varname + "%";
             i = k + 1;
         }
-        return nvalue + value.substr(i);
+
+        nvalue += value.substr(i);
+        if (arrlist.length !== 0)
+        {
+            conststr.push(nvalue);
+            var from = [conststr];
+            var to = [];
+            for(var j=0;j<arrlist.length;j++)
+            {
+                var list = arrlist[j];
+                for(var i=0; i<list.length;i++)
+                {
+                    for(var k=0;k<from.length;k++)
+                    {
+                        var cs = from[k];
+                        var ncs = cs.slice(1, cs.length);
+                        ncs[0] = cs[0] + list[i] + cs[1];
+                        to.push(ncs);
+                    }
+                }
+                var t = to;
+                to = from;
+                from = t;
+                to.length = 0;
+            }
+            for(var i=0;i<from.length;i++)
+            {
+                from[i] = from[i][0];
+            }
+            return from;
+        }
+        return nvalue;
     }
     if(!ex)
     {
@@ -63,7 +117,14 @@ function iheritOptions(orig, newo, ex)
         var value = newo[p];
         if (value instanceof Array)
         {
-            out[p] = value.map(convert);
+            var nvalue = [];
+            for(var i=0;i<value.length;i++)
+            {
+                var val = convert(value[i]);
+                if (val instanceof Array) nvalue.push.apply(nvalue, val);
+                else nvalue.push(val);
+            }
+            out[p] = nvalue;
         }
         else
         {
@@ -91,35 +152,46 @@ function closure(options)
 
     makeFile.on(out, src.concat([options.makejson]), function(){
         return new Promise(function(resolve, reject) {
-            util.log(projname + ": BUILD");
-            var args = ['-jar', closurecompiler];
+            var curdir = process.cwd();
+            try
+            {
+                process.chdir(options.projectdir);
+                util.log(projname + ": BUILD");
+                var args = ['-jar', closurecompiler];
 
-            var ex_parameter = {
-                js_output_file_filename: out.substr(out.lastIndexOf("/")+1)
-            };
-            var parameter = {
-                js: src, 
-                js_output_file: out,
-                generate_exports: options.export
-            };
+                var ex_parameter = {
+                    js_output_file_filename: out.substr(out.lastIndexOf("/")+1)
+                };
+                var parameter = {
+                    js: src, 
+                    js_output_file: out,
+                    generate_exports: options.export
+                };
 
-            var finalOptions = iheritOptions(parameter, config.closure, ex_parameter);
-            finalOptions = iheritOptions(finalOptions, options.closure, ex_parameter);
+                var finalOptions = iheritOptions(parameter, config.closure, ex_parameter);
+                finalOptions = iheritOptions(finalOptions, options.closure, ex_parameter);
 
-            util.addOptions(args, finalOptions);
-            var ls = cp.spawn("java", args);
-            ls.stdout.on('data', (data) => util.log(data));
-            ls.stderr.on('data', (data) => util.log(data));
-            ls.on('close', (code) => {
-                if (code === 0)
-                {
-                    resolve("COMPLETED");
-                }
-                else
-                {
-                    reject(new Error("RESULT: "+code));
-                }
-            });
+                util.addOptions(args, finalOptions);
+                var ls = cp.spawn("java", args);
+                ls.stdout.on('data', (data) => util.log(data));
+                ls.stderr.on('data', (data) => util.log(data));
+                ls.on('close', (code) => {
+                    if (code === 0)
+                    {
+                        resolve("COMPLETED");
+                    }
+                    else
+                    {
+                        reject(new Error("RESULT: "+code));
+                    }
+                });
+                process.chdir(curdir);
+            }
+            catch (err)
+            {
+                process.chdir(curdir);
+                reject(err);
+            }
         });
     });
 
@@ -160,7 +232,7 @@ function build(makejson)
     }
     try
     {
-        var options = JSON.parse(fs.readFileSync(makejson, 'utf8'));
+        var options = JSON.parse(stripJsonComments(fs.readFileSync(makejson, 'utf8')));
     }
     catch(err)
     {
@@ -169,6 +241,7 @@ function build(makejson)
 
     if (!options.name)
         options.name = projectdir;
+    options.projectdir = projectdir;
 
     options.src = options.src instanceof Array ? options.src : [options.src];
     options.makejson = makejson;

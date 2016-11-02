@@ -1,6 +1,7 @@
 
 var fs = require("./fs");
 var util = require("./util");
+var stripJsonComments = require('strip-json-comments');
 
 const CONFIG_PATH = "/.vscode/ftp-kr.json";
 
@@ -12,6 +13,7 @@ var CONFIG_BASE = {
     "port": 21,
     "fileNameEncoding": "utf8", 
     "ignoreWrongFileEncoding": false,
+    "createSyncCache": true, 
     "autoUpload": true,
     "autoDelete": false,
     "ignore":[
@@ -23,7 +25,7 @@ var CONFIG_BASE = {
         "compilation_level": "ADVANCED",
         "source_map_location_mapping": "d:/|file:///D:/",
         "warning_level": "VERBOSE",
-        "create_source_map": "%outpath%.map",
+        "create_source_map": "%js_output_file%.map",
         "output_wrapper": "(function(){%output%}).call(this);\n//# sourceMappingURL=%js_output_file_filename%.map",
         "language_in": "ECMASCRIPT5_STRICT",
         "language_out": "ECMASCRIPT5_STRICT",
@@ -60,6 +62,8 @@ function setConfig(newobj)
 
 var config = module.exports = {
     PATH: CONFIG_PATH,
+
+    state: 'NOTFOUND',
     
     /**
      * @param {string} path
@@ -134,7 +138,7 @@ var config = module.exports = {
             .then((data) => 
             {
                 Promise.resolve()
-                .then(() => config.set(JSON.parse(data)))
+                .then(() => config.set(JSON.parse(stripJsonComments(data))))
                 .then(() => resolve())
                 .catch((err) => {
                     util.error(err);

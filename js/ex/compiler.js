@@ -36,8 +36,7 @@ module.exports = {
     commands: {
         'ftpkr.makejson':function (){
             var makejson = fs.worklize(getSelectedPath() + "make.json");
-            return fs.exists(makejson)
-            .then((res) => {if(!res) return fs.initJson(makejson, MAKEJSON_DEFAULT); })
+            return fs.initJson(makejson, MAKEJSON_DEFAULT)
             .then(() => util.open(makejson))
             .catch(util.error);
         },

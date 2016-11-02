@@ -3,9 +3,6 @@ var config = require('../config');
 var work = require('../work');
 var util = require('../util');
 
-var configState = "NOTFOUND";
-
-
 function makeEvent()
 {
     var list = [];
@@ -35,19 +32,19 @@ function makeEvent()
 
 function fireNotFound()
 {
-    if (configState === "NOTFOUND")
+    if (config.state === "NOTFOUND")
         return Promise.resolve();
 
-    configState = "NOTFOUND";
+    config.state = "NOTFOUND";
     return cfg.onNotFound.rfire();
 }
 
 function fireInvalid()
 {
-    if (configState === "INVALID")
+    if (config.state === "INVALID")
         return Promise.resolve();
 
-    configState = "INVALID";
+    config.state = "INVALID";
     return cfg.onInvalid.fire();
 }
 
@@ -56,7 +53,7 @@ function fireLoad()
     return cfg.onLoad.fire()
     .then(function(){
         util.log("ftp-kr.json: loaded");
-        configState = "LOADED";
+        config.state = "LOADED";
     })
     .catch(function(err){
         util.error(err);
@@ -85,7 +82,7 @@ function onLoadError(err)
 var cfg = module.exports = {
     loadTest: function()
     {
-        if (configState !== 'LOADED')
+        if (config.state !== 'LOADED')
         {
             util.open(config.PATH);
             return Promise.reject(new Error("Need to fix"));

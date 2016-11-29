@@ -9,6 +9,8 @@ var work = require('../work');
 var closure = require('../closure');
 var util = require('../util');
 
+var latestCompilePath = '';
+
 function getSelectedPath()
 {
     var doc = window.activeTextEditor.document;
@@ -45,9 +47,18 @@ module.exports = {
             .then(() => workspace.saveAll())
             .then(() => work.compile.add(() => {
                     if (!window.activeTextEditor) return;
-                    return closure.make(getSelectedPath() + "make.json");
+					var path = getSelectedPath() + "make.json";
+                    return closure.make(path)
+					.then(() => { latestCompilePath = path; })
+					.catch((err)=>{
+						if (latestCompilePath && err.code === 'ENOENT')
+						{
+							return closure.make(latestCompilePath)
+							.catch(util.log);
+						}
+						util.log(err);
+					})
                 })
-                .catch(util.error)
             );
         },
         'ftpkr.closureCompileAll': function(){

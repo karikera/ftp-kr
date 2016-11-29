@@ -236,7 +236,7 @@ function build(makejson)
     }
     catch(err)
     {
-        return Promise.reject(err.message);
+        return Promise.reject(err);
     }
 
     if (!options.name)
@@ -267,6 +267,7 @@ var exports = {
      */
     all: function(){
         util.clearLog();
+		util.showLog();
         return glob(workspace.rootPath+"/**/make.json")
         .then((files) => util.cascadingPromise(build, files))
         .then(() => util.log('FINISH ALL'))
@@ -277,8 +278,8 @@ var exports = {
      */
     make: function(makejs){
         util.clearLog();
-        return build(makejs)
-        .catch((err) => util.log(err))
+		util.showLog();
+        return build(makejs);
     }
 };
 

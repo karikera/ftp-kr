@@ -69,10 +69,17 @@ var util = {
      */
     clearLog:function()
     {
-        if (!output)
-            return;
+        if (!output) return;
         output.clear();
     },
+    /**
+     * @returns {void}
+     */
+	showLog: function()
+	{
+		if(!output) return;
+		output.show();
+	},
     /**
      * @param {...string} message
      * @returns {void}

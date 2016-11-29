@@ -128,7 +128,37 @@ var util = {
     {
         console.error(err);
         util.log(err);
-        window.showErrorMessage(err instanceof Error ? err.message : err.toString());
+		if (err instanceof Error)
+		{
+        	window.showErrorMessage(err.message, 'Detail')
+			.then(function(res){
+				if (res !== 'Detail') return;
+				var output = '[';
+				output += err.constructor.name;
+				output += ']\nmessage: ';
+				output += err.message;
+				if (err.code)
+				{
+					output += '\ncode: ';
+					output += err.code;
+				}
+				if (err.errno)
+				{
+					output += '\nerrno: ';
+					output += err.errno;
+				}
+				output += '\n[Stack Trace]\n';
+				output += err.stack;
+				var LOGFILE = '/.vscode/ftp-kr.error.log';
+				fs.create(LOGFILE, output)
+				.then(util.open(LOGFILE))
+				.catch(console.error);
+			});
+		}
+		else
+		{
+        	window.showErrorMessage(err.toString());
+		}
     },
     /**
      * @function
@@ -165,7 +195,7 @@ var util = {
      */
     open: function(path)
     {
-       return workspace.openTextDocument(fs.workspace + path)
+       	return workspace.openTextDocument(fs.workspace + path)
         .then((doc) => window.showTextDocument(doc));
     },
 

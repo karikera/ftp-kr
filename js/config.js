@@ -19,6 +19,7 @@ var CONFIG_BASE = {
     "ignore":[
         "/.git",
         "/.vscode/ftp-kr.task.json",
+        "/.vscode/ftp-kr.error.log",
         "/.vscode/ftp-kr.sync.*.json"
     ],
     "closure":{

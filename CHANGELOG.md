@@ -55,3 +55,7 @@
 * Change output as ftp-kr when use Closure-Compiler
 * If make.json is not found use the latest one
 
+# 0.0.13
+* Fix invalid error when multiple init command
+* Add detail button in error message
+ 

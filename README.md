@@ -6,6 +6,12 @@ I'm not good at english, Sorry for my bad english ㅠㅠ
 
 Start with `ftp-kr Init` command! (When exists workspace)
 
+![init](images/init.png)
+
+![init after](images/init-after.png)
+
+![download all](images/downloadall.png)
+
 ## Functions
 FTP Functions:
 * Real-Time FTP synchronization(You can off it!)

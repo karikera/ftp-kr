@@ -58,4 +58,4 @@
 # 0.0.13
 * Fix invalid error when multiple init command
 * Add detail button in error message
- 
+* Add image to README.md

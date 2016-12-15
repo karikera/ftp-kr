@@ -3,12 +3,13 @@
     "displayName": "ftp-kr",
     "description": "FTP sync for ME!",
     "license": "MIT",
-    "version": "0.0.12",
+    "version": "0.0.13",
     "publisher": "ruakr",
     "repository": {
         "type": "git",
-        "url": "https://github.com/karikera/ftp-kr.git"
+        "url": "https://github.com/karikera/ftp-kr"
     }, 
+  	"bugs": "https://github.com/karikera/ftp-kr/issues",
     "engines": {
         "vscode": "^1.5.0"
     },

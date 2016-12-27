@@ -16,7 +16,7 @@ const workspace = vscode.workspace;
 const ftpkrRoot = path.join(path.dirname(__filename),'..').replace(/\\/g, '/');
 
 /** @type {string} */
-const closurecompiler = ftpkrRoot + "/compiler-latest/closure-compiler-v20160911.jar";
+const closurecompiler = ftpkrRoot + "/compiler-latest/closure-compiler-v20161201.jar";
 
 /**
  * @param {Object} orig

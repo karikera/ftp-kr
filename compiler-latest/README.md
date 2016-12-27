@@ -45,8 +45,9 @@ Note: The Closure Compiler requires [Java 7 or higher](http://www.java.com/).
 unit tests too).
 
     This will produce a jar file called `target/closure-compiler-1.0-SNAPSHOT.jar`.
-    Running `mvn -DskipTests -pl "!pom-gwt.xml"` will skip building the GWT
-    version of the compiler. This can speed up the build process significantly.
+
+    Running `mvn -DskipTests -pl externs/pom.xml,pom-main.xml,pom-main-shaded.xml`
+    will skip building the GWT version of the compiler. This can speed up the build process significantly.
 
 ### Using [Eclipse](http://www.eclipse.org/)
 
@@ -58,9 +59,7 @@ unit tests too).
 6. In Package Explorer, remove from the build path:
     - `src/com/google/javascript/jscomp/debugger/DebuggerGwtMain.java`
     - `src/com/google/javascript/jscomp/gwt/`
-7. In Project config, navigate to `Java Code Style > Formatter` and configure the project to
-   use the [Google styleguide settings](https://github.com/google/styleguide/blob/gh-pages/eclipse-java-google-style.xml).
-8. See *Using Maven* above to build the JAR.
+7. See *Using Maven* above to build the JAR.
 
 ## Running
 
@@ -153,7 +152,9 @@ will re-order the inputs automatically.
    signed for them.
 2. To make sure your changes are of the type that will be accepted, ask about your patch on the [Closure Compiler Discuss Group](https://groups.google.com/forum/#!forum/closure-compiler-discuss)
 3. Fork the repository.
-4. Make your changes.
+4. Make your changes. Check out our
+   [coding conventions](https://github.com/google/closure-compiler/wiki/Contributors#coding-conventions)
+   for details on making sure your code is in correct style.
 5. Submit a pull request for your changes. A project developer will review your work and then merge your request into the project.
 
 ## Closure Compiler License
@@ -217,18 +218,13 @@ system have been added.</td>
 
 <table>
   <tr>
-    <td>Code Path</td>
-    <td><code>lib/args4j.jar</code></td>
-  </tr>
-
-  <tr>
     <td>URL</td>
     <td>https://args4j.dev.java.net/</td>
   </tr>
 
   <tr>
     <td>Version</td>
-    <td>2.0.26</td>
+    <td>2.33</td>
   </tr>
 
   <tr>
@@ -251,11 +247,6 @@ options/arguments in your CUI application.</td>
 ### Guava Libraries
 
 <table>
-  <tr>
-    <td>Code Path</td>
-    <td><code>lib/guava.jar</code></td>
-  </tr>
-
   <tr>
     <td>URL</td>
     <td>https://github.com/google/guava</td>
@@ -286,18 +277,13 @@ options/arguments in your CUI application.</td>
 
 <table>
   <tr>
-    <td>Code Path</td>
-    <td><code>lib/jsr305.jar</code></td>
-  </tr>
-
-  <tr>
     <td>URL</td>
-    <td>http://code.google.com/p/jsr-305/</td>
+    <td>https://github.com/findbugsproject/findbugs</td>
   </tr>
 
   <tr>
     <td>Version</td>
-    <td>svn revision 47</td>
+    <td>3.0.1</td>
   </tr>
 
   <tr>
@@ -320,18 +306,13 @@ options/arguments in your CUI application.</td>
 
 <table>
   <tr>
-    <td>Code Path</td>
-    <td><code>lib/junit.jar</code></td>
-  </tr>
-
-  <tr>
     <td>URL</td>
     <td>http://sourceforge.net/projects/junit/</td>
   </tr>
 
   <tr>
     <td>Version</td>
-    <td>4.11</td>
+    <td>4.12</td>
   </tr>
 
   <tr>
@@ -354,18 +335,13 @@ options/arguments in your CUI application.</td>
 
 <table>
   <tr>
-    <td>Code Path</td>
-    <td><code>lib/protobuf-java.jar</code></td>
-  </tr>
-
-  <tr>
     <td>URL</td>
     <td>https://github.com/google/protobuf</td>
   </tr>
 
   <tr>
     <td>Version</td>
-    <td>2.5.0</td>
+    <td>3.0.2</td>
   </tr>
 
   <tr>
@@ -389,18 +365,13 @@ an encoding of structured data.</td>
 
 <table>
   <tr>
-    <td>Code Path</td>
-    <td><code>lib/truth.jar</code></td>
-  </tr>
-
-  <tr>
     <td>URL</td>
     <td>https://github.com/google/truth</td>
   </tr>
 
   <tr>
     <td>Version</td>
-    <td>0.24</td>
+    <td>0.30</td>
   </tr>
 
   <tr>
@@ -423,20 +394,13 @@ an encoding of structured data.</td>
 
 <table>
   <tr>
-    <td>Code Path</td>
-    <td>
-      <code>lib/ant.jar</code>, <code>lib/ant-launcher.jar</code>
-    </td>
-  </tr>
-
-  <tr>
     <td>URL</td>
     <td>http://ant.apache.org/bindownload.cgi</td>
   </tr>
 
   <tr>
     <td>Version</td>
-    <td>1.8.1</td>
+    <td>1.9.7</td>
   </tr>
 
   <tr>
@@ -460,18 +424,13 @@ without make's wrinkles and with the full portability of pure java code.</td>
 
 <table>
   <tr>
-    <td>Code Path</td>
-    <td><code>lib/gson.jar</code></td>
-  </tr>
-
-  <tr>
     <td>URL</td>
     <td>https://github.com/google/gson</td>
   </tr>
 
   <tr>
     <td>Version</td>
-    <td>2.2.4</td>
+    <td>2.7</td>
   </tr>
 
   <tr>

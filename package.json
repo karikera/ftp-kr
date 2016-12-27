@@ -3,7 +3,7 @@
   "displayName": "ftp-kr",
   "description": "FTP sync for ME!",
   "license": "MIT",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "publisher": "ruakr",
   "repository": {
     "type": "git",

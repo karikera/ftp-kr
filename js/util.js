@@ -1,47 +1,49 @@
 
-var vscode = require("vscode");
-var fs = require('./fs');
-var window = vscode.window;
-var workspace = vscode.workspace;
+const vscode = require("vscode");
+const fs = require('./fs');
+const window = vscode.window;
+const workspace = vscode.workspace;
 
 var output = null;
 var statebar = null;
 
-
-function Deferred()
+class Deferred
 {
-    var that = this;
-    this.promise = new Promise(function(res, rej){
-        that.resolve = res;
-        that.reject = rej;
-    });
+	constructor()
+	{
+		/** @type{Promise} */
+		this.promise = null;
+		/** @type {function()} */
+		this.resolve = null;
+		/** @type {function()} */
+		this.reject = null;
+
+		const that = this;
+		this.promise = new Promise(function(res, rej){
+			that.resolve = res;
+			that.reject = rej;
+		});
+	}
+		
+	/**
+	 * @param {function()} func
+	 * @return {!Promise}
+	 */
+	then(func)
+	{
+		return this.promise.then(func);
+	}
+	/**
+	 * @param {function()} func
+	 * @return {!Promise}
+	 */
+	catch(func)
+	{
+		return this.promise.catch(func);
+	}
 }
 
-/** @type{Promise} */
-Deferred.prototype.promise = null;
-/** @type {function()} */
-Deferred.prototype.resolve = null;
-/** @type {function()} */
-Deferred.prototype.reject = null;
-/**
- * @param {function()} func
- * @return {!Promise}
- */
-Deferred.prototype.then = function(func)
-{
-    return this.promise.then(func);
-};
-/**
- * @param {function()} func
- * @return {!Promise}
- */
-Deferred.prototype.catch = function(func)
-{
-    return this.promise.catch(func);
-};
-
-
-var util = {
+const util = {
     Deferred: Deferred,
 
     /**

@@ -1,13 +1,13 @@
 
-var vscode = require('vscode');
-var workspace = vscode.workspace;
-var window = vscode.window;
+const vscode = require('vscode');
+const workspace = vscode.workspace;
+const window = vscode.window;
 
-var cfg = require('./config');
-var fs = require('../fs');
-var work = require('../work');
-var closure = require('../closure');
-var util = require('../util');
+const cfg = require('./config');
+const fs = require('../fs');
+const work = require('../work');
+const closure = require('../closure');
+const util = require('../util');
 
 var latestCompilePath = '';
 
@@ -19,7 +19,7 @@ function getSelectedPath()
 }
 
 
-var MAKEJSON_DEFAULT = 
+const MAKEJSON_DEFAULT = 
 {
     "name": "jsproject",
     "src": "script.js", 

@@ -1,9 +1,9 @@
 
-var Client = require("ftp");
-var config = require('./config');
-var util = require('./util');
-var ofs = require('fs');
-var iconv = require('iconv-lite');
+const Client = require("ftp");
+const config = require('./config');
+const util = require('./util');
+const ofs = require('fs');
+const iconv = require('iconv-lite');
 
 var client = null;
 

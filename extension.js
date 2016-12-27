@@ -1,28 +1,27 @@
-var vscode = require('vscode');
-var workspace = vscode.workspace;
+const vscode = require('vscode');
+const workspace = vscode.workspace;
 
-// \!\[feature X\]\(images/feature-x.png\)
-var util = require('./js/util');
-var fs = require('./js/fs');
+const util = require('./js/util');
+const fs = require('./js/fs');
 
-var extensions = [
-    require('./js/ex/config'), 
-    require('./js/ex/ftpsync'), 
-    require('./js/ex/compiler')
+const extensions = [
+	require('./js/ex/config'), 
+	require('./js/ex/ftpsync'), 
+	require('./js/ex/compiler')
 ];
 
 function activate(context) {
     console.log('[extension: ftp-kr] activate');
     fs.workspace = workspace.rootPath.replace(/\\/g, "/");
 
-    for(var ex of extensions) ex.load();
+    for(const ex of extensions) ex.load();
 
-    for(var ex of extensions) 
+    for(const ex of extensions) 
     {
-        for(var p in ex.commands)
+        for(const p in ex.commands)
         {
             let command = ex.commands[p];
-            var disposable = vscode.commands.registerCommand(p,() => command().catch(util.error));
+            const disposable = vscode.commands.registerCommand(p,() => command().catch(util.error));
             context.subscriptions.push(disposable);
         }
     }

@@ -1,101 +1,104 @@
 {
-    "name": "ftp-kr",
-    "displayName": "ftp-kr",
-    "description": "FTP sync for ME!",
-    "license": "MIT",
-    "version": "0.0.13",
-    "publisher": "ruakr",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/karikera/ftp-kr"
-    }, 
-  	"bugs": "https://github.com/karikera/ftp-kr/issues",
-    "engines": {
-        "vscode": "^1.5.0"
-    },
-    "categories": [
-        "Other"
+  "name": "ftp-kr",
+  "displayName": "ftp-kr",
+  "description": "FTP sync for ME!",
+  "license": "MIT",
+  "version": "0.0.14",
+  "publisher": "ruakr",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/karikera/ftp-kr"
+  },
+  "bugs": "https://github.com/karikera/ftp-kr/issues",
+  "engines": {
+    "vscode": "^1.5.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:.vscode/ftp-kr.json",
+    "onCommand:ftpkr.init"
+  ],
+  "main": "./extension",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ftpkr.init",
+        "title": "ftp-kr Init"
+      },
+      {
+        "command": "ftpkr.makejson",
+        "title": "ftp-kr Make Json"
+      },
+      {
+        "command": "ftpkr.closureCompile",
+        "title": "ftp-kr Closure Compile"
+      },
+      {
+        "command": "ftpkr.closureCompileAll",
+        "title": "ftp-kr Closure Compile All"
+      },
+      {
+        "command": "ftpkr.uploadAll",
+        "title": "ftp-kr Upload All"
+      },
+      {
+        "command": "ftpkr.downloadAll",
+        "title": "ftp-kr Download All"
+      },
+      {
+        "command": "ftpkr.upload",
+        "title": "ftp-kr Upload This"
+      },
+      {
+        "command": "ftpkr.download",
+        "title": "ftp-kr Download This"
+      },
+      {
+        "command": "ftpkr.cleanAll",
+        "title": "ftp-kr Clean All"
+      }
     ],
-    "activationEvents": [
-	    "workspaceContains:.vscode/ftp-kr.json",
-        "onCommand:ftpkr.init"
+    "jsonValidation": [
+      {
+        "fileMatch": "ftp-kr.json",
+        "url": "./schema/ftp-kr.schema.json"
+      },
+      {
+        "fileMatch": "make.json",
+        "url": "./schema/make.schema.json"
+      }
     ],
-    "main": "./extension",
-    "contributes": {
-        "commands": [
+    "menus": {
+      "explorer/context": [
         {
-            "command": "ftpkr.init",
-            "title": "ftp-kr Init"
+          "command": "ftpkr.upload",
+          "title": "ftp-kr Upload",
+          "group": "ftp-kr"
         },
         {
-            "command": "ftpkr.makejson",
-            "title": "ftp-kr Make Json"
-        },
-        {
-            "command": "ftpkr.closureCompile",
-            "title": "ftp-kr Closure Compile"
-        },
-        {
-            "command": "ftpkr.closureCompileAll",
-            "title": "ftp-kr Closure Compile All"
-        },
-        {
-            "command": "ftpkr.uploadAll",
-            "title": "ftp-kr Upload All"
-        },
-        {
-            "command": "ftpkr.downloadAll",
-            "title": "ftp-kr Download All"
-        },
-        {
-            "command": "ftpkr.upload",
-            "title": "ftp-kr Upload This"
-        },
-        {
-            "command": "ftpkr.download",
-            "title": "ftp-kr Download This"
-        },
-        {
-            "command": "ftpkr.cleanAll",
-            "title": "ftp-kr Clean All"
-        }],
-         "jsonValidation": [{
-            "fileMatch": "ftp-kr.json",
-            "url": "./schema/ftp-kr.schema.json"
-        },
-        {
-            "fileMatch": "make.json",
-            "url": "./schema/make.schema.json"
-        }],
-        "menus": {
-            "explorer/context": [
-            {
-                "command": "ftpkr.upload",
-                "title": "ftp-kr Upload",
-                "group": "ftp-kr"
-            },
-            {
-                "command": "ftpkr.download",
-                "title": "ftp-kr Download",
-                "group": "ftp-kr"
-            }]
+          "command": "ftpkr.download",
+          "title": "ftp-kr Download",
+          "group": "ftp-kr"
         }
-    },
-    "scripts": {
-        "postinstall": "node ./node_modules/vscode/bin/install"
-    },
-    "dependencies" : {
-        "ftp": "0.3.10",
-        "glob": "7.1.0",
-        "iconv-lite": "0.4.13",
-        "strip-json-comments": "2.0.1"
-    },
-    "devDependencies": {
-        "typescript": "^2.0.3",
-        "vscode": "^1.0.0",
-        "mocha": "^2.3.3",
-        "eslint": "^3.6.0",
-        "@types/node": "^6.0.40",
-        "@types/mocha": "^2.2.32"
+      ]
     }
+  },
+  "scripts": {
+    "postinstall": "node ./node_modules/vscode/bin/install"
+  },
+  "dependencies": {
+    "ftp": "0.3.10",
+    "glob": "7.1.0",
+    "iconv-lite": "0.4.13",
+    "strip-json-comments": "2.0.1"
+  },
+  "devDependencies": {
+    "typescript": "^2.1.4",
+    "vscode": "^1.0.3",
+    "mocha": "^2.3.3",
+    "@types/node": "^6.0.54",
+    "@types/mocha": "^2.2.35"
+  }
 }

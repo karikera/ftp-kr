@@ -1,24 +1,22 @@
 
-var path = require("path");
-var util = require("util");
-var fs = require("fs");
-var cp = require('child_process');
-var vs = require("./vs");
-var util = require("./util");
-var glob = require("./glob");
-var MakeFile = require("./make");
-var config = require('./config');
-var vscode = require("vscode");
-var stripJsonComments = require('strip-json-comments');
+const path = require("path");
+const fs = require("fs");
+const cp = require('child_process');
+const vs = require("./vs");
+const util = require("./util");
+const glob = require("./glob");
+const MakeFile = require("./make");
+const config = require('./config');
+const vscode = require("vscode");
+const stripJsonComments = require('strip-json-comments');
 
-var workspace = vscode.workspace;
-
-/** @type {string} */
-var ftpkrRoot = __filename.replace(/\\/g, '/');
-ftpkrRoot = ftpkrRoot.substr(0, ftpkrRoot.lastIndexOf("/", ftpkrRoot.lastIndexOf("/")-1));
+const workspace = vscode.workspace;
 
 /** @type {string} */
-var closurecompiler = ftpkrRoot + "/compiler-latest/closure-compiler-v20160911.jar";
+const ftpkrRoot = path.join(path.dirname(__filename),'..').replace(/\\/g, '/');
+
+/** @type {string} */
+const closurecompiler = ftpkrRoot + "/compiler-latest/closure-compiler-v20160911.jar";
 
 /**
  * @param {Object} orig
@@ -258,7 +256,7 @@ function build(makejson)
     .catch((err) => util.log(err));
 }
 
-var exports = {
+module.exports = {
     help: function(){
         cp.spawnSync("java", ["-jar",closurecompiler,"--help"], {stdio: ['inherit', 'inherit', 'inherit']});
     },
@@ -282,5 +280,3 @@ var exports = {
         return build(makejs);
     }
 };
-
-module.exports = exports;

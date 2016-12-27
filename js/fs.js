@@ -1,72 +1,71 @@
 
-var fs = require("fs");
-var path = require('path');
-var stripJsonComments = require('strip-json-comments');
+const fs = require("fs");
+const path = require('path');
+const stripJsonComments = require('strip-json-comments');
 
-/**
- * @constructor
- */
-function FSStat()
+class FSStat
 {
+	constructor()
+	{
+		/** @type{number} */
+		this.dev = 0;
+		/** @type{number} */
+		this.ino = 0;
+		/** @type{number} */
+		this.mode = 0;
+		/** @type{number} */
+		this.nlink = 0;
+		/** @type{number} */
+		this.uid = 0;
+		/** @type{number} */
+		this.gid = 0;
+		/** @type{number} */
+		this.rdev = 0;
+		/** @type{number} */
+		this.size = 0;
+		/** @type{number} */
+		this.blksize = 0;
+		/** @type{number} */
+		this.blocks = 0;
+		/** @type{Date} */
+		this.atime = null;
+		/** @type{Date} */
+		this.mtime = null;
+		/** @type{Date} */
+		this.ctime = null;
+		/** @type{Date} */
+		this.birthtime = null;
+	}
+
+	/**
+	 * @returns {boolean}
+	 */
+	isFile() {};
+	/**
+	 * @returns {boolean}
+	 */
+	isDirectory() {};
+	/**
+	 * @returns {boolean}
+	 */
+	isBlockDevice() {};
+	/**
+	 * @returns {boolean}
+	 */
+	isCharacterDevice() {};
+	/**
+	 * @returns {boolean}
+	 */
+	isSymbolicLink() {};
+	/**
+	 * @returns {boolean}
+	 */
+	isFIFO() {};
+	/**
+	 * @returns {boolean}
+	 */
+	isSocket() {};
 }
-
-/** @type{number} */
-FSStat.prototype.dev = 0;
-/** @type{number} */
-FSStat.prototype.ino = 0;
-/** @type{number} */
-FSStat.prototype.mode = 0;
-/** @type{number} */
-FSStat.prototype.nlink = 0;
-/** @type{number} */
-FSStat.prototype.uid = 0;
-/** @type{number} */
-FSStat.prototype.gid = 0;
-/** @type{number} */
-FSStat.prototype.rdev = 0;
-/** @type{number} */
-FSStat.prototype.size = 0;
-/** @type{number} */
-FSStat.prototype.blksize = 0;
-/** @type{number} */
-FSStat.prototype.blocks = 0;
-/** @type{Date} */
-FSStat.prototype.atime = null;
-/** @type{Date} */
-FSStat.prototype.mtime = null;
-/** @type{Date} */
-FSStat.prototype.ctime = null;
-/** @type{Date} */
-FSStat.prototype.birthtime = null;
-
-/**
- * @returns {boolean}
- */
-FSStat.prototype.isFile = function () {};
-/**
- * @returns {boolean}
- */
-FSStat.prototype.isDirectory = function () {};
-/**
- * @returns {boolean}
- */
-FSStat.prototype.isBlockDevice = function () {};
-/**
- * @returns {boolean}
- */
-FSStat.prototype.isCharacterDevice = function () {};
-/**
- * @returns {boolean}
- */
-FSStat.prototype.isSymbolicLink = function () {};
-/**
- * @returns {boolean}
- */
-FSStat.prototype.isFIFO = function () {};
-/**
- * @returns {boolean}
- */
-FSStat.prototype.isSocket = function () {};
 
 /**
  * @template T
@@ -101,7 +100,7 @@ function mkdirParent(dirPath, callback)
     });
 };
 
-var nfs = module.exports = {
+const nfs = module.exports = {
 
     Stat: FSStat,
 

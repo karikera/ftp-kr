@@ -59,3 +59,6 @@
 * Fix invalid error when multiple init command
 * Add detail button in error message
 * Add image to README.md
+
+# 0.0.14
+* Add disableFtp option

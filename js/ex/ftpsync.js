@@ -1,14 +1,14 @@
 
-let vscode = require('vscode');
-var workspace = vscode.workspace;
-var window = vscode.window;
+const vscode = require('vscode');
+const workspace = vscode.workspace;
+const window = vscode.window;
 
-var config = require('../config');
-var fs = require('../fs');
-var ftpsync = require('../ftpsync');
-var work = require('../work');
-var util = require('../util');
-var cfg = require('./config');
+const config = require('../config');
+const fs = require('../fs');
+const ftpsync = require('../ftpsync');
+const work = require('../work');
+const util = require('../util');
+const cfg = require('./config');
 
 var watcher = null;
 var watcherMode = "";
@@ -18,7 +18,7 @@ const TASK_FILE_PATH = "/.vscode/ftp-kr.task.json";
 cfg.onLoad(function(){
     return ftpsync.load()
     .then(() => ftpsync.refresh(""))
-    .then(() => attachWatcher(config.autoUpload || config.autoDelete ? "FULL" : "CONFIG"));
+	.then(() => attachWatcher(!config.disableFtp && (config.autoUpload || config.autoDelete) ? "FULL" : "CONFIG"));
 });
 cfg.onInvalid(() => attachWatcher("CONFIG"));
 cfg.onNotFound(() => attachWatcher(""));
@@ -163,6 +163,7 @@ module.exports = {
     commands: {
         'ftpkr.upload': function(file) {
             return cfg.loadTest()
+			.then(() => cfg.isFtpDisabled())
             .then(() => fileOrEditorFile(file))
             .then(
                 (path) => work.ftp.add(
@@ -173,6 +174,7 @@ module.exports = {
         },
         'ftpkr.download': function(file) {
             return cfg.loadTest()
+			.then(() => cfg.isFtpDisabled())
             .then(() => fileOrEditorFile(file))
             .then(
                 (path) => work.ftp.add(
@@ -183,6 +185,7 @@ module.exports = {
         },
         'ftpkr.uploadAll': function() {
             return cfg.loadTest()
+			.then(() => cfg.isFtpDisabled())
             .then(() => workspace.saveAll())
             .then(
                 () => work.ftp.add(
@@ -194,6 +197,7 @@ module.exports = {
 
         'ftpkr.downloadAll': function() {
             return cfg.loadTest()
+			.then(() => cfg.isFtpDisabled())
             .then(() => workspace.saveAll())
             .then(
                 () => work.ftp.add(
@@ -206,6 +210,7 @@ module.exports = {
 
         'ftpkr.cleanAll': function() {
             return cfg.loadTest()
+			.then(() => cfg.isFtpDisabled())
             .then(() => workspace.saveAll())
             .then(
                 () => work.ftp.add(

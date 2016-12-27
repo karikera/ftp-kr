@@ -1,11 +1,11 @@
 
-var fs = require("./fs");
-var util = require("./util");
-var stripJsonComments = require('strip-json-comments');
+const fs = require("./fs");
+const util = require("./util");
+const stripJsonComments = require('strip-json-comments');
 
 const CONFIG_PATH = "/.vscode/ftp-kr.json";
 
-var CONFIG_BASE = {
+const CONFIG_BASE = {
     "host": "",
     "username": "",
     "password": "",
@@ -16,6 +16,7 @@ var CONFIG_BASE = {
     "createSyncCache": true, 
     "autoUpload": true,
     "autoDelete": false,
+	"disableFtp": false,
     "ignore":[
         "/.git",
         "/.vscode/ftp-kr.task.json",
@@ -38,7 +39,7 @@ var CONFIG_BASE = {
 };
 
 
-var REGEXP_MAP = {
+const REGEXP_MAP = {
     ".": "\\.", 
     "+": "\\+", 
     "?": "\\?", 
@@ -54,14 +55,14 @@ function regexpchanger(chr)
 }
 function setConfig(newobj)
 {
-    for(var p in newobj)
+    for(const p in newobj)
     {
-        var v = newobj[p];
+        const v = newobj[p];
         config[p] = (v instanceof Object) ? Object.create(v) : v;
     }
 }
 
-var config = module.exports = {
+const config = module.exports = {
     PATH: CONFIG_PATH,
 
     state: 'NOTFOUND',
@@ -107,14 +108,17 @@ var config = module.exports = {
             {
                 throw new TypeError("Invalid json data type: "+ typeof obj);
             }
-            if (!obj.host)
-            {
-                throw new Error("Need host");
-            }
-            if (!obj.username)
-            {
-                throw new Error("Need username");
-            }
+			if (!obj.disableFtp)
+			{
+				if (!obj.host)
+				{
+					throw new Error("Need host");
+				}
+				if (!obj.username)
+				{
+					throw new Error("Need username");
+				}
+			}
             
             setConfig(obj);
 

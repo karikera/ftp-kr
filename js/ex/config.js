@@ -1,7 +1,7 @@
 
-var config = require('../config');
-var work = require('../work');
-var util = require('../util');
+const config = require('../config');
+const work = require('../work');
+const util = require('../util');
 
 function makeEvent()
 {
@@ -79,7 +79,7 @@ function onLoadError(err)
 }
 
 
-var cfg = module.exports = {
+const cfg = module.exports = {
     loadTest: function()
     {
         if (config.state !== 'LOADED')
@@ -89,6 +89,15 @@ var cfg = module.exports = {
         } 
         return Promise.resolve();
     },
+	isFtpDisabled: function()
+	{
+		if (config.disableFtp)
+		{
+            util.open(config.PATH);
+			return Promise.reject(new Error("FTP is disabled. Please set disableFtp to false"));
+		}
+		return Promise.resolve();
+	},
     load: function()
     {
         return work.compile.add(

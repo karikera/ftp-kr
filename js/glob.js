@@ -1,6 +1,6 @@
 
-var glob_inner = require("glob");
-var util = require("./util");
+const glob_inner = require("glob");
+const util = require("./util");
 
 /**
  * @param {string} pattern

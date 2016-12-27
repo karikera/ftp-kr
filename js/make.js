@@ -1,57 +1,82 @@
 
-var util = require("./util");
-var fs = require("fs");
+const util = require("./util");
+const fs = require("fs");
 
-function MakeFile()
+class MakeFileItem
 {
-    this.map = {};
+	/**
+	 * @param {!Array<string>} children
+	 * @param {!Function} callback
+	 */
+	constructor(children, callback)
+	{
+		/** @type {!Array<string>} */
+		this.children = children;
+		/** @type {!Function} */
+		this.callback = callback;
+	}
 }
 
-MakeFile.prototype.map = null;
-MakeFile.prototype.on = function(master, childs, callback)
+class MakeFile
 {
-    this.map[master] = [childs, callback];
-};
-MakeFile.prototype.make = function(target)
-{
-    function buildChild(child)
-    {
-        return that.make(child).then(function(mod){
-            modified = modified || mod;
-            if (!modified)
-            {
-                try
-                {
-                    if(!mtime)
-                        mtime = fs.statSync(target).mtime.valueOf();
-                } 
-                catch (error)
-                {
-                    mtime = -1;
-                }
-                    
-                if (mtime <= fs.statSync(child).mtime.valueOf())
-                    modified = true;
-            }
-        });
-    }
+	constructor()
+	{
+		/** @type {Object<string, MakeFileItem>} */
+		this.map = {};
+	}
 
-    var that = this;
-    var mtime = 0;
-    var options = this.map[target];
-    if (!options)
-        return Promise.resolve(false);
+	/**
+	 * @param {string} master
+	 * @param {Array<string>} children
+	 * @param {!Function} callback
+	 */
+	on(master, children, callback)
+	{
+		this.map[master] = new MakeFileItem(children, callback);
+	}
 
-    var children = options[0];
-    if (children.length === 0)
-        return options[1]();
+	/**
+	 * @param {string} target
+	 */
+	make(target)
+	{
+		function buildChild(child)
+		{
+			return that.make(child).then(function(mod){
+				modified = modified || mod;
+				if (modified) return;
+				
+				try
+				{
+					if(!mtime) mtime = fs.statSync(target).mtime.valueOf();
+				} 
+				catch (error)
+				{
+					mtime = -1;
+				}
+					
+				if (mtime <= fs.statSync(child).mtime.valueOf())
+					modified = true;
+			});
+		}
 
-    var modified = false;        
-    return util.cascadingPromise(buildChild, children).then(function(){
-        if (modified)
-            return options[1]();
-        return Promise.resolve("LATEST");
-    });
-};
+		const that = this;
+		var mtime = 0;
+		/** @type {MakeFileItem} */
+		const options = this.map[target];
+		if (!options)
+			return Promise.resolve(false);
+
+		const children = options.children;
+		if (children.length === 0)
+			return options.callback();
+
+		var modified = false;        
+		return util.cascadingPromise(buildChild, children).then(function(){
+			if (modified) return options.callback();
+			return Promise.resolve("LATEST");
+		});
+	}
+}
 
 module.exports = MakeFile;

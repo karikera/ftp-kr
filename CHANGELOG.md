@@ -62,3 +62,6 @@
 
 # 0.0.14
 * Add disableFtp option
+
+# 0.0.15
+* Fix disableFtp option

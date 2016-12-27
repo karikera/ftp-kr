@@ -16,9 +16,11 @@ var watcherMode = "";
 const TASK_FILE_PATH = "/.vscode/ftp-kr.task.json";
 
 cfg.onLoad(function(){
-    return ftpsync.load()
-    .then(() => ftpsync.refresh(""))
-	.then(() => attachWatcher(!config.disableFtp && (config.autoUpload || config.autoDelete) ? "FULL" : "CONFIG"));
+	if (config.disableFtp) return attachWatcher("CONFIG");
+	
+	return ftpsync.load()
+	.then(() => ftpsync.refresh(""))
+	.then(() => attachWatcher(config.autoUpload || config.autoDelete ? "FULL" : "CONFIG"));	
 });
 cfg.onInvalid(() => attachWatcher("CONFIG"));
 cfg.onNotFound(() => attachWatcher(""));

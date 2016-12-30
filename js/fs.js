@@ -93,7 +93,7 @@ function mkdirParent(dirPath, callback)
                 return mkdirParent(path.dirname(dirPath), () => fs.mkdir(dirPath, callback));
             case -4075:
                 callback();
-                break;
+                return;
             }
         }
         callback && callback(error);

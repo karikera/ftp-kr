@@ -9,6 +9,7 @@ const MakeFile = require("./make");
 const config = require('./config');
 const vscode = require("vscode");
 const stripJsonComments = require('strip-json-comments');
+const nfs = require('./fs');
 
 const workspace = vscode.workspace;
 
@@ -17,6 +18,7 @@ const ftpkrRoot = path.join(path.dirname(__filename),'..').replace(/\\/g, '/');
 
 /** @type {string} */
 const closurecompiler = ftpkrRoot + "/compiler-latest/closure-compiler-v20161201.jar";
+
 
 /**
  * @param {Object} orig
@@ -211,10 +213,13 @@ function include(src)
     return includer.list;
 }
 
+/**
+ * @param {string} makejson
+ */
 function build(makejson)
 {
     makejson = path.resolve(makejson).replace(/\\/g, '/');
-    var workspacedir = workspace.rootPath.replace(/\\/g, '/'); 
+    const workspacedir = workspace.rootPath.replace(/\\/g, '/'); 
     function toAbsolute(path)
     {
         if (path.startsWith('/'))
@@ -223,7 +228,7 @@ function build(makejson)
             return projectdir + "/" + path;
     }
 
-    var projectdir = makejson.substr(0, makejson.lastIndexOf("/"));
+    const projectdir = makejson.substr(0, makejson.lastIndexOf("/"));
     if (!makejson.startsWith(workspacedir))
     {
         return Promise.reject("workspace: " + workspacedir+"\nproject: " + projectdir+"\nout of workspace");
@@ -234,7 +239,7 @@ function build(makejson)
     }
     catch(err)
     {
-        return Promise.reject(err);
+		return Promise.reject(err);
     }
 
     if (!options.name)
@@ -271,7 +276,31 @@ module.exports = {
         .then(() => util.log('FINISH ALL'))
         .catch((err) => util.log(err))
     },
+	/**
+	 * @param {string} makejson
+	 * @param {string=} input
+	 * @return {!Promise}
+	 */
+	makeJson: function(makejson, input)
+	{
+		if (input) input = path.relative(path.dirname(makejson), input).replace(/\\/g, '/');
+		else input = "./script.js";
+		const output = (input.endsWith('.js') ? input.substring(0, input.length-3) : input) +'.min.js';
+		const makejsonDefault = 
+		{
+			"name": "jsproject",
+			"src": input, 
+			"output": output,
+			"includeReference": true,
+			"closure": {}
+		};
+
+		makejson = nfs.worklize(makejson);
+		return nfs.initJson(makejson, makejsonDefault)
+            .then(() => util.open(makejson));
+	},
     /**
+	 * @param {string} makejs
      * @returns {!Promise} 
      */
     make: function(makejs){

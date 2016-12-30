@@ -68,3 +68,6 @@
 
 # 0.0.16
 * Update closure compiler to v20161201
+
+# 0.0.17
+* Add generate button when not found make.json

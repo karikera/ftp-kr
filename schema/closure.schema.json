@@ -172,7 +172,7 @@
             "description": "Processes built-ins from the Closure library, such as goog.require(), goog.provide(), and goog.exportSymbol(). True by default."
         },
         "rewrite_polyfills": {
-            "type": "boolean",
+			"enum": ["false"],
             "description": "Rewrite ES6 library calls to use polyfills provided by the compiler's runtime."
         },
         "module": {

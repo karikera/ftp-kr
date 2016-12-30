@@ -19,7 +19,7 @@
             "description": "FTP side directory"
         },
         "port": {
-            "type": "number",
+            "type": "integer",
             "description": "Port number of FTP server"
         },
         "fileNameEncoding": {
@@ -191,6 +191,10 @@
         "createSyncCache": {
             "type": "boolean",
             "description": "Create sync.json file for next FTP access(Not effective ' -';)"
+        },
+        "disableFtp": {
+            "type": "boolean",
+            "description": "Disable FTP feature(Can still use closure compiler)"
         },
         "ignore": {
             "type": "array",

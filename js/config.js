@@ -24,17 +24,8 @@ const CONFIG_BASE = {
         "/.vscode/ftp-kr.sync.*.json"
     ],
     "closure":{
-        "compilation_level": "ADVANCED",
-        "source_map_location_mapping": "d:/|file:///D:/",
-        "warning_level": "VERBOSE",
         "create_source_map": "%js_output_file%.map",
-        "output_wrapper": "(function(){%output%}).call(this);\n//# sourceMappingURL=%js_output_file_filename%.map",
-        "language_in": "ECMASCRIPT5_STRICT",
-        "language_out": "ECMASCRIPT5_STRICT",
-        "summary_detail_level": 3,
-        "assume_function_wrapper": true,
-        "use_types_for_optimization": true,
-        "process_closure_primitives": "false"
+        "output_wrapper": "%output%\n//# sourceMappingURL=%js_output_file_filename%.map",
     }
 };
 

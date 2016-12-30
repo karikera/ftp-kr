@@ -3,7 +3,7 @@
   "displayName": "ftp-kr",
   "description": "FTP sync for ME!",
   "license": "MIT",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "publisher": "ruakr",
   "repository": {
     "type": "git",
@@ -29,7 +29,7 @@
       },
       {
         "command": "ftpkr.makejson",
-        "title": "ftp-kr Make Json"
+        "title": "ftp-kr Generate make.json"
       },
       {
         "command": "ftpkr.closureCompile",
@@ -98,7 +98,7 @@
     "typescript": "^2.1.4",
     "vscode": "^1.0.3",
     "mocha": "^2.3.3",
-    "@types/node": "^6.0.54",
+    "@types/node": "^6.0.55",
     "@types/mocha": "^2.2.35"
   }
 }

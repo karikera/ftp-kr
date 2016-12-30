@@ -11,22 +11,28 @@ const util = require('../util');
 
 var latestCompilePath = '';
 
-function getSelectedPath()
+function getSelectedFilePath()
 {
-    var doc = window.activeTextEditor.document;
-    var localpath = doc.fileName.replace(/\\/g, '/');
-    return localpath.substr(0, localpath.lastIndexOf('/')+1);
+	return window.activeTextEditor.document.fileName.replace(/\\/g, '/');
 }
-
-
-const MAKEJSON_DEFAULT = 
+function getSelectedMakeJson()
 {
-    "name": "jsproject",
-    "src": "script.js", 
-    "output": "./script.min.js",
-    "includeReference": true,
-    "closure": {}
-};
+	const filename = getSelectedFilePath();
+    return filename.substr(0, filename.lastIndexOf('/')+1) + "make.json";
+}
+/**
+ * @param {string} makejson
+ * @param {string} input
+ * @param {!Error} err
+ */
+function generateConfirm(makejson, input, err)
+{
+	return util.errorConfirm(err, 'Generate make.json')
+	.then((select)=>{
+		if (!select) return;
+		return closure.makeJson(makejson, input);
+	});
+}
 
 module.exports = {
     load : function () {
@@ -37,36 +43,51 @@ module.exports = {
     },
     commands: {
         'ftpkr.makejson':function (){
-            var makejson = fs.worklize(getSelectedPath() + "make.json");
-            return fs.initJson(makejson, MAKEJSON_DEFAULT)
-            .then(() => util.open(makejson))
-            .catch(util.error);
+            if (!window.activeTextEditor) return;
+			return closure.makeJson(getSelectedMakeJson(), getSelectedFilePath()).catch(util.error);
         },
         'ftpkr.closureCompile':function (){
             return cfg.loadTest()
             .then(() => workspace.saveAll())
             .then(() => work.compile.add(() => {
                     if (!window.activeTextEditor) return;
-					var path = getSelectedPath() + "make.json";
-                    return closure.make(path)
-					.then(() => { latestCompilePath = path; })
+					const input = getSelectedFilePath();
+					const makejson = getSelectedMakeJson();
+                    return closure.make(makejson)
+					.then(() => { latestCompilePath = makejson; })
 					.catch((err)=>{
-						if (latestCompilePath && err.code === 'ENOENT')
+						if (err.code !== 'ENOENT')
+						{
+							util.log(err);
+							return;
+						}
+						if (latestCompilePath)
 						{
 							return closure.make(latestCompilePath)
-							.catch(util.log);
+							.catch((err)=>{
+								if (err.code !== 'ENOENT')
+								{
+									util.log(err);
+									return;
+								}
+								latestCompilePath = '';
+								return generateConfirm(makejson, input, err);
+							});
 						}
-						util.log(err);
+						else
+						{
+							return generateConfirm(makejson, input, err);
+						}
 					})
                 })
-            );
+            )
+			.catch(util.error);
         },
         'ftpkr.closureCompileAll': function(){
             return cfg.loadTest()
             .then(() => workspace.saveAll())
-            .then(() => work.compile.add(() => closure.all())
-                .catch(util.error)
-            );
+            .then(() => work.compile.add(() => closure.all()).catch(util.error))
+			.catch(util.error);
         }
     }
 };

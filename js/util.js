@@ -166,7 +166,7 @@ const util = {
      * @function
      * @param {Error|string} err
      * @param {...string} items
-     * @returns {void}
+     * @returns {!Promise<string|undefined>}
      */
     errorConfirm: function (err, items)
     {
@@ -279,22 +279,27 @@ const util = {
      */
     addOptions: function(args, options)
     {
-        Object.keys(options).forEach(function(key) {
-            var i, len, val, value;
-            value = options[key];
-            if (Array.isArray(value)) {
-                for (i = 0, len = value.length; i < len; i++) {
-                val = value[i];
-                args.push("--" + key);
-                args.push(val);
+        Object.keys(options).forEach(function(key)
+		{
+            const value = options[key];
+            if (Array.isArray(value))
+			{
+				const len = value.length;
+                for (var i = 0; i < len; i++)
+				{
+					const val = value[i];
+					args.push("--" + key);
+					args.push(val);
                 }
                 return;
             }
-            if (typeof value === 'boolean' && value === false) {
+            if (typeof value === 'boolean' && value === false)
+			{
                 return;
             }
             args.push("--" + key);
-            if (value !== true) {
+            if (value !== true)
+			{
                 return args.push(value);
             }
         });

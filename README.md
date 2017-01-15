@@ -1,7 +1,6 @@
 # ftp-kr README
 
-This is FTP + Closure Compiler Extension for ME!
-
+This is FTP + Closure Compiler Extension for ME!  
 I'm not good at english, Sorry for my bad english ㅠㅠ
 
 Start with `ftp-kr Init` command! (When exists workspace)
@@ -11,6 +10,9 @@ Start with `ftp-kr Init` command! (When exists workspace)
 ![init after](images/init-after.png)
 
 ![download all](images/downloadall.png)
+
+By default, the auto-sync feature is enabled  
+If you want to disable, please set autoUpload/autoDelete to false
 
 ## Functions
 FTP Functions:

@@ -21,7 +21,7 @@ function activate(context) {
         for(const p in ex.commands)
         {
             let command = ex.commands[p];
-            const disposable = vscode.commands.registerCommand(p,() => command().catch(util.error));
+            const disposable = vscode.commands.registerCommand(p,(...arg) => command(...arg).catch(util.error));
             context.subscriptions.push(disposable);
         }
     }

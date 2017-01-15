@@ -71,3 +71,9 @@
 
 # 0.0.17
 * Add generate button when not found make.json
+
+# 0.0.18
+* Show notification when task takes longer then 1 second
+* Add SFTP support
+* Fix `Upload/Download this` in file menu
+* If use `Upload/Download this` at directory it will use `Upload/Download All` command

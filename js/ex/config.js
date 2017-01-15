@@ -84,6 +84,7 @@ const cfg = module.exports = {
     {
         if (config.state !== 'LOADED')
         {
+			if (config.state === 'NOTFOUND') return Promise.reject('Config is not loaded');
             util.open(config.PATH);
             return Promise.reject(new Error("Need to fix"));
         } 

@@ -86,6 +86,33 @@ class FtpFileSystem extends f.FileSystem
 		/** @type {!Object.<string, Deferred>} */
     	this.refreshed = {};
 	}
+
+	/**
+	 * @param {!f.Directory} dir
+	 * @param {string} path
+	 * @private
+	 */
+	_deletedir(dir, path)
+	{
+		if (!this.refreshed[path]) return;
+		delete this.refreshed[path];
+		for(const filename in dir.files)
+		{
+			const childdir = dir.files[filename];
+			if (!(childdir instanceof f.Directory)) continue;
+			this._deletedir(childdir, path+'/'+filename);
+		}
+	}
+
+	/**
+	 * @param {string} path
+	 */
+	delete(path)
+	{
+		const dir = this.get(path);
+		if (dir) this._deletedir(dir, path);
+		super.delete(path);
+	}
 	
 	/**
 	 * @param {string} path
@@ -93,7 +120,7 @@ class FtpFileSystem extends f.FileSystem
 	 */
 	ftpDelete(path)
 	{
-		var that = this;
+		const that = this;
 		function deleteTest(file)
 		{
 			var promise;
@@ -110,11 +137,10 @@ class FtpFileSystem extends f.FileSystem
 			});
 		}
 
-		var file = this.get(path);
+		const file = this.get(path);
 		if (file === null) return certainWork();
 		return deleteTest(file)
 		.catch(certainWork);
-		
 	}
 
 	/**
@@ -217,18 +243,18 @@ class FtpFileSystem extends f.FileSystem
 		const that = this;
 		var latest = this.refreshed[path];
 		if (latest) return latest.promise;
-		this.refreshed[path] = new util.Deferred;
+		const deferred = new util.Deferred;
+		this.refreshed[path] = deferred;
 		return ftp.list(path)
 		.then(function(ftpfiles){
-			var dir = that.refresh(path, ftpfiles);
-			that.refreshed[path].resolve(dir);
+			const dir = that.refresh(path, ftpfiles);
+			deferred.resolve(dir);
 			return dir;
 		})
 		.catch(function(err){
-			var prom = that.refreshed[path];
-			prom.catch(() => {});
-			prom.reject(err);
-			that.refreshed[path] = null;
+			deferred.catch(() => {});
+			deferred.reject(err);
+			if (that.refreshed[path] === deferred) that.refreshed[path] = null;
 			throw err;
 		});
 	}
@@ -384,18 +410,20 @@ const sync = {
         return vfs.syncTestNotExists("", false);
     },
     /**
+	 * @param {string} path
      * @returns {!Promise.<Object.<string, string>>}
      */
-    syncTestUpload: function()
+    syncTestUpload: function(path)
     {
-        return vfs.syncTestUpload("");
+        return vfs.syncTestUpload(path);
     },
     /**
+	 * @param {string} path
      * @returns {!Promise.<Object.<string, string>>}
      */
-    syncTestDownload: function()
+    syncTestDownload: function(path)
     {
-        return vfs.syncTestNotExists("", true);
+        return vfs.syncTestNotExists(path, true);
     },
     /**
      * @returns {void}
@@ -413,7 +441,7 @@ const sync = {
      */
     load: function()
     {
-        syncDataPath = "/.vscode/ftp-kr.sync."+config.host+"."+config.remotePath.replace(/\//g, ".")+".json";
+        syncDataPath = `/.vscode/ftp-kr.sync.${config.protocol}.${config.host}.${config.remotePath.replace(/\//g, ".")}.json`;
         return fs.open(syncDataPath)
         .catch(()=>null)
         .then(function(data){

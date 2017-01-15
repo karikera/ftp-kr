@@ -1,6 +1,10 @@
 {
     "type": "object",
     "properties": {
+        "protocol": {
+            "enum": ["ftp","sftp"],
+            "description": "Connection protocol"
+        },
         "host": {
             "type": "string",
             "description": "Address of the FTP server",

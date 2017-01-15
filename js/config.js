@@ -10,7 +10,7 @@ const CONFIG_BASE = {
     "username": "",
     "password": "",
     "remotePath": "",
-    "port": 21,
+	"protocol": "ftp",
     "fileNameEncoding": "utf8", 
     "ignoreWrongFileEncoding": false,
     "createSyncCache": true, 

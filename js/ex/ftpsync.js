@@ -90,15 +90,19 @@ function attachWatcher(mode)
 
 /**
  * @param {!Object.<string, string>} tasks
+ * @param {string} taskname
+ * @param {function()} infocallback
  * @return {!Promise}
  */
-function reserveSyncTaskWith(tasks, infocallback)
+function reserveSyncTaskWith(tasks, taskname, infocallback)
 {
     if (util.isEmptyObject(tasks))
     {
         util.info("Nothing to DO");
         return Promise.resolve();
     }
+	util.showLog();
+	util.log(taskname+' started');
     return fs.create(TASK_FILE_PATH,JSON.stringify(tasks, null , 1))
     .then(() => util.open(TASK_FILE_PATH))
     .then(infocallback)
@@ -108,11 +112,22 @@ function reserveSyncTaskWith(tasks, infocallback)
             fs.delete(TASK_FILE_PATH);
             return;
         }
+		const startTime = +new Date();
         return fs.json(TASK_FILE_PATH)
         .then((data) => fs.delete(TASK_FILE_PATH).then(() => ftpsync.exec(data)))
         .then((failed) => {
-            if (!failed) return;
-            return reserveSyncTaskWith(failed.tasks, ()=>util.errorConfirm("ftp-kr execution failed: "+failed.count, "Retry"));            
+            if (!failed)
+			{
+				const passedTime = +new Date() - startTime;
+				if (passedTime > 1000)
+				{
+					util.info(taskname+" completed");
+				}
+				util.showLog();
+				util.log(taskname+' completed');
+				return;
+			}
+            return reserveSyncTaskWith(failed.tasks, taskname, ()=>util.errorConfirm("ftp-kr Task failed, more information in the output", "Retry"));            
         });
     })
     .catch(function (err){
@@ -122,12 +137,31 @@ function reserveSyncTaskWith(tasks, infocallback)
 }
 
 /**
- * @param {!Object.<string, string>} tasks
+ * @param {string} taskname
+ * @param {!Promise} taskpromise
  * @return {!Promise}
  */
-function reserveSyncTask(tasks)
+function taskTimer(taskname, taskpromise)
 {
-    return reserveSyncTaskWith(tasks, ()=>util.info("This will be occurred. Are you OK?", "OK"));
+	const startTime = +new Date();
+	return taskpromise.then(()=>{
+		const passedTime = +new Date() - startTime;
+		if (passedTime > 1000)
+		{
+			util.info(taskname+" completed");
+		}
+	});
+}
+
+
+/**
+ * @param {!Object.<string, string>} tasks
+ * @param {string} taskname
+ * @return {!Promise}
+ */
+function reserveSyncTask(tasks, taskname)
+{
+    return reserveSyncTaskWith(tasks, taskname, ()=>util.info("This will be occurred. Are you OK?", "OK"));
 }
 
 
@@ -155,6 +189,24 @@ function fileOrEditorFile(file)
     }
 }
 
+/**
+ * @param {string} path
+ */
+function uploadAll(path)
+{
+	return ftpsync.syncTestUpload(path)
+	.then((tasks) => reserveSyncTask(tasks, 'Upload All'));
+}
+
+/**
+ * @param {string} path
+ */
+function downloadAll(path)
+{
+	return ftpsync.syncTestDownload(path)
+	.then((tasks) => reserveSyncTask(tasks, 'Download All'));
+}
+
 module.exports = {
     load: function () {
     },
@@ -169,10 +221,10 @@ module.exports = {
             .then(() => fileOrEditorFile(file))
             .then(
                 (path) => work.ftp.add(
-                    () => ftpsync.upload(path))
-                .catch(util.error)
-            )
-            .catch(util.error);
+					() => fs.isDirectory(path)
+					.then(isdir=>isdir ? uploadAll(path) : taskTimer('Upload', ftpsync.upload(path)))
+				).catch(util.error)
+            ).catch(util.error);
         },
         'ftpkr.download': function(file) {
             return cfg.loadTest()
@@ -180,34 +232,23 @@ module.exports = {
             .then(() => fileOrEditorFile(file))
             .then(
                 (path) => work.ftp.add(
-                    () => ftpsync.download(path))
-                .catch(util.error)
-            )
-            .catch(util.error);
+					() => fs.isDirectory(path)
+					.then(isdir=>isdir ? downloadAll(path) : taskTimer('Download', ftpsync.download(path)))
+				).catch(util.error)
+            ).catch(util.error);
         },
         'ftpkr.uploadAll': function() {
             return cfg.loadTest()
 			.then(() => cfg.isFtpDisabled())
             .then(() => workspace.saveAll())
-            .then(
-                () => work.ftp.add(
-                    () => ftpsync.syncTestUpload()
-                    .then((tasks) => reserveSyncTask(tasks))
-                ).catch(util.error)
-            );
+            .then(() => work.ftp.add(() => uploadAll("")).catch(util.error));
         },
 
         'ftpkr.downloadAll': function() {
             return cfg.loadTest()
 			.then(() => cfg.isFtpDisabled())
             .then(() => workspace.saveAll())
-            .then(
-                () => work.ftp.add(
-                    () => ftpsync.syncTestDownload()
-                    .then((tasks) => reserveSyncTask(tasks))
-                )
-                .catch(util.error)
-            );
+            .then(() => work.ftp.add(() => downloadAll("")).catch(util.error));
         },
 
         'ftpkr.cleanAll': function() {
@@ -217,7 +258,7 @@ module.exports = {
             .then(
                 () => work.ftp.add(
                     () => ftpsync.syncTestClean()
-                    .then((tasks) => reserveSyncTask(tasks))
+                    .then((tasks) => reserveSyncTask(tasks, 'Clean All'))
                 )
                 .catch(util.error)
             );

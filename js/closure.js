@@ -152,17 +152,17 @@ function closure(options)
 
     makeFile.on(out, src.concat([options.makejson]), function(){
         return new Promise(function(resolve, reject) {
-            var curdir = process.cwd();
+            const curdir = process.cwd();
             try
             {
                 process.chdir(options.projectdir);
                 util.log(projname + ": BUILD");
-                var args = ['-jar', closurecompiler];
+                const args = ['-jar', closurecompiler];
 
-                var ex_parameter = {
+                const ex_parameter = {
                     js_output_file_filename: out.substr(out.lastIndexOf("/")+1)
                 };
-                var parameter = {
+                const parameter = {
                     js: src, 
                     js_output_file: out,
                     generate_exports: options.export
@@ -172,7 +172,7 @@ function closure(options)
                 finalOptions = iheritOptions(finalOptions, options.closure, ex_parameter);
 
                 util.addOptions(args, finalOptions);
-                var ls = cp.spawn("java", args);
+                const ls = cp.spawn("java", args);
                 ls.stdout.on('data', (data) => util.log(data));
                 ls.stderr.on('data', (data) => util.log(data));
                 ls.on('close', (code) => {

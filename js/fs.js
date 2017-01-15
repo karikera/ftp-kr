@@ -258,5 +258,14 @@ const nfs = module.exports = {
             return nfs.create(filepath, JSON.stringify(defaultValue, null, 4))
             .then(() => Object.create(defaultValue));
         });
-    }
+    },
+
+	/**
+	 * @param {string} path
+	 * @return {!Promise<boolean>}
+	 */
+	isDirectory: function(path)
+	{
+		return nfs.stat(path).then(stat=>stat.isDirectory());
+	}
 };

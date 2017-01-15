@@ -279,30 +279,28 @@ const util = {
      */
     addOptions: function(args, options)
     {
-        Object.keys(options).forEach(function(key)
+		for (const key in options)
 		{
             const value = options[key];
             if (Array.isArray(value))
 			{
-				const len = value.length;
-                for (var i = 0; i < len; i++)
+                for (const val of value)
 				{
-					const val = value[i];
 					args.push("--" + key);
 					args.push(val);
                 }
-                return;
+                continue;
             }
             if (typeof value === 'boolean' && value === false)
 			{
-                return;
+                continue;
             }
             args.push("--" + key);
             if (value !== true)
 			{
-                return args.push(value);
+                args.push(value);
             }
-        });
+        }
     }
 };
 

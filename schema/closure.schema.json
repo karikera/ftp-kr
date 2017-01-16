@@ -208,7 +208,7 @@
             "description": "Source map location mapping separated by a '|' (i.e. filesystem-path|webserver-path)"
         },
         "variable_renaming_report": {
-            "type": "boolean",
+            "type": "string",
             "description": "File where the serialized version of the variable renaming map produced should be saved"
         },
         "charset": {

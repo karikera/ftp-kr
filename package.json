@@ -3,7 +3,7 @@
   "displayName": "ftp-kr",
   "description": "FTP sync & Closure Compiler for ME!",
   "license": "MIT",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "publisher": "ruakr",
   "repository": {
     "type": "git",
@@ -89,7 +89,7 @@
     "postinstall": "node ./node_modules/vscode/bin/install"
   },
   "dependencies": {
-    "ftps": "^1.0.0",
+    "ftp": "^0.3.10",
     "glob": "7.1.0",
     "iconv-lite": "0.4.13",
     "ssh2-sftp-client": "^1.0.5",

@@ -77,3 +77,6 @@
 * Add SFTP support
 * Fix `Upload/Download this` in file menu
 * If use `Upload/Download this` at directory it will use `Upload/Download All` command
+
+# 0.0.19
+* Add missing module

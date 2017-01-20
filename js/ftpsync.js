@@ -126,7 +126,7 @@ class FtpFileSystem extends f.FileSystem
 			var promise;
 			if (file instanceof f.Directory) promise = ftp.rmdir(path);
 			else promise = ftp.delete(path);
-			return promise.then(() => vfs.delete(path))
+			return promise.then(() => that.delete(path))
 		}
 		function certainWork()
 		{
@@ -209,7 +209,11 @@ class FtpFileSystem extends f.FileSystem
 	{
 		function onfile(file)
 		{
-			if (!file) return fs.delete(path);
+			if (!file)
+			{
+				util.error(`${path} not found in remote`);
+				return Promise.resolve();
+			}
 			var promise;
 			if (config.autoUpload) file.ignoreWatcher = true;
 			if (file instanceof f.Directory) promise = fs.mkdir(path);
@@ -265,84 +269,122 @@ class FtpFileSystem extends f.FileSystem
 	 */
 	syncTestUpload(path)
 	{
-		var output = {};
-		var list = {};
+		const output = {};
+		const list = {};
 		return _getUpdatedFile(this.root, path, list)
 		.then(() => {
-			function addWork(filepath, st)
+			let promise = Promise.resolve();
+			for(const filepath in list)
 			{
+				const st = list[filepath];
 				promise = promise
-				.then(() => vfs.ftpStat(filepath))
+				.then(() => this.ftpStat(filepath))
 				.then((file) => testLatest(file, st))
 				.then((res) => { if(!res) output[filepath] = "upload"; });
 			}
-
-			var promise = Promise.resolve();
-			for(var filepath in list) addWork(filepath, list[filepath]);
 			return promise;
 		})
 		.then(() => output);
 	}
-}
+		
+	/**
+	 * @param {string} path
+	 * @param {!Object.<string, boolean>} list
+	 * @param {boolean} download
+	 */
+	_listNotExists(path, list, download)
+	{
+		const that = this;
+		const command = download ? "download" : "delete"; 
+		return new Promise((resolve, reject)=>{
+			var promise = Promise.resolve();
+			function onfslist(fslist)
+			{
+				that.ftpList(path)
+				.then((dir) => {
+					const willDel = {};
+					for(const p in dir.files)
+					{
+						switch(p)
+						{
+						case '': case '.': case '..': break;
+						default:
+							willDel[p] = true;
+							if (dir.files[p] instanceof f.Directory)
+							{
+								promise = promise.then(() => that._listNotExists(path + "/" + p, list, download));
+							}
+							break;
+						}
+					}
+					for(const file of fslist)
+					{
+						delete willDel[file];
+					}
+					for (const p in willDel)
+					{
+						if (download) list[path + "/" + p] = command;
+						else promise = promise.then(() => list[path + "/" + p] = command);
+					}
+					resolve(promise);
+				})
+				.catch((err) => reject(err))
+			}
+			fs.list(path)
+			.then(onfslist)
+			.catch(() => {
+				if (!download) resolve();
+				else onfslist([]);
+			});
+		}); 
+	}
 
-/**
- * @param {string} path
- * @param {!Object.<string, boolean>} list
- * @param {boolean} download
- */
-function _listNotExists(path, list, download)
-{
-    var command = download ? "download" : "delete"; 
-    var promise = new Promise(function(resolve, reject){
-        var promise = Promise.resolve();
-        function next(npath)
-        {
-            promise = promise.then(() => _listNotExists(npath, list, download));
-        }
-        function onfslist(fslist)
-        {
-            vfs.ftpList(path)
-            .then((dir) => {
-                var willDel = {};
-                for(var p in dir.files) willDel[p] = true;
-                delete willDel[""];
-                delete willDel["."];
-                delete willDel[".."];
-                for(var file of fslist)
-                {
-                    delete willDel[file];
-                }
-                for (let p in willDel)
-                {
-                    if (download) list[path + "/" + p] = command;
-                    if (dir.files[p] instanceof f.Directory) next(path + "/" + p);
-                    if (!download) promise = promise.then(() => list[path + "/" + p] = command);
-                }
-                resolve(promise);
-            })
-            .catch((err) => reject(err))
-        }
-        fs.list(path)
-        .then(onfslist)
-        .catch(() => {
-            if (!download) resolve();
-            else onfslist([]);
-        });
-    }); 
-    return promise;
-}
+	/**
+	 * @param {string} path
+	 * @param {boolean} download
+	 * @return {!Promise.<Object.<string, boolean>>}
+	 */
+	syncTestNotExists(path, download)
+	{
+		const list = {};
+		return this._listNotExists(path, list, download)
+		.then(() => list);
+	}
 
-/**
- * @param {string} path
- * @param {boolean} download
- * @return {!Promise.<Object.<string, boolean>>}
- */
-FtpFileSystem.prototype.syncTestNotExists = function(path, download)
-{
-    var list = {};
-    return _listNotExists(path, list, download)
-    .then(() => list);
-};
+	/**
+	 * @param {string} path
+	 */
+	_refeshForce(path)
+	{
+		return this.ftpList(path)
+		.then((dir) => {
+			var promise = Promise.resolve();
+			for(const p in dir.files)
+			{
+				switch(p)
+				{
+				case '': case '.': case '..': break;
+				default:
+					if (dir.files[p] instanceof f.Directory)
+					{
+						promise = promise.then(() => this._refeshForce(path + "/" + p));
+					}
+					break;
+				}
+			}
+			return promise;
+		}); 
+	}
+	
+	ftpRefreshForce()
+	{
+		for(const p in this.refreshed)
+		{
+			delete this.refreshed[p];
+		}
+		return this._refeshForce('');
+	}
+}
 
 const vfs = new FtpFileSystem;
 var syncDataPath = "";
@@ -456,6 +498,13 @@ const sync = {
                 util.error(nerr);
             }
         });
+    },
+    /**
+     * @returns {!Promise}
+     */
+    refreshForce: function()
+    {
+		return vfs.ftpRefreshForce();
     },
     /**
      * @param {string} path

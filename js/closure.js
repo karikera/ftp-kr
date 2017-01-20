@@ -295,7 +295,14 @@ module.exports = {
 			"closure": {}
 		};
 
-		makejson = nfs.worklize(makejson);
+		try
+		{
+			makejson = nfs.worklize(makejson);
+		}
+		catch(e)
+		{
+			makejson = nfs.workspace+'/';
+		}
 		return nfs.initJson(makejson, makejsonDefault)
             .then(() => util.open(makejson));
 	},

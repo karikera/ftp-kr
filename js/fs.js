@@ -112,13 +112,13 @@ const nfs = module.exports = {
      */
     worklize: function(localpath)
     {
-        var fullpath = path.resolve(localpath).replace(/\\/g, '/');
+        const fullpath = path.resolve(localpath).replace(/\\/g, '/');
         if (!fullpath.startsWith(nfs.workspace))
             throw new Error(localpath+" not in workspace");
-        var workpath = fullpath.substr(nfs.workspace.length);
-        if (!workpath.startsWith("/"))
+        const workpath = fullpath.substr(nfs.workspace.length);
+        if (workpath !== '' && workpath.charAt(0) !== '/')
             throw new Error(localpath+" not in workspace");
-        return fullpath.substr(nfs.workspace.length);        
+        return workpath;
     },
 
     /**

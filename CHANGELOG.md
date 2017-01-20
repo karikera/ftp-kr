@@ -80,3 +80,7 @@
 
 # 0.0.19
 * Add missing module
+
+# 0.0.20
+* Fix `Download/Clean All` commands
+* Add `Refresh All` command

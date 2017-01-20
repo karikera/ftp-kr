@@ -27,14 +27,18 @@ Closure Compiler Functions:
 * Parse &lt;reference&gt; tag to include other js
 
 ## Available commands
-* `ftp-kr Init` - Create ftp-kr.json.
-* `ftp-kr Upload All` - Upload all files.
-* `ftp-kr Download All` - Download all files.
-* `ftp-kr Upload This` - Upload this file.
-* `ftp-kr Download This` - Download this file.
-* `ftp-kr Clean All` - Cleaning FTP files that Not in workspace.
-* `ftp-kr Make Json` - Make json file for Closure compiler.
-* `ftp-kr Closure Compile` - Compile by makejson from directory of opened file!
-* `ftp-kr Closure Compile All` - Compile all of make.json in workspace!
+* `ftp-kr: Init` - Create ftp-kr.json.
+* `ftp-kr: Upload All` - Upload all files.
+* `ftp-kr: Download All` - Download all files.
+* `ftp-kr: Upload This` - Upload this file.
+* `ftp-kr: Download This` - Download this file.
+* `ftp-kr: Refresh All` - Rescan remote files.
+* `ftp-kr: Clean All` - Cleaning remote files that Not in workspace.
+
+## Available commands about Closure Compiler
+
+* `ftp-kr: Make Json` - Create config file of Closure Compiler as make.json.
+* `ftp-kr: Closure Compile` - Compile by makejson from directory of opened file!
+* `ftp-kr: Closure Compile All` - Compile all of make.json in workspace!
 
 **Enjoy!**

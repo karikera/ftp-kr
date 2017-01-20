@@ -71,17 +71,17 @@ function attachWatcher(mode)
     watcher = workspace.createFileSystemWatcher(watcherPath);
     var deleteParent = ""; // 부모 디렉토리가 삭제된 다음 자식 디렉토리가 갱신되는 상황을 우회
     watcher.onDidChange((e) => {
-        var path = fs.worklize(e.fsPath);
+        const path = fs.worklize(e.fsPath);
         if (deleteParent && path.startsWith(deleteParent+ "/")) return;
         processWatcher(path, (path) => ftpsync.upload(path, true), config.autoUpload);
     });
     watcher.onDidCreate((e) => {
-        var path = fs.worklize(e.fsPath);
+        const path = fs.worklize(e.fsPath);
         if (deleteParent && deleteParent === path) deleteParent = "";
         processWatcher(path, ftpsync.upload, config.autoUpload);
     });
     watcher.onDidDelete((e) => {
-        var path = fs.worklize(e.fsPath);
+        const path = fs.worklize(e.fsPath);
         deleteParent = path;
         processWatcher(path, ftpsync.delete, config.autoDelete);
     });
@@ -171,15 +171,15 @@ function fileOrEditorFile(file)
     {
         if(file)
         {
-            var path = fs.worklize(file.fsPath);
+            const path = fs.worklize(file.fsPath);
             return Promise.resolve(path);
         }
         else
         {
-            var editor = window.activeTextEditor;
+            const editor = window.activeTextEditor;
             if (!editor) throw new Error("No file opened");
-            var doc = editor.document;
-            var path = fs.worklize(doc.fileName);
+            const doc = editor.document;
+            const path = fs.worklize(doc.fileName);
             return doc.save().then(() => path);
         }
     }
@@ -262,7 +262,13 @@ module.exports = {
                 )
                 .catch(util.error)
             );
-        }
+        },
+        'ftpkr.refreshAll': function() {
+            return cfg.loadTest()
+			.then(() => cfg.isFtpDisabled())
+            .then(() => work.ftp.add(() => ftpsync.refreshForce()).catch(util.error));
+        },
+
     }
 };
 

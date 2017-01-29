@@ -80,7 +80,7 @@ function onLoadError(err)
 
 
 const cfg = module.exports = {
-    loadTest: function()
+    loadTest()
     {
         if (config.state !== 'LOADED')
         {
@@ -90,7 +90,7 @@ const cfg = module.exports = {
         } 
         return Promise.resolve();
     },
-	isFtpDisabled: function()
+	isFtpDisabled()
 	{
 		if (config.disableFtp)
 		{
@@ -99,7 +99,7 @@ const cfg = module.exports = {
 		}
 		return Promise.resolve();
 	},
-    load: function()
+    load()
     {
         return work.compile.add(
             ()=>work.ftp.add(
@@ -110,7 +110,7 @@ const cfg = module.exports = {
         ).catch((err) => onLoadError(err));
     },
 
-    unload: function()
+    unload()
     {
     },
 
@@ -119,7 +119,7 @@ const cfg = module.exports = {
     onNotFound:makeEvent(),
 
     commands: {
-        'ftpkr.init': function(){
+        'ftpkr.init'(){
             return work.compile.add(
                 ()=>work.ftp.add(
                     ()=> work.load.add(

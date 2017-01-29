@@ -110,7 +110,7 @@ const nfs = module.exports = {
      * @param {string} localpath
      * @returns {string}
      */
-    worklize: function(localpath)
+    worklize(localpath)
     {
         const fullpath = path.resolve(localpath).replace(/\\/g, '/');
         if (!fullpath.startsWith(nfs.workspace))
@@ -125,7 +125,7 @@ const nfs = module.exports = {
      * @param {string} path
      * @returns {!Promise.<Array.<string>>}
      */
-    list: function(path)
+    list(path)
     {
         if (path !== "" && !path.startsWith("/")) return Promise.reject(new Error("Path must starts with slash: "+path));
         return callbackToPromise((callback)=>fs.readdir(nfs.workspace + path, callback));
@@ -134,7 +134,7 @@ const nfs = module.exports = {
      * @param {string} path
      * @returns {!Promise.<FSStat>}
      */
-    stat: function(path)
+    stat(path)
     {
         if (path !== "" && !path.startsWith("/")) return Promise.reject(new Error("Path must starts with slash: "+path));
         return callbackToPromise((callback)=>fs.stat(nfs.workspace + path, callback));
@@ -143,7 +143,7 @@ const nfs = module.exports = {
      * @param {string} path
      * @returns {!Promise}
      */
-    mkdir: function(path)
+    mkdir(path)
     {
         if (!path.startsWith("/")) return Promise.reject(new Error("Path must starts with slash: "+path));
         return new Promise(function(resolve, reject){
@@ -161,7 +161,7 @@ const nfs = module.exports = {
      * @param {string} path
      * @returns {!Promise}
      */
-    mkdirp: function(path)
+    mkdirp(path)
     {
         if (!path.startsWith("/")) return Promise.reject(new Error("Path must starts with slash: "+path));
         return callbackToPromise((callback)=>mkdirParent(nfs.workspace + path, callback));
@@ -170,7 +170,7 @@ const nfs = module.exports = {
      * @param {string} path
      * @returns {!Promise.<FSStat>}
      */
-    lstat: function(path)
+    lstat(path)
     {
         if (path !== "" && !path.startsWith("/")) return Promise.reject(new Error("Path must starts with slash: "+path));
         return callbackToPromise((callback)=>fs.lstat(nfs.workspace + path, callback));
@@ -179,7 +179,7 @@ const nfs = module.exports = {
      * @param {string} path
      * @returns {!Promise.<string>}
      */
-    open: function(path)
+    open(path)
     {
         if (!path.startsWith("/")) return Promise.reject(new Error("Path must starts with slash: "+path));
         return callbackToPromise((callback)=>fs.readFile(nfs.workspace + path, "utf-8", callback));
@@ -189,7 +189,7 @@ const nfs = module.exports = {
      * @param {string} path
      * @returns {!Promise.<boolean>}
      */
-    exists: function(path)
+    exists(path)
     {
         if (!path.startsWith("/")) return Promise.reject(new Error("Path must starts with slash: "+path));
         return new Promise((resolve) => fs.exists(nfs.workspace + path, resolve));
@@ -199,7 +199,7 @@ const nfs = module.exports = {
      * @param {string} path
      * @returns {Promise.<*>}
      */
-    json: function(path)
+    json(path)
     {
         return nfs.open(path).then((data) => JSON.parse(stripJsonComments(data)));
     },
@@ -209,7 +209,7 @@ const nfs = module.exports = {
      * @param {string} data
      * @returns {Promise}
      */
-    create: function(filepath, data)
+    create(filepath, data)
     {
         return nfs.mkdirp(path.dirname(filepath))
         .then(() => callbackToPromise((callback)=>fs.writeFile(nfs.workspace + filepath, data, "utf-8", callback)));
@@ -220,7 +220,7 @@ const nfs = module.exports = {
      * @param {string} data
      * @returns {void}
      */
-    createSync: function(path, data)
+    createSync(path, data)
     {
         if (!path.startsWith("/")) throw new Error("Path must starts with slash: "+path);
         return fs.writeFileSync(nfs.workspace + path, data, "utf-8");
@@ -230,7 +230,7 @@ const nfs = module.exports = {
      * @param {string} path
      * @returns {Promise}
      */
-    delete: function(path)
+    delete(path)
     {
         if (!path.startsWith("/")) return Promise.reject(new Error("Path must starts with slash: "+path));
         return callbackToPromise((callback)=>fs.unlink(nfs.workspace + path, callback));
@@ -240,7 +240,7 @@ const nfs = module.exports = {
      * @param {string} filepath
      * @returns {Promise}
      */
-    initJson: function(filepath, defaultValue)
+    initJson(filepath, defaultValue)
     {
         return nfs.json(filepath).then(function(data){
             var changed = false;
@@ -264,7 +264,7 @@ const nfs = module.exports = {
 	 * @param {string} path
 	 * @return {!Promise<boolean>}
 	 */
-	isDirectory: function(path)
+	isDirectory(path)
 	{
 		return nfs.stat(path).then(stat=>stat.isDirectory());
 	}

@@ -294,6 +294,7 @@ class FtpFileSystem extends f.FileSystem
 	 */
 	_listNotExists(path, list, download)
 	{
+        if (config.checkIgnorePath(path)) return;
 		const that = this;
 		const command = download ? "download" : "delete"; 
 		return new Promise((resolve, reject)=>{
@@ -305,6 +306,9 @@ class FtpFileSystem extends f.FileSystem
 					const willDel = {};
 					for(const p in dir.files)
 					{
+						const fullPath = path + "/" + p;
+        				if (config.checkIgnorePath(fullPath)) continue;
+
 						switch(p)
 						{
 						case '': case '.': case '..': break;
@@ -312,7 +316,7 @@ class FtpFileSystem extends f.FileSystem
 							willDel[p] = true;
 							if (dir.files[p] instanceof f.Directory)
 							{
-								promise = promise.then(() => that._listNotExists(path + "/" + p, list, download));
+								promise = promise.then(() => that._listNotExists(fullPath, list, download));
 							}
 							break;
 						}
@@ -394,7 +398,7 @@ const sync = {
      * @param {Object.<string, string>} task
      * @returns {!Promise}
      */
-    exec: function(task)
+    exec(task)
     {
         var errorCount = 0;
         var failedTasks = {};
@@ -423,7 +427,7 @@ const sync = {
      * @param {string} path
      * @returns {!Promise}
      */
-    delete: function(path)
+    delete(path)
     {
         return vfs.ftpDelete(path);
     },
@@ -432,7 +436,7 @@ const sync = {
      * @param {boolean=} ignoreDirectory
      * @returns {!Promise}
      */
-    upload: function(path, ignoreDirectory)
+    upload(path, ignoreDirectory)
     {
         return vfs.ftpUpload(path, ignoreDirectory);
     },
@@ -440,14 +444,14 @@ const sync = {
      * @param {string} path
      * @returns {!Promise}
      */
-    download: function(path)
+    download(path)
     {
         return vfs.ftpDownload(path);
     },
     /**
      * @returns {!Promise.<Object.<string, string>>}
      */
-    syncTestClean: function()
+    syncTestClean()
     {
         return vfs.syncTestNotExists("", false);
     },
@@ -455,7 +459,7 @@ const sync = {
 	 * @param {string} path
      * @returns {!Promise.<Object.<string, string>>}
      */
-    syncTestUpload: function(path)
+    syncTestUpload(path)
     {
         return vfs.syncTestUpload(path);
     },
@@ -463,14 +467,14 @@ const sync = {
 	 * @param {string} path
      * @returns {!Promise.<Object.<string, string>>}
      */
-    syncTestDownload: function(path)
+    syncTestDownload(path)
     {
         return vfs.syncTestNotExists(path, true);
     },
     /**
      * @returns {void}
      */
-    saveSync: function()
+    saveSync()
     {
         if(!syncDataPath) return;
         if (config.state !== 'LOADED') return;
@@ -481,7 +485,7 @@ const sync = {
     /**
      * @returns {!Promise}
      */
-    load: function()
+    load()
     {
         syncDataPath = `/.vscode/ftp-kr.sync.${config.protocol}.${config.host}.${config.remotePath.replace(/\//g, ".")}.json`;
         return fs.open(syncDataPath)
@@ -502,7 +506,7 @@ const sync = {
     /**
      * @returns {!Promise}
      */
-    refreshForce: function()
+    refreshForce()
     {
 		return vfs.ftpRefreshForce();
     },
@@ -510,7 +514,61 @@ const sync = {
      * @param {string} path
      * @returns {!Promise}
      */
-    refresh: function(path)
+	list(path)
+	{
+		const NAMES = {
+			'd': '[DIR] ',
+			'-': '[FILE]',
+		};
+		return util.select(vfs.ftpList(path).then(dir=>{
+			const list = [];
+			for(const filename in dir.files)
+			{
+				switch(filename)
+				{
+				case '': case '.': continue;
+				case '..': if(path === '') continue;
+				}
+				const file = dir.files[filename];
+				list.push(NAMES[file.type]+'\t'+filename);
+			}
+			list.sort();
+			return list;
+		}))
+		.then(selected=>{
+			if (selected === undefined) return;
+			const typecut = selected.indexOf('\t');
+			const type = selected.substr(0, typecut);
+			selected = selected.substr(typecut+1);
+			if (selected === '..')
+			{
+				return sync.list(path.substring(0, path.lastIndexOf('/')));
+			}
+			const npath = path + '/' + selected;
+			switch (type)
+			{
+			case NAMES['d']:
+				return sync.list(npath);
+			case NAMES['-']:
+				return util.select(['Download '+selected,'Upload '+selected,'Delete '+selected])
+				.then(selected=>{
+					if (selected === undefined) return sync.list(path);
+					const cmd = selected.substr(0, selected.indexOf(' '));
+					switch(cmd)
+					{
+					case 'Download': return sync.download(npath);
+					case 'Upload': return sync.upload(npath);
+					case 'Delete': return sync.delete(npath);
+					}
+				});
+			}
+		});
+	},
+    /**
+     * @param {string} path
+     * @returns {!Promise}
+     */
+    refresh(path)
     {
         return vfs.ftpList(path);
     },
@@ -518,7 +576,7 @@ const sync = {
      * @param {string} path
      * @returns {!Promise}
      */
-    delete:function(path)
+    delete(path)
     {
         return vfs.ftpDelete(path);
     },

@@ -208,14 +208,14 @@ function downloadAll(path)
 }
 
 module.exports = {
-    load: function () {
+    load () {
     },
-    unload: function() {
+    unload() {
         ftpsync.saveSync();
     },
 
     commands: {
-        'ftpkr.upload': function(file) {
+        'ftpkr.upload'(file) {
             return cfg.loadTest()
 			.then(() => cfg.isFtpDisabled())
             .then(() => fileOrEditorFile(file))
@@ -226,7 +226,7 @@ module.exports = {
 				).catch(util.error)
             ).catch(util.error);
         },
-        'ftpkr.download': function(file) {
+        'ftpkr.download'(file) {
             return cfg.loadTest()
 			.then(() => cfg.isFtpDisabled())
             .then(() => fileOrEditorFile(file))
@@ -237,21 +237,21 @@ module.exports = {
 				).catch(util.error)
             ).catch(util.error);
         },
-        'ftpkr.uploadAll': function() {
+        'ftpkr.uploadAll'() {
             return cfg.loadTest()
 			.then(() => cfg.isFtpDisabled())
             .then(() => workspace.saveAll())
             .then(() => work.ftp.add(() => uploadAll("")).catch(util.error));
         },
 
-        'ftpkr.downloadAll': function() {
+        'ftpkr.downloadAll'() {
             return cfg.loadTest()
 			.then(() => cfg.isFtpDisabled())
             .then(() => workspace.saveAll())
             .then(() => work.ftp.add(() => downloadAll("")).catch(util.error));
         },
 
-        'ftpkr.cleanAll': function() {
+        'ftpkr.cleanAll'() {
             return cfg.loadTest()
 			.then(() => cfg.isFtpDisabled())
             .then(() => workspace.saveAll())
@@ -263,10 +263,15 @@ module.exports = {
                 .catch(util.error)
             );
         },
-        'ftpkr.refreshAll': function() {
+        'ftpkr.refreshAll'() {
             return cfg.loadTest()
 			.then(() => cfg.isFtpDisabled())
             .then(() => work.ftp.add(() => ftpsync.refreshForce()).catch(util.error));
+        },
+        'ftpkr.list'() {
+            return cfg.loadTest()
+			.then(() => cfg.isFtpDisabled())
+            .then(() => work.ftp.add(() => ftpsync.list('')).catch(util.error));
         },
 
     }

@@ -262,13 +262,13 @@ function build(makejson)
 }
 
 module.exports = {
-    help: function(){
+    help(){
         cp.spawnSync("java", ["-jar",closurecompiler,"--help"], {stdio: ['inherit', 'inherit', 'inherit']});
     },
     /**
      * @returns {!Promise} 
      */
-    all: function(){
+    all(){
         util.clearLog();
 		util.showLog();
         return glob(workspace.rootPath+"/**/make.json")
@@ -281,7 +281,7 @@ module.exports = {
 	 * @param {string=} input
 	 * @return {!Promise}
 	 */
-	makeJson: function(makejson, input)
+	makeJson(makejson, input)
 	{
 		if (input) input = path.relative(path.dirname(makejson), input).replace(/\\/g, '/');
 		else input = "./script.js";
@@ -310,7 +310,7 @@ module.exports = {
 	 * @param {string} makejs
      * @returns {!Promise} 
      */
-    make: function(makejs){
+    make(makejs){
         util.clearLog();
 		util.showLog();
         return build(makejs);

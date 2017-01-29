@@ -62,7 +62,7 @@ const config = module.exports = {
      * @param {string} path
      * @return {boolean}
      */
-    checkIgnorePath: function(path)
+    checkIgnorePath(path)
     {
         if(!path.startsWith("/"))
             path = "/" + path;
@@ -91,7 +91,7 @@ const config = module.exports = {
      * @param {Object} obj
      * @returns {!Promise}
      */
-    set: function(obj)
+    set(obj)
     {
         try
         {
@@ -127,7 +127,7 @@ const config = module.exports = {
     /**
      * @returns {!Promise.<boolean>}
      */
-    load: function ()
+    load ()
     {
         return new Promise(function(resolve, reject){
             fs.open(CONFIG_PATH)
@@ -149,7 +149,7 @@ const config = module.exports = {
     /**
      * @returns {!Promise}
      */
-    init: function()
+    init()
     {
         return fs.initJson(CONFIG_PATH, CONFIG_BASE)
         .then((obj) => config.set(obj))

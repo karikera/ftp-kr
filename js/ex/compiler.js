@@ -35,18 +35,18 @@ function generateConfirm(makejson, input, err)
 }
 
 module.exports = {
-    load : function () {
+    load  () {
 
     },
-    unload: function() {
+    unload() {
 
     },
     commands: {
-        'ftpkr.makejson':function (){
+        'ftpkr.makejson' (){
             if (!window.activeTextEditor) return;
 			return closure.makeJson(getSelectedMakeJson(), getSelectedFilePath()).catch(util.error);
         },
-        'ftpkr.closureCompile':function (){
+        'ftpkr.closureCompile' (){
             return cfg.loadTest()
             .then(() => workspace.saveAll())
             .then(() => work.compile.add(() => {
@@ -83,7 +83,7 @@ module.exports = {
             )
 			.catch(util.error);
         },
-        'ftpkr.closureCompileAll': function(){
+        'ftpkr.closureCompileAll'(){
             return cfg.loadTest()
             .then(() => workspace.saveAll())
             .then(() => work.compile.add(() => closure.all()).catch(util.error))

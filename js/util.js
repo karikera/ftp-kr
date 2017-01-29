@@ -49,7 +49,7 @@ const util = {
     /**
      * @return {boolean}
      */
-    isEmptyObject: function(obj)
+    isEmptyObject(obj)
     {
         for(var p in obj) return false;
         return true;
@@ -59,7 +59,7 @@ const util = {
      * @param {string} state
      * @return {void}
      */
-    setState: function(state)
+    setState(state)
     {
         if (!statebar) statebar = window.createStatusBarItem();
         statebar.text = state;
@@ -69,7 +69,7 @@ const util = {
     /**
      * @returns {void}
      */
-    clearLog:function()
+    clearLog()
     {
         if (!output) return;
         output.clear();
@@ -77,7 +77,7 @@ const util = {
     /**
      * @returns {void}
      */
-	showLog: function()
+	showLog()
 	{
 		if(!output) return;
 		output.show();
@@ -86,7 +86,7 @@ const util = {
      * @param {...string} message
      * @returns {void}
      */
-    log: function(message)
+    log(message)
     {
         if (!output)
         {
@@ -96,11 +96,10 @@ const util = {
     },
 
     /**
-     * @function
      * @param {function()} func
      * @returns {void}
      */
-    wrap: function(func)
+    wrap(func)
     {
         try
         {
@@ -112,21 +111,19 @@ const util = {
         }
     },
     /**
-     * @function
      * @param {string} info
      * @param {...string} items
      * @returns {!Promise}
      */
-    info: function (info, items)
+    info (info, items)
     {
         return window.showInformationMessage.apply(window, arguments);
     },
     /**
-     * @function
      * @param {Error|string} err
      * @returns {void}
      */
-    error: function (err)
+    error (err)
     {
         console.error(err);
         util.log(err);
@@ -163,12 +160,11 @@ const util = {
 		}
     },
     /**
-     * @function
      * @param {Error|string} err
      * @param {...string} items
      * @returns {!Promise<string|undefined>}
      */
-    errorConfirm: function (err, items)
+    errorConfirm (err, items)
     {
         var args = Array.prototype.slice.apply(arguments);
         if (err instanceof Error)
@@ -180,35 +176,40 @@ const util = {
         return window.showErrorMessage.apply(window, args);
     },
     /**
-     * @function
      * @param {string} path
      * @param {string} message
      * @returns {!Promise}
      */
-    openWithError: function(path, message)
+    openWithError(path, message)
     {
         window.showErrorMessage(path + ": " + message);
         return util.open(path);
     },
+	/**
+	 * @param {string[]|!Promise<string[]>} list
+	 * @return {!Promise<string|undefined>}
+	 */
+	select(list)
+	{
+		return window.showQuickPick(list);
+	},
     /**
-     * @function
      * @param {string} path
      * @returns {!Promise}
      */
-    open: function(path)
+    open(path)
     {
        	return workspace.openTextDocument(fs.workspace + path)
         .then((doc) => window.showTextDocument(doc));
     },
 
     /**
-     * @function
      * @template T
      * @param {function(Array.<T>):Promise} func
      * @param {Array.<T>} params
      * @returns {Promise}
      */
-    cascadingPromise: function(func, params)
+    cascadingPromise(func, params)
     {
         if (params.length == 0)
         {
@@ -235,12 +236,11 @@ const util = {
     },
 
     /**
-     * @function
      * @param {function(Array.<?>):Promise} func
      * @param {Array.<?>} params
      * @returns {!Promise}
      */
-    cascadingPromiseAuto: function(func, params)
+    cascadingPromiseAuto(func, params)
     {
         if (!("length" in params))
         {
@@ -272,12 +272,11 @@ const util = {
         });
     },
     /**
-     * @function
      * @param {Array.<string>} args
      * @param {Object} options
      * @returns {void}
      */
-    addOptions: function(args, options)
+    addOptions(args, options)
     {
 		for (const key in options)
 		{

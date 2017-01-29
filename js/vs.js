@@ -88,7 +88,7 @@ const vs = {
 	 * @param {string} data
 	 * @return {Array<Tag>}
 	 */
-	readXml:function(data)
+	readXml(data)
 	{
 		const page = new Reader;
 		page.data = data;
@@ -120,7 +120,7 @@ const vs = {
 	 * @param {Array.<string>}
 	 * @returns {Array.<string>}
 	 */
-	normalize: function(src)
+	normalize(src)
 	{
 		var sort = {};
 		var j = 0;

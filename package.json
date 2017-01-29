@@ -3,7 +3,7 @@
   "displayName": "ftp-kr",
   "description": "FTP sync & Closure Compiler for ME!",
   "license": "MIT",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "publisher": "ruakr",
   "repository": {
     "type": "git",
@@ -71,6 +71,11 @@
       {
         "command": "ftpkr.cleanAll",
         "title": "Clean All",
+		"category": "ftp-kr"
+      },
+      {
+        "command": "ftpkr.list",
+        "title": "List",
 		"category": "ftp-kr"
       }
     ],

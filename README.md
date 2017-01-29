@@ -12,18 +12,23 @@ Start with `ftp-kr Init` command! (When exists workspace)
 ![download all](images/downloadall.png)
 
 By default, the auto-sync feature is enabled  
-If you want to disable, please set autoUpload/autoDelete to false
+If you want to disable auto-sync, please set autoUpload/autoDelete to false
+![auto](images/autofeature.png)
+
+You can see remote directory with `ftp-kr List` command!
+![list](images/list.png)
 
 ## Functions
-FTP Functions:
-* Real-Time FTP synchronization(You can off it!)
+FTP/SFTP Functions:
+* Real-Time FTP/SFTP synchronization(You can off it!)
 * Upload All without Same size file
 * Download All without exists file
-* Cleaning FTP files that Not in workspace
+* Cleaning remote files that Not in workspace
 * Same file size -> It is Latest! -> Do not upload or download
+* Browse remote directory
 
 Closure Compiler Functions:
-* Compile to command "ftp-kr Closure Compile"
+* Compile with `ftp-kr Closure Compile` command
 * Parse &lt;reference&gt; tag to include other js
 
 ## Available commands
@@ -34,6 +39,8 @@ Closure Compiler Functions:
 * `ftp-kr: Download This` - Download this file.
 * `ftp-kr: Refresh All` - Rescan remote files.
 * `ftp-kr: Clean All` - Cleaning remote files that Not in workspace.
+* `ftp-kr: Refresh All` - Cleaning remote file list cache.
+* `ftp-kr: List` - Show list of remote files.
 
 ## Available commands about Closure Compiler
 

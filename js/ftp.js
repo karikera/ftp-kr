@@ -577,6 +577,8 @@ function init()
         return Promise.resolve();
     }
 
+	util.showLog();
+	
 	switch (config.protocol)
 	{
 	case 'sftp': new Sftp; break;
@@ -587,8 +589,24 @@ function init()
 		new Ftp;
 		break;
 	}
+	var url = '';
+	url += config.protocol;
+	url += '://';
+	url += config.host;
+	if (config.port)
+	{
+		url += ':';
+		url += config.port;
+	}
+	url += '/';
+	url += config.remotePath;
+	url += '/';
 
-	return client.connect();
+	util.log(`Try connect to ${url} with user ${config.username}`);
+
+	return client.connect().then(()=>{
+		util.log('Connected');
+	});
 }
 
 function _errorWrap(err)
@@ -601,7 +619,7 @@ module.exports = {
      * @param {string} workpath
      * @returns {!Promise}
      */
-    rmdir: function(workpath)
+    rmdir(workpath)
     {
        return init().then(() => client.rmdir(workpath));
     },
@@ -609,7 +627,7 @@ module.exports = {
      * @param {string} workpath
      * @returns {!Promise}
      */
-    delete: function(workpath)
+    delete(workpath)
     {
        return init().then(() => client.delete(workpath));
     },
@@ -617,7 +635,7 @@ module.exports = {
      * @param {string} workpath
      * @returns {!Promise}
      */
-    mkdir: function(workpath)
+    mkdir(workpath)
     {
        return init().then(() => client.mkdir(workpath));
     },
@@ -626,7 +644,7 @@ module.exports = {
      * @param {string} localpath
      * @returns {!Promise}
      */
-    upload: function(workpath, localpath)
+    upload(workpath, localpath)
     {
        return init().then(() => client.upload(workpath, localpath));
     },
@@ -635,7 +653,7 @@ module.exports = {
      * @param {string} workpath
      * @returns {!Promise}
      */
-    download: function(localpath, workpath)
+    download(localpath, workpath)
     {
        return init().then(() => client.download(localpath, workpath));
     },
@@ -643,7 +661,7 @@ module.exports = {
      * @param {string} workpath
      * @returns {!Promise}
      */
-    list: function(workpath)
+    list(workpath)
     {
        return init().then(() => client.list(workpath));
     }

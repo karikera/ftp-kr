@@ -7,25 +7,29 @@
         },
         "host": {
             "type": "string",
-            "description": "Address of the FTP server",
+            "description": "Address of the FTP/SFTP server",
             "format": "hostname"
         },
         "username": {
             "type": "string",
-            "description": "FTP user name"
+            "description": "FTP/SFTP user name"
         },
         "password": {
             "type": "string",
-            "description": "FTP password"
+            "description": "FTP/SFTP password"
         },
         "remotePath": {
             "type": "string",
-            "description": "FTP side directory"
+            "description": "FTP/SFTP side directory"
         },
         "port": {
             "type": "integer",
-            "description": "Port number of FTP server"
+            "description": "Port number of FTP/SFTP server"
         },
+		"connectionTimeout": {
+			"type": "integer",
+			"description": "Disconnect from FTP/SFTP server after timeout(ms) (default: 60000)"
+		},
         "fileNameEncoding": {
             "enum": [
                 "utf8",

@@ -67,13 +67,13 @@ const config = module.exports = {
         if(!path.startsWith("/"))
             path = "/" + path;
         
-        var check = config.ignore;
+        const check = config.ignore;
         for (var i=0;i<check.length;i++)
         {
-            var pattern = check[i];
+            let pattern = check[i];
             if (typeof pattern === "string")
             {
-                var regexp = pattern.replace(/[*.?+\[\]^$]/g, regexpchanger);
+                let regexp = pattern.replace(/[*.?+\[\]^$]/g, regexpchanger);
                 if (regexp.startsWith("/"))
                     regexp = "^" + regexp;
                 else
@@ -87,6 +87,7 @@ const config = module.exports = {
         }
         return false;
     },
+
     /**
      * @param {Object} obj
      * @returns {!Promise}
@@ -127,7 +128,7 @@ const config = module.exports = {
     /**
      * @returns {!Promise.<boolean>}
      */
-    load ()
+    load()
     {
         return new Promise(function(resolve, reject){
             fs.open(CONFIG_PATH)

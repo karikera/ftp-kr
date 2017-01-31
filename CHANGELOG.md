@@ -1,8 +1,12 @@
 
+# 0.0.22
+* Add connectionTimeout option
+* Do not opens up output for every connection
+
 # 0.0.21
 * Fix ignore list did not apply to `Download/Clean All` command
 * Reverse ordering of CHANGELOG.md
-* Add `List` command
+* Add `List` command  
 ![list](images/list.png)
 
 # 0.0.20

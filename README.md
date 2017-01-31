@@ -12,10 +12,10 @@ Start with `ftp-kr Init` command! (When exists workspace)
 ![download all](images/downloadall.png)
 
 By default, the auto-sync feature is enabled  
-If you want to disable auto-sync, please set autoUpload/autoDelete to false
+If you want to disable auto-sync, please set autoUpload/autoDelete to false  
 ![auto](images/autofeature.png)
 
-You can see remote directory with `ftp-kr List` command!
+You can see remote directory with `ftp-kr List` command!  
 ![list](images/list.png)
 
 ## Functions

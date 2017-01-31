@@ -3,7 +3,7 @@
   "displayName": "ftp-kr",
   "description": "FTP sync & Closure Compiler for ME!",
   "license": "MIT",
-  "version": "0.0.21",
+  "version": "0.0.22",
   "publisher": "ruakr",
   "repository": {
     "type": "git",
@@ -26,57 +26,57 @@
       {
         "command": "ftpkr.init",
         "title": "Init",
-		"category": "ftp-kr"
+        "category": "ftp-kr"
       },
       {
         "command": "ftpkr.makejson",
         "title": "Generate make.json",
-		"category": "ftp-kr"
+        "category": "ftp-kr"
       },
       {
         "command": "ftpkr.closureCompile",
         "title": "Closure Compile",
-		"category": "ftp-kr"
+        "category": "ftp-kr"
       },
       {
         "command": "ftpkr.closureCompileAll",
         "title": "Closure Compile All",
-		"category": "ftp-kr"
+        "category": "ftp-kr"
       },
       {
         "command": "ftpkr.uploadAll",
         "title": "Upload All",
-		"category": "ftp-kr"
+        "category": "ftp-kr"
       },
       {
         "command": "ftpkr.downloadAll",
         "title": "Download All",
-		"category": "ftp-kr"
+        "category": "ftp-kr"
       },
       {
         "command": "ftpkr.upload",
         "title": "Upload This",
-		"category": "ftp-kr"
+        "category": "ftp-kr"
       },
       {
         "command": "ftpkr.download",
         "title": "Download This",
-		"category": "ftp-kr"
+        "category": "ftp-kr"
       },
       {
         "command": "ftpkr.refreshAll",
         "title": "Refresh All",
-		"category": "ftp-kr"
+        "category": "ftp-kr"
       },
       {
         "command": "ftpkr.cleanAll",
         "title": "Clean All",
-		"category": "ftp-kr"
+        "category": "ftp-kr"
       },
       {
         "command": "ftpkr.list",
         "title": "List",
-		"category": "ftp-kr"
+        "category": "ftp-kr"
       }
     ],
     "jsonValidation": [
@@ -118,7 +118,7 @@
     "typescript": "^2.1.5",
     "vscode": "^1.0.3",
     "mocha": "^2.3.3",
-    "@types/node": "^6.0.60",
+    "@types/node": "^6.0.62",
     "@types/mocha": "^2.2.38"
   }
 }

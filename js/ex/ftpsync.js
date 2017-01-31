@@ -38,7 +38,8 @@ function processWatcher(path, upload, autoSync)
     {
         if (path == config.PATH)
         {
-            var promise = cfg.load();
+			util.showLog();
+            let promise = cfg.load();
             if (watcherMode !== 'CONFIG')
                 promise = promise.then(() => commit());
             promise.catch(util.error);

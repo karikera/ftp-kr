@@ -61,7 +61,7 @@ class FileInterface
 	update()
 	{
 		this.cancelDestroyTimeout();
-		this.destroyTimeout = setTimeout(this.destroy.bind(this), 5000);
+		this.destroyTimeout = setTimeout(this.destroy.bind(this), config.connectionTimeout ? config.connectionTimeout : 60000);
 	}
 
 	destroy()
@@ -576,8 +576,6 @@ function init()
         client.update();
         return Promise.resolve();
     }
-
-	util.showLog();
 	
 	switch (config.protocol)
 	{

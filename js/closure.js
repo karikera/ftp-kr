@@ -150,8 +150,8 @@ function closure(options)
     
     var makeFile = new MakeFile;
 
-    makeFile.on(out, src.concat([options.makejson]), function(){
-        return new Promise(function(resolve, reject) {
+    makeFile.on(out, src.concat([options.makejson]), ()=>{
+        return new Promise((resolve, reject)=> {
             const curdir = process.cwd();
             try
             {

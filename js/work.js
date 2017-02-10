@@ -26,20 +26,18 @@ class Work
 		if (this.endIsBusy)
 		{
 			this.endIsBusy = false;
-			var that = this;
-			return new Promise(function(resolve, reject){
-				that.promise = that.promise
-				.then(() => { resolve(); that.busy--; })
-				.catch((err) => { reject(err); that.busy--; });
+			return new Promise((resolve, reject)=>{
+				this.promise = this.promise
+				.then(() => { resolve(); this.busy--; })
+				.catch((err) => { reject(err); this.busy--; });
 			});
 		}
 		return this.promise;
 	}
 	catch(func)
 	{
-		var that = this;
-		return new Promise(function(resolve){
-			that.promise = that.end()
+		return new Promise(resolve=>{
+			this.promise = this.end()
 			.then((data) => resolve(data))
 			.catch((err) => resolve(func(err)))
 		});

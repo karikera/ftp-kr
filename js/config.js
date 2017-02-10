@@ -11,11 +11,13 @@ const CONFIG_BASE = {
     "password": "",
     "remotePath": "",
 	"protocol": "ftp",
+	"port": 0,
     "fileNameEncoding": "utf8", 
     "ignoreWrongFileEncoding": false,
     "createSyncCache": true, 
     "autoUpload": true,
     "autoDelete": false,
+	"autoDownload": false,
 	"disableFtp": false,
     "ignore":[
         "/.git",
@@ -116,6 +118,10 @@ const config = module.exports = {
 
             if (config.remotePath.endsWith("/"))
                 config.remotePath = config.remotePath.substr(0, config.remotePath.length-1);
+			if (!("autoDownloadRefreshTime" in config))
+			{
+				config.autoDownloadRefreshTime = 1000;
+			}
 
             return Promise.resolve();
         }

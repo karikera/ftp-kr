@@ -42,21 +42,22 @@ class MakeFile
 	{
 		function buildChild(child)
 		{
-			return that.make(child).then(function(mod){
+			return that.make(child).then(mod=>{
 				modified = modified || mod;
 				if (modified) return;
 				
 				try
 				{
-					if(!mtime) mtime = fs.statSync(target).mtime.valueOf();
-				} 
-				catch (error)
+					const stat = fs.statSync(target);
+					if(!mtime) mtime = +stat.mtime;
+				}
+				catch(err)
 				{
 					mtime = -1;
 				}
-					
-				if (mtime <= fs.statSync(child).mtime.valueOf())
-					modified = true;
+				const stat = fs.statSync(child);
+				if (mtime <= +stat.mtime)
+				modified = true;
 			});
 		}
 

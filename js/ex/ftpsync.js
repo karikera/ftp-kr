@@ -11,19 +11,35 @@ const util = require('../util');
 const cfg = require('./config');
 
 var watcher = null;
+var openWatcher = null;
 var watcherMode = "";
+var openWatcherMode = false;
 
 const TASK_FILE_PATH = "/.vscode/ftp-kr.task.json";
 
 cfg.onLoad(function(){
-	if (config.disableFtp) return attachWatcher("CONFIG");
+	if (config.disableFtp)
+	{
+		attachOpenWatcher(false);
+		attachWatcher("CONFIG");
+		return;
+	}
 	
 	return ftpsync.load()
 	.then(() => ftpsync.refresh(""))
-	.then(() => attachWatcher(config.autoUpload || config.autoDelete ? "FULL" : "CONFIG"));	
+	.then(() => {
+		attachWatcher(config.autoUpload || config.autoDelete ? "FULL" : "CONFIG");
+		attachOpenWatcher(config.autoDownload);
+	});	
 });
-cfg.onInvalid(() => attachWatcher("CONFIG"));
-cfg.onNotFound(() => attachWatcher(""));
+cfg.onInvalid(() => {
+	attachOpenWatcher(false);
+	attachWatcher("CONFIG");
+});
+cfg.onNotFound(() => {
+	attachOpenWatcher(false);
+	attachWatcher("");
+});
 
 
 function processWatcher(path, upload, autoSync)
@@ -54,6 +70,36 @@ function processWatcher(path, upload, autoSync)
 }
 
 /**
+ * @param {boolean} mode
+ */
+function attachOpenWatcher(mode)
+{
+	if (openWatcherMode === mode) return;
+	openWatcherMode = mode;
+	if (mode)
+	{
+		openWatcher = workspace.onDidOpenTextDocument(e=>{
+			const workpath = fs.worklize(e.fileName);
+			try
+			{
+				if (!config.autoDownload) return;
+				if (config.checkIgnorePath(workpath)) return;
+				work.ftp.add(()=>ftpsync.downloadWithCheck(workpath)).catch(util.error);
+			}
+			catch(err)
+			{
+				util.error(err);
+			}
+		});
+	}
+	else
+	{
+		openWatcher.dispose();
+		openWatcher = null;
+	}
+}
+
+/**
  * @param {string} mode
  * @return {void}
  */
@@ -71,17 +117,17 @@ function attachWatcher(mode)
     }
     watcher = workspace.createFileSystemWatcher(watcherPath);
     var deleteParent = ""; // 부모 디렉토리가 삭제된 다음 자식 디렉토리가 갱신되는 상황을 우회
-    watcher.onDidChange((e) => {
+    watcher.onDidChange(e => {
         const path = fs.worklize(e.fsPath);
         if (deleteParent && path.startsWith(deleteParent+ "/")) return;
-        processWatcher(path, (path) => ftpsync.upload(path, true), config.autoUpload);
+        processWatcher(path, path => ftpsync.upload(path, true), config.autoUpload);
     });
-    watcher.onDidCreate((e) => {
+    watcher.onDidCreate(e => {
         const path = fs.worklize(e.fsPath);
         if (deleteParent && deleteParent === path) deleteParent = "";
         processWatcher(path, ftpsync.upload, config.autoUpload);
     });
-    watcher.onDidDelete((e) => {
+    watcher.onDidDelete(e => {
         const path = fs.worklize(e.fsPath);
         deleteParent = path;
         processWatcher(path, ftpsync.delete, config.autoDelete);

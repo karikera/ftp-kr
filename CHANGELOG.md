@@ -1,3 +1,5 @@
+# 0.0.23
+* Add `autoDownload` option, It check modification and download every opening
 
 # 0.0.22
 * Add connectionTimeout option

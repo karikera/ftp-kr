@@ -1,7 +1,7 @@
 
 const config = require('./config');
 const fs = require('./fs');
-const ftp = require("./ftp");
+const ftp = require('./ftp');
 const util = require('./util');
 const f = require('./filesystem');
 const stripJsonComments = require('strip-json-comments');
@@ -14,7 +14,6 @@ function testLatest(file, localStat)
 {
     if (!file) return false;
     if (localStat.size !== file.size) return false;
-    //if (+localStat.mtime > file.mtime) return false;
     switch(file.type)
     {
     case "-":
@@ -29,11 +28,6 @@ function testLatest(file, localStat)
     }
     return true;
 }
-
-/** @type {number} */
-f.State.prototype.lmtime = 0;
-/** @type {boolean} */
-f.State.prototype.ignoreWatcher = false;
 
 
 /**
@@ -77,14 +71,24 @@ function _getUpdatedFile(cmp, path, list)
     .catch(() => {});
 }
 
+class RefreshedData extends util.Deferred
+{
+	constructor()
+	{
+		super();
+		/** @type {number} */
+		this.accessTime = new Date().valueOf();
+	}
+}
+
 class FtpFileSystem extends f.FileSystem
 {
 	constructor()
 	{
 		super();
 
-		/** @type {!Object.<string, Deferred>} */
-    	this.refreshed = {};
+		/** @type {!Map.<string, !RefreshedData>} */
+    	this.refreshed = new Map;
 	}
 
 	/**
@@ -94,8 +98,7 @@ class FtpFileSystem extends f.FileSystem
 	 */
 	_deletedir(dir, path)
 	{
-		if (!this.refreshed[path]) return;
-		delete this.refreshed[path];
+		if (!this.refreshed.delete(path)) return;
 		for(const filename in dir.files)
 		{
 			const childdir = dir.files[filename];
@@ -145,59 +148,78 @@ class FtpFileSystem extends f.FileSystem
 
 	/**
 	 * @param {string} path
-	 * @param {boolean} ignoreDirectory
+	 * @param {boolean} weak
 	 * @return {!Promise.<State>}
 	 */
-	ftpUpload(path, ignoreDirectory)
+	ftpUpload(path, weak)
 	{
-		var that = this;
-		return fs.stat(path)
-		.then(function(stats){
-			var oldfile = that.get(path);
-			if (oldfile)
+		return fs.stat(path).then(stats=>{
+			const that = this;
+			function next(stats)
 			{
-				if(+stats.mtime === oldfile.lmtime) return oldfile;
-				if (oldfile.ignoreWatcher)
+				if (stats.isDirectory())
 				{
-					oldfile.ignoreWatcher = false;
-					if (config.autoUpload) return oldfile;
+					if (weak) return null;
+
+					var promise;
+					if (oldfile !== null)
+					{
+						if (oldfile instanceof f.Directory)
+						{
+							oldfile.lmtime = +stats.mtime;
+							return oldfile;
+						}
+						promise = that.ftpDelete(path).then(() => ftp.mkdir(path));
+					}
+					else
+						promise = ftp.mkdir(path);
+
+					var dir = oldfile;
+					return promise.then(() => {
+						dir = that.mkdir(path, +stats.mtime);
+						dir.lmtime = +stats.mtime;
+						return dir;
+					});
 				}
-			}
-
-			if (stats.isDirectory())
-			{
-				if (ignoreDirectory) return null;
-
-				var dir = oldfile;
-				if (dir instanceof f.Directory)
-				{
-					dir.lmtime = +stats.mtime;
-					return dir;
-				}
-
-				var promise;
-				if (dir !== null)
-					promise = that.ftpDelete(path).then(() => ftp.mkdir(path));
 				else
-					promise = ftp.mkdir(path);
-				// catch(); , 디렉토리를 추적하며, 상태를 확인해야한다.
-				return promise.then(() => {
-					dir = that.mkdir(path, +stats.mtime);
-					dir.lmtime = +stats.mtime;
-					return dir;
-				});
+				{
+					that.refreshed.delete(path);
+					const fn = f.splitFileName(path);
+					that.refreshed.delete(fn.dir);
+					return ftp.upload(path, fs.workspace+ path)
+					.then(() => {
+						const file = that.create(path);
+						file.lmtime = +stats.mtime;
+						file.size = stats.size;
+						return file;
+					});
+				}
 			}
-			else
+			
+			const oldfile = this.get(path);
+			if (!oldfile) return next(stats);
+			if (weak)
 			{
-				return ftp.upload(path, fs.workspace+ path)
-				// catch(); , 디렉토리를 추적하며, 상태를 확인해야한다.
-				.then(() => {
-					var file = that.create(path, +stats.mtime);
-					file.lmtime = +stats.mtime;
-					file.size = stats.size;
-					return file;
-				});
+				if (+new Date() < oldfile.ignoreUploadTime)
+				{
+					oldfile.ignoreUploadTime = 0;
+					return oldfile;
+				}
 			}
+			if (+stats.mtime === oldfile.lmtime) return oldfile;
+			if (!config.autoDownload) return next(stats);
+
+			const oldsize = oldfile.size;
+			return this.ftpStat(path).then(ftpstats=>{
+				if (oldsize === ftpstats.size) return next(stats);
+				return util.errorConfirm(`${path}: Remote file modified detected.`, "Upload anyway", "Download")
+				.then(selected=>{
+					if (!selected) return oldfile;
+					if (selected !== "Download") return next(stats);
+					this.ftpDownload(path);
+					return oldfile;
+				});
+			});
 		});
 	}
 
@@ -207,6 +229,9 @@ class FtpFileSystem extends f.FileSystem
 	 */
 	ftpDownload(path)
 	{
+		/**
+		 * @param {f.State} file
+		 */
 		function onfile(file)
 		{
 			if (!file)
@@ -215,50 +240,94 @@ class FtpFileSystem extends f.FileSystem
 				return Promise.resolve();
 			}
 			var promise;
-			if (config.autoUpload) file.ignoreWatcher = true;
 			if (file instanceof f.Directory) promise = fs.mkdir(path);
 			else promise = ftp.download(fs.workspace + path, path);
-			return promise
-			.then(() => fs.stat(path))
-			.then((stats) => file.lmtime = +stats.mtime);
+			return promise.then(() => fs.stat(path))
+			.then(stats => {
+				file.lmtime = +stats.mtime;
+				file.ignoreUploadTime = +new Date() + 1000;
+			});
 		}
-
-		var file = this.get(path);
-		if (file) return onfile(file);
+		const oldfile = this.get(path);
+		if (oldfile) return onfile(oldfile);
 		return this.ftpStat(path).then(onfile);
 	}
 
 	/**
 	 * @param {string} path
-	 * @return {!Promise.<f.State>}
+	 * @return {!Promise}
+	 */
+	ftpDownloadWithCheck(path)
+	{
+		const that = this;
+		/**
+		 * @param {f.State} file
+		 */
+		function onfile(file)
+		{
+			if (!file)
+			{
+				if (config.autoUpload)
+				{
+					return that.ftpUpload(path);
+				}
+				return;
+			}
+
+			return fs.stat(path)
+			.then(stats=>{
+				if (stats.size === file.size) return;
+				var promise;
+				if (file instanceof f.Directory) promise = fs.mkdir(path);
+				else promise = ftp.download(fs.workspace + path, path);
+				return promise.then(() => fs.stat(path))
+				.then(stats => {
+					file.lmtime = +stats.mtime;
+					file.ignoreUploadTime = +new Date() + 1000;
+				});
+			})
+		}
+		return this.ftpStat(path).then(onfile);
+	}
+
+	/**
+	 * @param {string} path
+	 * @return {!Promise<f.State>}
 	 */
 	ftpStat(path)
 	{
-		var fn = f.splitFileName(path);
+		const fn = f.splitFileName(path);
 		return this.ftpList(fn.dir)
-		.then((dir) => dir.files[fn.name]);
+		.then(dir => dir.files[fn.name]);
 	}
+
 	/**
 	 * @param {string} path
 	 * @return {!Promise.<f.Directory>}
 	 */
 	ftpList(path)
 	{
-		const that = this;
-		var latest = this.refreshed[path];
-		if (latest) return latest.promise;
-		const deferred = new util.Deferred;
-		this.refreshed[path] = deferred;
+		const latest = this.refreshed.get(path);
+		if (latest)
+		{
+			if (latest.accessTime + config.autoDownloadRefreshTime > +new Date())
+			return latest.promise;
+		}
+		const deferred = new RefreshedData;
+		this.refreshed.set(path, deferred);
 		return ftp.list(path)
-		.then(function(ftpfiles){
-			const dir = that.refresh(path, ftpfiles);
+		.then(ftpfiles=>{
+			const dir = this.refresh(path, ftpfiles);
 			deferred.resolve(dir);
 			return dir;
 		})
-		.catch(function(err){
+		.catch(err=>{
 			deferred.catch(() => {});
 			deferred.reject(err);
-			if (that.refreshed[path] === deferred) that.refreshed[path] = null;
+			if (this.refreshed.get(path) === deferred)
+			{
+				this.refreshed.delete(path);
+			}
 			throw err;
 		});
 	}
@@ -382,10 +451,7 @@ class FtpFileSystem extends f.FileSystem
 	
 	ftpRefreshForce()
 	{
-		for(const p in this.refreshed)
-		{
-			delete this.refreshed[p];
-		}
+		this.refreshed.clear();
 		return this._refeshForce('');
 	}
 }
@@ -396,7 +462,7 @@ var syncDataPath = "";
 const sync = {
     /**
      * @param {Object.<string, string>} task
-     * @returns {!Promise}
+     * @returns {!Promise<?{tasks:Object, number}>}
      */
     exec(task)
     {
@@ -433,12 +499,12 @@ const sync = {
     },
     /**
      * @param {string} path
-     * @param {boolean=} ignoreDirectory
+     * @param {boolean=} weak
      * @returns {!Promise}
      */
-    upload(path, ignoreDirectory)
+    upload(path, weak)
     {
-        return vfs.ftpUpload(path, ignoreDirectory);
+        return vfs.ftpUpload(path, weak);
     },
     /**
      * @param {string} path
@@ -447,6 +513,14 @@ const sync = {
     download(path)
     {
         return vfs.ftpDownload(path);
+    },
+    /**
+     * @param {string} path
+     * @returns {!Promise}
+     */
+    downloadWithCheck(path)
+    {
+        return vfs.ftpDownloadWithCheck(path);
     },
     /**
      * @returns {!Promise.<Object.<string, string>>}
@@ -490,12 +564,19 @@ const sync = {
         syncDataPath = `/.vscode/ftp-kr.sync.${config.protocol}.${config.host}.${config.remotePath.replace(/\//g, ".")}.json`;
         return fs.open(syncDataPath)
         .catch(()=>null)
-        .then(function(data){
+        .then(data=>{
             try
             {
-                if (data !== null) vfs.deserialize(JSON.parse(stripJsonComments(data)));
+                if (data !== null)
+				{
+					data = JSON.parse(stripJsonComments(data));
+					if (data.version === 1)
+					{
+						vfs.deserialize(data);
+					}
+				}
                 else vfs.reset();
-                vfs.refreshed = {};
+                vfs.refreshed.clear();
             }
             catch(nerr)
             {
@@ -517,7 +598,7 @@ const sync = {
 	list(path)
 	{
 		const NAMES = {
-			'd': '[DIR] ',
+				'd': '[DIR] ',
 			'-': '[FILE]',
 		};
 		return util.select(vfs.ftpList(path).then(dir=>{

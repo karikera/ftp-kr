@@ -4,7 +4,7 @@ const util = require("./util");
 
 /**
  * @param {string} pattern
- * @returns {Promise}
+ * @returns {Promise<string[]>}
  */
 function glob(pattern)
 {

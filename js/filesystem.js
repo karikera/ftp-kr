@@ -1,7 +1,7 @@
 
 /**
  * @param {string} path
- * @return {Array.<string>}
+ * @return {{dir:string, name:string}}
  */
 function splitFileName(path)
 {
@@ -23,8 +23,10 @@ class State
 	{
 		/** @type {string} */
 		this.type = "";
-		/** @type{number} */
-		this.mtime = 0;
+		/** @type {number} */
+		this.lmtime = 0;
+		/** @type {number} */
+		this.ignoreUploadTime = 0;
 		/** @type{Directory} */
 		this.parent = parent ? parent : null;
 		/** @type{string} */
@@ -62,7 +64,6 @@ class FileCommon extends State
 	 */
 	setByStat(st)
 	{
-		this.mtime = +st.mtime;
 		this.size = st.size;
 	};
 
@@ -71,8 +72,7 @@ class FileCommon extends State
 	 */
 	deserialize(file)
 	{
-		this.mtime = +file.date;
-		if (file.size) this.size = file.size;
+		if ("size" in file) this.size = file.size;
 	};
 
 	/**
@@ -83,7 +83,6 @@ class FileCommon extends State
 		return {
 			type: this.type,
 			name: this.name,
-			date: this.mtime,
 			size: this.size
 		};  
 	};
@@ -179,6 +178,14 @@ class Directory extends FileCommon
 		}
 		this.files = nfiles;
 	}
+	setToLatest()
+	{
+		super.setToLatest();
+		for(const file in this.files)
+		{
+			this.files[file].setToLatest();
+		}
+	}
 }
 
 
@@ -261,8 +268,7 @@ class FileSystem
 	{
 		var file;
 		var fn = splitFileName(path);
-		var mtime = +st.mtime;
-		var dir = this.get(fn.dir, mtime);
+		var dir = this.get(fn.dir, true);
 
 		if (st.isSymbolicLink()) file = new SymLink(dir, fn.name);
 		else if(st.isDirectory()) file = new Directory(dir, fn.name);
@@ -274,10 +280,10 @@ class FileSystem
 
 	/**
 	 * @param {string} path
-	 * @param {number=} mtime
+	 * @param {boolean=} make
 	 * @returns {Directory}
 	 */
-	get(path, mtime)
+	get(path, make)
 	{
 		var dirs = path.split("/");
 		var dir = this.root;
@@ -290,10 +296,9 @@ class FileSystem
 				dir = ndir;
 				continue;
 			}
-			if (mtime === undefined)
+			if (!make)
 				return null;
 			dir = dir.files[cd] = new Directory(dir, cd);
-			dir.mtime = mtime;
 		}
 		return dir;
 	}
@@ -305,21 +310,19 @@ class FileSystem
 	 */
 	refresh(path, list)
 	{
-		var dir = this.get(path, 0);
+		var dir = this.get(path, true);
 		dir.readFiles(list, true);
 		return dir;
 	}
 
 	/**
 	 * @param {string} path
-	 * @param {number} mtime
 	 * @returns {!File}
 	 */
-	create(path, mtime){
-		var fn = splitFileName(path);
-		var dir = this.get(fn.dir, mtime);
-		var file = dir.files[fn.name] = new File(dir, fn.name);
-		file.mtime = mtime;
+	create(path){
+		const fn = splitFileName(path);
+		const dir = this.get(fn.dir, true);
+		const file = dir.files[fn.name] = new File(dir, fn.name);
 		return file;
 	}
 
@@ -328,20 +331,17 @@ class FileSystem
 	 * @returns {void}
 	 */
 	delete(path){
-		var fn = splitFileName(path);
-		var dir = this.get(fn.dir);
+		const fn = splitFileName(path);
+		const dir = this.get(fn.dir);
 		if (dir) delete dir.files[fn.name];
 	}
 
 	/**
 	 * @param {string} path
-	 * @param {number} mtime
 	 * @returns {Directory}
 	 */
-	mkdir(path, mtime){
-		var dir = this.get(path, mtime);
-		dir.mtime = mtime;
-		return dir;
+	mkdir(path){
+		return this.get(path, true);
 	}
 
 	/**
@@ -359,7 +359,8 @@ class FileSystem
 	 */
 	deserialize(data, add)
 	{
-		return this.root.deserialize(data, add);
+		this.root.deserialize(data, add);
+		this.root.setToLatest();
 	}
 }
 

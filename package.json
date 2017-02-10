@@ -115,10 +115,10 @@
     "strip-json-comments": "2.0.1"
   },
   "devDependencies": {
-    "typescript": "^2.1.5",
+    "typescript": "^2.2.0",
     "vscode": "^1.0.3",
     "mocha": "^2.3.3",
-    "@types/node": "^6.0.62",
-    "@types/mocha": "^2.2.38"
+    "@types/node": "^6.0.63",
+    "@types/mocha": "^2.2.39"
   }
 }

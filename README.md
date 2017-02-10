@@ -24,7 +24,7 @@ FTP/SFTP Functions:
 * Upload All without Same size file
 * Download All without exists file
 * Cleaning remote files that Not in workspace
-* Same file size -> It is Latest! -> Do not upload or download
+* This extension check modification with file size
 * Browse remote directory
 
 Closure Compiler Functions:

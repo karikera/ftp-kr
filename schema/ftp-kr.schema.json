@@ -24,7 +24,7 @@
         },
         "port": {
             "type": "integer",
-            "description": "Port number of FTP/SFTP server"
+            "description": "Port number of FTP/SFTP server. If is was zero, use the default port"
         },
 		"connectionTimeout": {
 			"type": "integer",
@@ -196,6 +196,14 @@
             "type": "boolean",
             "description": "Delete FTP file when delete in workspace"
         },
+		"autoDownload": {
+			"type": "boolean",
+			"description": "It will check modification of every opening and download if it modified"
+		},
+		"autoDownloadRefreshTime": {
+			"type": "integer",
+			"description": "Milliseconds. Auto refresh after this value when set 'autoDownload' as true. default is 1000"
+		},
         "createSyncCache": {
             "type": "boolean",
             "description": "Create sync.json file for next FTP access(Not effective ' -';)"

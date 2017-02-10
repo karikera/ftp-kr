@@ -5,7 +5,7 @@ const util = require('../util');
 
 function makeEvent()
 {
-    var list = [];
+    const list = [];
     function ev(onfunc)
     {
         list.push(onfunc);
@@ -13,18 +13,15 @@ function makeEvent()
     ev.fire = function()
     {
         var promise = Promise.resolve();
-        for(let func of list)
-            promise = promise.then(() => func());
+        for(const func of list)
+            promise = promise.then(func);
         return promise;
     };
     ev.rfire = function()
     {
         var promise = Promise.resolve();
         for(var i = list.length -1 ; i>= 0; i--)
-        {
-            let func = list[i];
-            promise = promise.then(() => func());
-        }
+            promise = promise.then(list[i]);
         return promise;
     };
     return ev;
@@ -107,7 +104,7 @@ const cfg = module.exports = {
                     ()=>config.load().then(fireLoad)
                 ).end()
             ).end()
-        ).catch((err) => onLoadError(err));
+        ).catch(onLoadError);
     },
 
     unload()
@@ -126,7 +123,7 @@ const cfg = module.exports = {
                         ()=>config.init().then(fireLoad)
                     ).end()
                 ).end()
-            ).catch((err) => onLoadError(err));
+            ).catch(onLoadError);
         }
     }
 };

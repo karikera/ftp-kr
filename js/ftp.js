@@ -80,17 +80,16 @@ class FileInterface
 	_callWithName(name, workpath, ignorecode, callback)
 	{
 		this.cancelDestroyTimeout();
-		const that = this;
 		util.setState(name +" "+workpath);
 		util.log(name +": "+workpath);
 		const ftppath = toftpPath(workpath);
 		return callback(ftppath).then(()=>{
 			util.setState("");
-			that.update();
+			this.update();
 		})
 		.catch((err)=>{
 			util.setState("");
-			that.update();
+			this.update();
 			if (err.ftpCode === ignorecode) return;
 			util.log(name+" fail: "+workpath);
 			throw _errorWrap(err);
@@ -105,7 +104,6 @@ class FileInterface
 	 */
 	upload(workpath, localpath)
 	{
-		const that = this;
 		this.cancelDestroyTimeout();
 		util.setState("upload "+workpath);
 		util.log("upload: "+workpath);
@@ -116,16 +114,16 @@ class FileInterface
 			if (err.ftpCode !== DIRECTORY_NOT_FOUND) throw err;
 			const ftpdir = ftppath.substr(0, ftppath.lastIndexOf("/") + 1);
 			if (!ftpdir) throw err;
-			return that._mkdir(ftpdir, true)
-			.then(()=>that._put(localpath, ftppath));
+			return this._mkdir(ftpdir, true)
+			.then(()=>this._put(localpath, ftppath));
 		})
 		.then(()=>{
 			util.setState("");
-			that.update();
+			this.update();
 		})
 		.catch((err)=>{
 			util.setState("");
-			that.update();
+			this.update();
 			util.log("upload fail: "+workpath);
 			throw _errorWrap(err);
 		});
@@ -141,7 +139,6 @@ class FileInterface
 		this.cancelDestroyTimeout();
 		util.setState("download "+workpath);
 		util.log("download: "+workpath);
-		const that = this;
 		const ftppath = toftpPath(workpath);
 
 		return this._get(ftppath)
@@ -149,7 +146,7 @@ class FileInterface
 			return new Promise(resolve=>{
 				stream.once('close', ()=>{
 					util.setState("");
-					that.update();
+					this.update();
 					resolve();
 				});
 				stream.pipe(ofs.createWriteStream(localpath));
@@ -157,7 +154,7 @@ class FileInterface
 		})
 		.catch(err=>{
 			util.setState("");
-			that.update();
+			this.update();
 			util.log("download fail: "+workpath);
 			throw _errorWrap(err);
 		});
@@ -173,13 +170,12 @@ class FileInterface
 		util.setState("list "+workpath);
 		util.log("list: "+workpath);
 
-		const that = this;
 		var ftppath = toftpPath(workpath);
 		if (!ftppath) ftppath = ".";
 
 		return this._list(ftppath).then((list)=>{
 			util.setState("");
-			that.update();
+			this.update();
 			const errfiles = [];
 			for (var i = 0; i<list.length; i++)
 			{
@@ -206,7 +202,7 @@ class FileInterface
 		})
 		.catch(err=>{
 			util.setState("");
-			that.update();
+			this.update();
 			util.log("list fail: "+workpath);
 			throw _errorWrap(err);
 		});
@@ -218,8 +214,7 @@ class FileInterface
 	 */
 	rmdir(workpath)
 	{
-		const that = this;
-		return this._callWithName("rmdir", workpath, FILE_NOT_FOUND, ftppath=>that._rmdir(ftppath, true));
+		return this._callWithName("rmdir", workpath, FILE_NOT_FOUND, ftppath=>this._rmdir(ftppath, true));
 	}
 	/**
 	 * @param {string} workpath
@@ -227,8 +222,7 @@ class FileInterface
 	 */
 	delete(workpath)
 	{
-		const that = this;
-		return this._callWithName("delete", workpath, FILE_NOT_FOUND, ftppath=>that._delete(ftppath));
+		return this._callWithName("delete", workpath, FILE_NOT_FOUND, ftppath=>this._delete(ftppath));
 	}
 	/**
 	 * @param {string} workpath
@@ -236,8 +230,15 @@ class FileInterface
 	 */
 	mkdir(workpath)
 	{
-		const that = this;
-		return this._callWithName("mkdir", workpath, 0, ftppath=>that._mkdir(ftppath, true));
+		return this._callWithName("mkdir", workpath, 0, ftppath=>this._mkdir(ftppath, true));
+	}
+	/**
+	 * @param {string} workpath
+	 * @returns {?Promise<number>}
+	 */
+	lastmod(workpath)
+	{
+		return this._callWithName("lastmod", workpath, 0, ftppath=>this._lastmod(ftppath));
 	}
 
 	/**
@@ -296,6 +297,15 @@ class FileInterface
 	_list(ftppath)
 	{
 	}
+
+	/**
+	 * @param {string} ftppath
+	 * @return {!Promise<number>}
+	 */
+	_lastmod(ftppath)
+	{
+		return Promise.reject('NOTSUPPORTED');
+	}
 }
 
 class Ftp extends FileInterface
@@ -309,27 +319,26 @@ class Ftp extends FileInterface
 	connect()
 	{
 		client = this;
-		const that = this;
-		return new Promise(function(resolve, reject){
-			that.client.on("ready", function(){
-				const socket = that.client._socket;
+		return new Promise((resolve, reject)=>{
+			this.client.on("ready", ()=>{
+				const socket = this.client._socket;
 				const oldwrite = socket.write;
-				socket.write = function(str){
+				socket.write = str=>{
 					return oldwrite.call(socket, str, 'binary');
 				};
-				that.update();
+				this.update();
 				resolve();
 			});
-			that.client.on("error", function(e){
+			this.client.on("error", e=>{
 				reject(e);
-				if (that.client)
+				if (this.client)
 				{
-					that.client.end();
-					that.client = null;
+					this.client.end();
+					this.client = null;
 				}
 				client = null;
 			});
-			that.client.connect({
+			this.client.connect({
 				host: config.host,
 				port: config.port ? config.port : 21, 
 				user: config.username, 
@@ -402,8 +411,7 @@ class Ftp extends FileInterface
 	 */
 	_put(localpath, ftppath)
 	{
-		const client = this.client;
-		return Ftp.wrapToPromise(callback=>client.put(localpath, ftppath, callback))
+		return Ftp.wrapToPromise(callback=>this.client.put(localpath, ftppath, callback))
 		.catch(e=>{
 			if (e.code === 553) e.ftpCode = DIRECTORY_NOT_FOUND;
 			throw e;
@@ -416,8 +424,7 @@ class Ftp extends FileInterface
 	 */
 	_get(ftppath)
 	{
-		const client = this.client;
-		return Ftp.wrapToPromise(callback=>client.get(ftppath, callback));
+		return Ftp.wrapToPromise(callback=>this.client.get(ftppath, callback));
 	}
 
 	/**
@@ -426,8 +433,7 @@ class Ftp extends FileInterface
 	 */
 	_list(ftppath)
 	{
-		const client = this.client;
-		return Ftp.wrapToPromise(callback=>client.list(ftppath, false, callback))
+		return Ftp.wrapToPromise(callback=>this.client.list('-al '+ftppath, false, callback))
 		.then(list=>{
 			for(var i=0;i<list.length;i++)
 			{
@@ -440,6 +446,15 @@ class Ftp extends FileInterface
 			}
 			return list;
 		});
+	}
+	/**
+	 * @param {string} ftppath
+	 * @return {!Promise<number>}
+	 */
+	_lastmod(ftppath)
+	{
+		return Ftp.wrapToPromise(callback=>this.client.lastMod(ftppath, callback))
+		.then(date=>+date);
 	}
 
 }
@@ -454,19 +469,18 @@ class Sftp extends FileInterface
 	
 	connect()
 	{
-		const that = this;
 		return this.client.connect({
 			host: config.host,
 			port: config.port ? config.port : 22,
 			user: config.username, 
 			password: config.password
 		})
-		.then(()=>that.update())
+		.then(()=>this.update())
 		.catch(err=>{
-			if (that.client)
+			if (this.client)
 			{
-				that.client.end();
-				that.client = null;
+				this.client.end();
+				this.client = null;
 			}
 			client = null;
 			throw err;
@@ -564,6 +578,14 @@ class Sftp extends FileInterface
 		});
 	}
 
+	/**
+	 * @param {string} ftppath
+	 * @return {!Promise<number>}
+	 */
+	lastmod(ftppath)
+	{
+		return Promise.reject('NOTSUPPORTED');
+	}
 }
 
 /**

@@ -18,10 +18,9 @@ class Deferred
 		/** @type {function()} */
 		this.reject = null;
 
-		const that = this;
-		this.promise = new Promise(function(res, rej){
-			that.resolve = res;
-			that.reject = rej;
+		this.promise = new Promise((res, rej)=>{
+			this.resolve = res;
+			this.reject = rej;
 		});
 	}
 		
@@ -215,7 +214,7 @@ const util = {
         {
             return Promise.resolve([]);
         }
-        var response = [];
+        const response = [];
         var promise = func(params[0]);
         
         function make(param)
@@ -250,7 +249,7 @@ const util = {
         {
             params = params[0];
         }
-        var response = [];
+        const response = [];
         var promise = func(params[0]);
         
         function make(param)

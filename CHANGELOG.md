@@ -1,3 +1,6 @@
+# 0.0.24
+* Update Closure compiler to v20170124
+
 # 0.0.23
 * Add `autoDownload` option, It check modification and download every opening
 

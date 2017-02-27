@@ -598,7 +598,7 @@ const sync = {
 	list(path)
 	{
 		const NAMES = {
-				'd': '[DIR] ',
+			'd': '[DIR] ',
 			'-': '[FILE]',
 		};
 		return util.select(vfs.ftpList(path).then(dir=>{

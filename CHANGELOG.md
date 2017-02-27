@@ -1,3 +1,6 @@
+# 0.0.25
+* SFTP private key support
+
 # 0.0.24
 * Update Closure compiler to v20170124
 

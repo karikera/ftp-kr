@@ -26,7 +26,7 @@ cfg.onLoad(function(){
 	}
 	
 	return ftpsync.load()
-	.then(() => ftpsync.refresh(""))
+	.then(()=>ftpsync.refresh(""))
 	.then(() => {
 		attachWatcher(config.autoUpload || config.autoDelete ? "FULL" : "CONFIG");
 		attachOpenWatcher(config.autoDownload);

@@ -6,28 +6,30 @@ const stripJsonComments = require('strip-json-comments');
 const CONFIG_PATH = "/.vscode/ftp-kr.json";
 
 const CONFIG_BASE = {
-    "host": "",
-    "username": "",
-    "password": "",
-    "remotePath": "",
-	"protocol": "ftp",
-	"port": 0,
-    "fileNameEncoding": "utf8", 
-    "ignoreWrongFileEncoding": false,
-    "createSyncCache": true, 
-    "autoUpload": true,
-    "autoDelete": false,
-	"autoDownload": false,
-	"disableFtp": false,
-    "ignore":[
+    host: "",
+    username: "",
+    password: "",
+    remotePath: "",
+	protocol: "ftp",
+	port: 0,
+    fileNameEncoding: "utf8", 
+    ignoreWrongFileEncoding: false,
+    createSyncCache: true, 
+    autoUpload: true,
+    autoDelete: false,
+	autoDownload: false,
+	disableFtp: false,
+    ignore:[
         "/.git",
+        "/.vscode/chrome",
+        "/.vscode/.key",
         "/.vscode/ftp-kr.task.json",
         "/.vscode/ftp-kr.error.log",
         "/.vscode/ftp-kr.sync.*.json"
     ],
-    "closure":{
-        "create_source_map": "%js_output_file%.map",
-        "output_wrapper": "%output%\n//# sourceMappingURL=%js_output_file_filename%.map",
+    closure:{
+        create_source_map: "%js_output_file%.map",
+        output_wrapper: "%output%\n//# sourceMappingURL=%js_output_file_filename%.map",
     }
 };
 

@@ -4,12 +4,55 @@ const SftpClient = require('ssh2-sftp-client');
 const config = require('./config');
 const util = require('./util');
 const ofs = require('fs');
+const fs = require('./fs');
 const iconv = require('iconv-lite');
 
 const DIRECTORY_NOT_FOUND = 1;
 const FILE_NOT_FOUND = 2;
 
+/** @type {FileInterface} */
 var client = null;
+
+/** @type {string} */
+var connectionInfo = '';
+
+/**
+ * @return {string}
+ */
+function makeConnectionInfo()
+{
+	const protocol = config.protocol ? config.protocol : 'ftp';
+	const usepk = protocol === 'sftp' && !!config.privateKey;
+	var info = protocol;
+	info += '://';
+	info += config.username;
+	if (config.password && !usepk)
+	{
+		info += ':';
+		info += config.password;
+	}
+	info += '@';
+	info += config.host;
+	if (config.port)
+	{
+		info += ':';
+		info += config.port;
+	}
+	info += '/';
+	info += config.remotePath;
+	info += '/';
+	if (usepk)
+	{
+		info += '#';
+		info += config.privateKey;
+		if (config.passphrase !== undefined)
+		{
+			info += '#';
+			info += config.passphrase;
+		}
+	}
+	return info;
+}
 
 function bin2str(bin)
 {
@@ -469,13 +512,34 @@ class Sftp extends FileInterface
 	
 	connect()
 	{
-		return this.client.connect({
-			host: config.host,
-			port: config.port ? config.port : 22,
-			user: config.username, 
-			password: config.password
-		})
-		.then(()=>this.update())
+		var promise = null;
+		if (config.privateKey)
+		{
+			//promise = chilkat.load(fs.workspace+'/.vscode/'+config.privateKey)
+			var path = config.privateKey;
+			if (!path.startsWith('/'))
+			{
+				path = '/.vscode/'+path;
+			}
+			promise = fs.open(path)
+			.then(keybuf=>this.client.connect({
+				host: config.host,
+				port: config.port ? config.port : 22,
+				user: config.username, 
+				privateKey: keybuf,
+				passphrase: config.passphrase
+			}));
+		}
+		else
+		{
+			promise = this.client.connect({
+				host: config.host,
+				port: config.port ? config.port : 22,
+				user: config.username, 
+				password: config.password,
+			});
+		}
+		return promise.then(()=>this.update())
 		.catch(err=>{
 			if (this.client)
 			{
@@ -593,11 +657,17 @@ class Sftp extends FileInterface
  */
 function init()
 {
+	const coninfo = makeConnectionInfo();
     if (client)
-    {
-        client.update();
-        return Promise.resolve();
+	{
+		if (coninfo === connectionInfo)
+		{
+			client.update();
+			return Promise.resolve();
+		}
+		client.destroy();
     }
+	connectionInfo = coninfo;
 	
 	switch (config.protocol)
 	{

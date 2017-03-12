@@ -18,7 +18,7 @@ If you want to disable auto-sync, please set autoUpload/autoDelete to false
 You can see remote directory with `ftp-kr List` command!  
 ![list](images/list.png)
 
-You can use SFTP with private key!
+You can use SFTP with private key!  
 ![privatekey](images/privatekey.png)
 
 ## Functions

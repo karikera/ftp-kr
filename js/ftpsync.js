@@ -370,8 +370,7 @@ class FtpFileSystem extends f.FileSystem
 			var promise = Promise.resolve();
 			function onfslist(fslist)
 			{
-				that.ftpList(path)
-				.then((dir) => {
+				that.ftpList(path).then(dir => {
 					const willDel = {};
 					for(const p in dir.files)
 					{

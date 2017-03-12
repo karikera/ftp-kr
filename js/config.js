@@ -124,6 +124,15 @@ const config = module.exports = {
 			{
 				config.autoDownloadRefreshTime = 1000;
 			}
+			switch (config.protocol)
+			{
+			case 'sftp':
+			case 'ftp': break;
+			default:
+				util.error(`Unsupported protocol "${config.protocol}", It will treat as ftp`);
+				config.protocol = 'ftp';
+				break;
+			}
 
             return Promise.resolve();
         }

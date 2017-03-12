@@ -28,11 +28,11 @@
         },
         "privateKey": {
             "type": "string",
-            "description": "Private key file for SFTP connection. If it is non empty, password will be ignored"
+            "description": "Private key file for SFTP connection. Use OpenSSH format. If it is non empty, password will be ignored"
         },
 		"passphrase": {
 			"type": "string",
-			"description": "For an encrypted private key."
+			"description": "Password for an encrypted private key."
 		},
 		"connectionTimeout": {
 			"type": "integer",

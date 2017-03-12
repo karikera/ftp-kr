@@ -1,5 +1,9 @@
+# 0.0.26
+* Fix SFTP private key absolute path problem
+
 # 0.0.25
-* SFTP private key support
+* SFTP private key support  
+![privatekey](images/privatekey.png)
 
 # 0.0.24
 * Update Closure compiler to v20170124

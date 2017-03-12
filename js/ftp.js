@@ -6,6 +6,7 @@ const util = require('./util');
 const ofs = require('fs');
 const fs = require('./fs');
 const iconv = require('iconv-lite');
+const path = require('path');
 
 const DIRECTORY_NOT_FOUND = 1;
 const FILE_NOT_FOUND = 2;
@@ -21,9 +22,8 @@ var connectionInfo = '';
  */
 function makeConnectionInfo()
 {
-	const protocol = config.protocol ? config.protocol : 'ftp';
-	const usepk = protocol === 'sftp' && !!config.privateKey;
-	var info = protocol;
+	const usepk = config.protocol === 'sftp' && !!config.privateKey;
+	var info = config.protocol;
 	info += '://';
 	info += config.username;
 	if (config.password && !usepk)
@@ -93,6 +93,13 @@ class FileInterface
 		this.destroyTimeout = 0;
 	}
 
+	/**
+	 * @return {!Promise}
+	 */
+	connect()
+	{
+	}
+
 	cancelDestroyTimeout()
 	{
 		if (this.destroyTimeout === 0)
@@ -109,6 +116,7 @@ class FileInterface
 
 	destroy()
 	{
+		util.log('Disconnected');
 		this.cancelDestroyTimeout();
 		client = null;
 	}
@@ -515,13 +523,17 @@ class Sftp extends FileInterface
 		var promise = null;
 		if (config.privateKey)
 		{
-			//promise = chilkat.load(fs.workspace+'/.vscode/'+config.privateKey)
-			var path = config.privateKey;
-			if (!path.startsWith('/'))
-			{
-				path = '/.vscode/'+path;
-			}
-			promise = fs.open(path)
+			promise = new Promise((resolve, reject)=>{
+				var keyPath = config.privateKey;
+				if (!path.isAbsolute(keyPath))
+				{
+					keyPath = path.join(fs.workspace, '.vscode', keyPath);
+				}
+				ofs.readFile(keyPath, 'utf-8', (err, data)=>{
+					if (err) reject(err);
+					else resolve(data);
+				});
+			})
 			.then(keybuf=>this.client.connect({
 				host: config.host,
 				port: config.port ? config.port : 22,
@@ -673,11 +685,7 @@ function init()
 	{
 	case 'sftp': new Sftp; break;
 	case 'ftp': new Ftp; break;
-	default:
-		config.protocol = 'ftp';
-		util.error(`Unsupported protocol "${config.protocol}", It will treat as ftp`);
-		new Ftp;
-		break;
+	default: throw Error(`Invalid protocol ${config.protocol}`);
 	}
 	var url = '';
 	url += config.protocol;

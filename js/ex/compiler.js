@@ -4,7 +4,6 @@ const workspace = vscode.workspace;
 const window = vscode.window;
 
 const cfg = require('./config');
-const fs = require('../fs');
 const work = require('../work');
 const closure = require('../closure');
 const util = require('../util');

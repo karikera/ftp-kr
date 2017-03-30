@@ -2,9 +2,14 @@
     "type": "object",
     "properties": {
         "protocol": {
-            "enum": ["ftp","sftp"],
+            "enum": ["ftp","sftp","ftps"],
             "description": "Connection protocol"
         },
+		"sslProtocol": {
+			"enum": ["SSLv23_method", "TLSv1_2_method", "TLSv1_1_method", "TLSv1_method", "SSLv3_method", "SSLv2_method"],
+			"default": "SSLv23_method",
+			"description": " Optional SSL method to use, default is \"SSLv23_method\". The possible values are listed as https://www.openssl.org/docs/man1.0.2/ssl/ssl.html#DEALING-WITH-PROTOCOL-METHODS , use the function names as strings. For example, \"SSLv3_method\" to force SSL version 3."
+		},
         "host": {
             "type": "string",
             "description": "Address of the FTP/SFTP server",
@@ -228,6 +233,8 @@
                 "description": "Ignore file or directory"
             }
         },
-        "closure": { "$ref": "closure.schema.json" }
+        "closure": { "$ref": "closure.schema.json" },
+		"ftpOverride": { "$ref": "ftp.schema.json" },
+		"sftpOverride": { "$ref": "sftp.schema.json" }
     }
 }

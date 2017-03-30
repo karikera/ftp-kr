@@ -1,0 +1,41 @@
+{
+	"type":"object",
+	"properties": {
+		"host":{
+			"type": "string",
+			"description": "The hostname or IP address of the FTP server. Default: 'localhost'"
+		},
+		"port":{
+			"type": "number",
+			"description": "The port of the FTP server. Default: 21"
+		},
+		"secure":{
+			"type": ["string", "boolean"],
+			"description": "Set to true for both control and data connection encryption, 'control' for control connection encryption only, or 'implicit' for\nimplicitly encrypted control connection (this mode is deprecated in modern times, but usually uses port 990) Default: false"
+		},
+        "secureOptions": {"$ref": "tls.schema.json"},
+		"user":{
+			"type": "string",
+			"description": "Username for authentication. Default: 'anonymous'"
+		},
+		"password":{
+			"type": "string",
+			"description": "Password for authentication. Default: 'anonymous@'"
+		},
+		"connTimeout":{
+			"type": "number",
+			"description": "How long (in milliseconds) to wait for the control connection to be established. Default: 10000",
+			"default": 10000
+		},
+		"pasvTimeout":{
+			"type": "number",
+			"description": "How long (in milliseconds) to wait for a PASV data connection to be established. Default: 10000",
+			"default": 10000
+		},
+		"keepalive":{
+			"type": "number",
+			"description": "How often (in milliseconds) to send a 'dummy' (NOOP) command to keep the connection alive. Default: 10000",
+			"default": 10000
+		}
+	}
+}

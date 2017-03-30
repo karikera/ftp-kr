@@ -1,3 +1,9 @@
+# 1.0.0
+* Set version to 1.0.0 without much meaning
+* Port all javascript to typescript
+* Use ftp-ssl when set protocol to `ftps`
+* Add `ftpOverride` and `sftpOverride` field, It can force override option of ftp/sftp connection
+
 # 0.0.26
 * Fix SFTP private key absolute path problem
 

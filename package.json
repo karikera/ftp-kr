@@ -3,7 +3,7 @@
   "displayName": "ftp-kr",
   "description": "FTP sync & Closure Compiler for ME!",
   "license": "MIT",
-  "version": "0.0.26",
+  "version": "1.0.0",
   "publisher": "ruakr",
   "repository": {
     "type": "git",
@@ -20,7 +20,7 @@
     "workspaceContains:.vscode/ftp-kr.json",
     "onCommand:ftpkr.init"
   ],
-  "main": "./extension",
+  "main": "./out/index",
   "contributes": {
     "commands": [
       {
@@ -41,6 +41,11 @@
       {
         "command": "ftpkr.closureCompileAll",
         "title": "Closure Compile All",
+        "category": "ftp-kr"
+      },
+      {
+        "command": "ftpkr.generateExtern",
+        "title": "Closure Compiler Generate Extern",
         "category": "ftp-kr"
       },
       {
@@ -108,17 +113,24 @@
     "postinstall": "node ./node_modules/vscode/bin/install"
   },
   "dependencies": {
+    "esprima": "^3.1.3",
     "ftp": "^0.3.10",
+    "get-parameter-names": "^0.3.0",
     "glob": "7.1.0",
     "iconv-lite": "0.4.13",
     "ssh2-sftp-client": "^1.0.5",
     "strip-json-comments": "2.0.1"
   },
   "devDependencies": {
-    "typescript": "^2.2.1",
-    "vscode": "^1.1.0",
+    "@types/ftp": "^0.3.29",
+    "@types/glob": "^5.0.30",
+    "@types/iconv-lite": "0.0.1",
+    "@types/mocha": "^2.2.40",
+    "@types/node": "^6.0.68",
+    "@types/ssh2-sftp-client": "^1.0.5",
+    "@types/strip-json-comments": "0.0.28",
     "mocha": "^2.3.3",
-    "@types/node": "^6.0.65",
-    "@types/mocha": "^2.2.40"
+    "typescript": "^2.2.2",
+    "vscode": "^1.1.0"
   }
 }

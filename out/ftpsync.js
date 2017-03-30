@@ -17,14 +17,14 @@ const stripJsonComments = require("strip-json-comments");
 function testLatest(file, localStat) {
     if (!file)
         return false;
-    if (file instanceof f.FileCommon) {
-        if (localStat.size !== file.size)
-            return false;
-    }
     switch (file.type) {
         case "-":
             if (!localStat.isFile())
                 return false;
+            if (file instanceof f.FileCommon) {
+                if (localStat.size !== file.size)
+                    return false;
+            }
             break;
         case "d":
             if (!localStat.isDirectory())
@@ -48,7 +48,7 @@ function _getUpdatedFileInDir(cmp, path, list) {
                 if (file)
                     childfile = file;
             }
-            _getUpdatedFile(childfile, filepath, list);
+            yield _getUpdatedFile(childfile, filepath, list);
         }
     });
 }
@@ -156,7 +156,11 @@ class FtpFileSystem extends f.FileSystem {
                     }
                 });
             }
-            const oldfile = this.get(path);
+            const fn = f.splitFileName(path);
+            const filedir = this.get(fn.dir);
+            if (!filedir)
+                return yield next(stats);
+            const oldfile = filedir.files[fn.name];
             if (!oldfile)
                 return yield next(stats);
             if (weak) {
@@ -169,9 +173,10 @@ class FtpFileSystem extends f.FileSystem {
                 return oldfile;
             if (!config_1.default.autoDownload)
                 return yield next(stats);
+            const oldtype = oldfile.type;
             const oldsize = oldfile.size;
             const ftpstats = yield this.ftpStat(path);
-            if (ftpstats instanceof f.FileCommon && oldsize === ftpstats.size)
+            if (ftpstats.type == oldtype && oldsize === ftpstats.size)
                 return yield next(stats);
             const selected = yield util.errorConfirm(`${path}: Remote file modified detected.`, "Upload anyway", "Download");
             if (!selected)
@@ -211,7 +216,7 @@ class FtpFileSystem extends f.FileSystem {
                 return;
             }
             var stats = yield fs.stat(path);
-            if (file instanceof f.FileCommon && stats.size === file.size)
+            if (file instanceof f.File && stats.size === file.size)
                 return;
             if (file instanceof f.Directory)
                 yield fs.mkdir(path);

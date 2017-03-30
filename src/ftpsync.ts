@@ -9,14 +9,14 @@ import stripJsonComments = require('strip-json-comments');
 function testLatest(file:f.State|null, localStat:fs.Stats):boolean
 {
     if (!file) return false;
-	if (file instanceof f.FileCommon)
-	{
-    	if (localStat.size !== file.size) return false;
-	}
     switch(file.type)
     {
     case "-":
         if (!localStat.isFile()) return false;
+		if (file instanceof f.FileCommon)
+		{
+    		if (localStat.size !== file.size) return false;
+		}
         break;
     case "d":
         if (!localStat.isDirectory()) return false;
@@ -40,7 +40,7 @@ async function _getUpdatedFileInDir(cmp:f.Directory|null, path:string, list:{[ke
 			const file = cmp.files[filename];
 			if (file) childfile = file;
 		}
-        _getUpdatedFile(childfile, filepath, list);
+        await _getUpdatedFile(childfile, filepath, list);
 	}
 }
 
@@ -161,7 +161,10 @@ class FtpFileSystem extends f.FileSystem
 			}
 		}
 		
-		const oldfile = this.get(path);
+		const fn = f.splitFileName(path);
+		const filedir = this.get(fn.dir);
+		if (!filedir) return await next(stats);
+		const oldfile = filedir.files[fn.name];
 		if (!oldfile) return await next(stats);
 		if (weak)
 		{
@@ -174,10 +177,11 @@ class FtpFileSystem extends f.FileSystem
 		if (+stats.mtime === oldfile.lmtime) return oldfile;
 		if (!config.autoDownload) return await next(stats);
 
+		const oldtype = oldfile.type;
 		const oldsize = oldfile.size;
 		const ftpstats = await this.ftpStat(path);
 
-		if (ftpstats instanceof f.FileCommon && oldsize === ftpstats.size) return await next(stats);
+		if (ftpstats.type == oldtype &&  oldsize === ftpstats.size) return await next(stats);
 
 		const selected = await util.errorConfirm(`${path}: Remote file modified detected.`, "Upload anyway", "Download");
 
@@ -220,7 +224,7 @@ class FtpFileSystem extends f.FileSystem
 		}
 
 		var stats = await fs.stat(path);
-		if (file instanceof f.FileCommon && stats.size === file.size) return;
+		if (file instanceof f.File && stats.size === file.size) return;
 		if (file instanceof f.Directory) await fs.mkdir(path);
 		else await ftp.download(fs.workspace + path, path);
 		stats = await fs.stat(path);

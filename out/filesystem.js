@@ -14,6 +14,7 @@ class State {
         this.name = name;
         this.type = "";
         this.lmtime = 0;
+        this.size = 0;
         this.ignoreUploadTime = 0;
         if (parent)
             this.parent = parent;
@@ -27,7 +28,6 @@ exports.State = State;
 class FileCommon extends State {
     constructor(parent, name) {
         super(parent, name);
-        this.size = 0;
     }
     setByStat(st) {
         this.size = st.size;

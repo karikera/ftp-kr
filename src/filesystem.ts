@@ -32,6 +32,7 @@ export abstract class State
 	parent:Directory;
 	type:string = "";
 	lmtime:number = 0;
+	size:number = 0;
 	ignoreUploadTime:number = 0;
 
 	constructor(parent:Directory|null, public name:string)
@@ -48,8 +49,6 @@ export abstract class State
 
 export abstract class FileCommon extends State
 {
-	size:number = 0;
-
 	constructor(parent:Directory|null, name:string)
 	{
 		super(parent, name);

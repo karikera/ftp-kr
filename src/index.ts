@@ -14,6 +14,8 @@ function activate(context) {
     console.log('[extension: ftp-kr] activate');
 	fs.setWorkspace(workspace.rootPath.replace(/\\/g, "/"));
 
+	fs.create('/.vscode/test/test/test.txt', 'test');
+
     for(const ex of extensions) ex.load();
 
     for(const ex of extensions) 

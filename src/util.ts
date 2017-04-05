@@ -106,10 +106,14 @@ export function error(err:NodeJS.ErrnoException|string):void
 			}
 			output += '\n[Stack Trace]\n';
 			output += err.stack;
-			var LOGFILE = '/.vscode/ftp-kr.error.log';
+			
+			const LOGFILE = '/.vscode/ftp-kr.error.log';
 			fs.create(LOGFILE, output)
 			.then(()=>open(LOGFILE))
-			.catch(console.error);
+			.catch(()=>{
+				showLog();
+				log(output);
+			});
 		});
 	}
 	else

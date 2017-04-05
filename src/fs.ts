@@ -18,16 +18,13 @@ function mkdirParent(dirPath:string, callback:(err?:Error)=>void):void
     return fs.mkdir(dirPath, error=>{
         if (error)
         {
-            switch(error.errno)
+            switch(error.code)
             {
-			case 17: // EEXIST
+			case 'EEXIST':
 				callback();
 				return;
-            case 34:
+            case 'ENOENT':
                 return mkdirParent(path.dirname(dirPath), () => fs.mkdir(dirPath, callback));
-            case -4075:
-                callback();
-                return;
             }
         }
         callback && callback(error);
@@ -72,10 +69,9 @@ export function mkdir(path:string):Promise<void>
 		fs.mkdir(workspace + path, (err)=>{
 			if (err)
 			{
-				switch(err.errno)
+				switch (err.code)
 				{
-				case 17: // EEXIST
-				case -4075: resolve(); return;
+				case 'EEXIST': resolve(); return;
 				default: reject(err); return;
 				}
 			}

@@ -2,6 +2,8 @@
 
 .gitignore
 jsconfig.json
-.eslintrc.json
+.tsconfig.json
 
 node_modules/.bin/**
+/src/
+/out/**/*.js.map

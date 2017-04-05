@@ -1,3 +1,7 @@
+# 1.0.2
+* Use error code instead of error number when exception check for OS compatibility
+* Remove unusing files
+
 # 1.0.1
 * Bug fix
 

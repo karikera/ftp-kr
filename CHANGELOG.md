@@ -1,3 +1,6 @@
+# 1.0.3
+* Fix autoDownload bug... maybe not...
+
 # 1.0.2
 * Use error code instead of error number when exception check for OS compatibility
 * Remove unusing files

@@ -223,7 +223,15 @@ class FtpFileSystem extends f.FileSystem
 			return;
 		}
 
-		var stats = await fs.stat(path);
+		try
+		{
+			var stats = await fs.stat(path);
+		}
+		catch(e)
+		{
+			if (e.code === 'ENOENT') return;
+			throw e;
+		}
 		if (file instanceof f.File && stats.size === file.size) return;
 		if (file instanceof f.Directory) await fs.mkdir(path);
 		else await ftp.download(fs.workspace + path, path);

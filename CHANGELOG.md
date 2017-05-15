@@ -1,3 +1,6 @@
+# 1.0.7
+* Stop create test.txt
+
 # 1.0.6
 * Fix autoDownload bug... maybe?
 

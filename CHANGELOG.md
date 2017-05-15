@@ -1,3 +1,6 @@
+# 1.0.6
+* Fix autoDownload bug... maybe?
+
 # 1.0.5
 * Changing infotext for reviewing sync remote to local operations.
 * Open log when upload/download manually

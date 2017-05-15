@@ -238,6 +238,15 @@ class FtpFileSystem extends f.FileSystem
 
 	async ftpDownloadWithCheck(path:string):Promise<void>
 	{
+		try
+		{
+			var stats = await fs.stat(path);
+		}
+		catch(e)
+		{
+			if (e.code === 'ENOENT') return; // Somethings vscode open "%s.git" file, why?
+			throw e;
+		}
 		const file = await this.ftpStat(path);
 		if (!file)
 		{
@@ -248,15 +257,6 @@ class FtpFileSystem extends f.FileSystem
 			return;
 		}
 
-		try
-		{
-			var stats = await fs.stat(path);
-		}
-		catch(e)
-		{
-			if (e.code === 'ENOENT') return;
-			throw e;
-		}
 		if (file instanceof f.File && stats.size === file.size) return;
 		if (file instanceof f.Directory) await fs.mkdir(path);
 		else await ftp.download(fs.workspace + path, path);

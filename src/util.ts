@@ -42,6 +42,12 @@ export function setState(state:string):void
 	bar.show();
 }
 
+function getOutput():vscode.OutputChannel
+{
+	if (output) return output;
+	else return output = window.createOutputChannel("ftp-kr");
+}
+
 export function clearLog():void 
 {
 	const out = output;
@@ -51,17 +57,14 @@ export function clearLog():void
 
 export function showLog():void
 {
-	const out = output;
-	if(!out) return;
+	const out = getOutput();
 	out.show();
 }
 
 export function log(...message:string[]):void
 {
-	var out;
-	if (output) out = output;
-	else out = output = window.createOutputChannel("ftp-kr");
-	out.appendLine(...message);
+	const out = getOutput();
+	out.appendLine(message.join(' '));
 }
 
 export function wrap(func:()=>void):void

@@ -222,17 +222,33 @@ module.exports = {
 
     commands: {
         'ftpkr.upload'(file: vscode.Uri) {
+			util.showLog();
             return cfg.loadTest()
                 .then(() => cfg.isFtpDisabled())
                 .then(() => fileOrEditorFile(file))
                 .then(
                 (path) => work.ftp.add(
                     () => fs.isDirectory(path)
-                        .then(isdir => isdir ? uploadAll(path) : taskTimer('Upload', ftpsync.upload(path).then(() => { })))
+                        .then(isdir => {
+							if (isdir)
+							{
+								uploadAll(path);
+							}
+							else
+							{
+								return taskTimer('Upload', ftpsync.upload(path).then(res => {
+									if (res.latestIgnored)
+									{
+										util.log(`latest: ${path}`);
+									}
+								}));
+							}
+						})
                 ).catch(util.error)
                 ).catch(util.error);
         },
         'ftpkr.download'(file: vscode.Uri) {
+			util.showLog();
             return cfg.loadTest()
                 .then(() => cfg.isFtpDisabled())
                 .then(() => fileOrEditorFile(file))

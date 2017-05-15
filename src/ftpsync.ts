@@ -69,6 +69,13 @@ class RefreshedData extends util.Deferred<f.Directory>
 	}
 }
 
+export class UploadReport
+{
+	weakIgnored:boolean = false;
+	latestIgnored:boolean = false;
+	file:f.State | null = null;
+}
+
 class FtpFileSystem extends f.FileSystem
 {
 	refreshed:Map<string, RefreshedData> = new Map;
@@ -118,23 +125,29 @@ class FtpFileSystem extends f.FileSystem
 		await deleteTest(file);
 	}
 
-	async ftpUpload(path:string, weak?:boolean):Promise<f.State|null>
+	async ftpUpload(path:string, weak?:boolean):Promise<UploadReport>
 	{
 		const stats = await fs.stat(path);
+		const report = new UploadReport;
 	
 		const that = this;
-		async function next(stats):Promise<f.State|null>
+		async function next(stats):Promise<UploadReport>
 		{
 			if (stats.isDirectory())
 			{
-				if (weak) return null;
+				if (weak)
+				{
+					report.weakIgnored = true;
+					return report;
+				}
 
 				if (oldfile !== null)
 				{
 					if (oldfile instanceof f.Directory)
 					{
 						oldfile.lmtime = +stats.mtime;
-						return oldfile;
+						report.file = oldfile;
+						return report;
 					}
 					await that.ftpDelete(path).then(() => ftp.mkdir(path));
 				}
@@ -145,7 +158,8 @@ class FtpFileSystem extends f.FileSystem
 
 				const dir = that.mkdir(path);
 				dir.lmtime = +stats.mtime;
-				return dir;
+				report.file = dir;
+				return report;
 			}
 			else
 			{
@@ -157,7 +171,8 @@ class FtpFileSystem extends f.FileSystem
 				const file = that.create(path);
 				file.lmtime = +stats.mtime;
 				file.size = stats.size;
-				return file;
+				report.file = file;
+				return report;
 			}
 		}
 		
@@ -171,10 +186,17 @@ class FtpFileSystem extends f.FileSystem
 			if (Date.now() < oldfile.ignoreUploadTime)
 			{
 				oldfile.ignoreUploadTime = 0;
-				return oldfile;
+				report.weakIgnored = true;
+				report.file = oldfile;
+				return report;
 			}
 		}
-		if (+stats.mtime === oldfile.lmtime) return oldfile;
+		if (+stats.mtime === oldfile.lmtime)
+		{
+			report.latestIgnored = true;
+			report.file = oldfile;
+			return report;
+		}
 		if (!config.autoDownload) return await next(stats);
 
 		const oldtype = oldfile.type;
@@ -185,10 +207,13 @@ class FtpFileSystem extends f.FileSystem
 
 		const selected = await util.errorConfirm(`${path}: Remote file modified detected.`, "Upload anyway", "Download");
 
-		if (!selected) return oldfile;
-		if (selected !== "Download") return await next(stats);
-		this.ftpDownload(path);
-		return oldfile;
+		if (selected)
+		{
+			if (selected !== "Download") return await next(stats);
+			this.ftpDownload(path);
+		}
+		report.file = oldfile;
+		return report;
 	}
 
 	async ftpDownload(path:string):Promise<void>
@@ -441,7 +466,7 @@ export async function exec(task:TaskList):Promise<{tasks:TaskList, count:number}
 	else return null;
 }
 
-export function upload(path:string, weak?:boolean):Promise<f.State>
+export function upload(path:string, weak?:boolean):Promise<UploadReport>
 {
 	return vfs.ftpUpload(path, weak);
 }

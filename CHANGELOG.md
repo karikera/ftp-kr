@@ -1,5 +1,12 @@
-# 1.0.3
+# 1.0.5
+* Changing infotext for reviewing sync remote to local operations.
+* Open log when upload/download manually
+
+# 1.0.4
 * Fix autoDownload bug... maybe not...
+
+# 1.0.3
+* Nothing
 
 # 1.0.2
 * Use error code instead of error number when exception check for OS compatibility

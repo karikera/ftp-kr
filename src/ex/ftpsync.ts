@@ -10,6 +10,7 @@ import * as work from '../work';
 import * as util from '../util';
 import * as cfg from './config';
 
+var watcherQueue : Promise<void> = Promise.resolve();
 var watcher: vscode.FileSystemWatcher | null = null;
 var openWatcher: vscode.Disposable | null = null;
 var watcherMode = "";
@@ -100,6 +101,17 @@ function attachOpenWatcher(mode: boolean): void {
     }
 }
 
+async function uploadCascade(path: string)
+{
+	processWatcher(path, ftpsync.upload, !!config.autoUpload);
+	if (!(await fs.isDirectory(path))) return;
+
+	for(const cs of await fs.list(path))
+	{
+		await uploadCascade(path + '/' + cs);
+	}
+}
+
 function attachWatcher(mode: string): void {
     if (watcherMode === mode) return;
     if (watcher) watcher.dispose();
@@ -116,57 +128,80 @@ function attachWatcher(mode: string): void {
     var deleteParent = ""; // #1
 
     watcher.onDidChange(e => {
-        const path = fs.worklize(e.fsPath);
-        if (deleteParent && path.startsWith(deleteParent + "/")) return; // #1
-        processWatcher(path, path => ftpsync.upload(path, true), !!config.autoUpload);
+		watcherQueue = watcherQueue.then(()=>{
+			const path = fs.worklize(e.fsPath);
+			if (deleteParent && path.startsWith(deleteParent + "/")) return; // #1
+			processWatcher(path, path => ftpsync.upload(path, {doNotMakeDirectory: true}), !!config.autoUpload);
+		});
     });
     watcher.onDidCreate(e => {
-        const path = fs.worklize(e.fsPath);
-        if (deleteParent && deleteParent === path) deleteParent = ""; // #1
-        processWatcher(path, ftpsync.upload, !!config.autoUpload);
+		watcherQueue = watcherQueue.then(()=>{
+			const path = fs.worklize(e.fsPath);
+			if (deleteParent && deleteParent === path) deleteParent = ""; // #1
+			return uploadCascade(path);
+		});
     });
     watcher.onDidDelete(e => {
-        const path = fs.worklize(e.fsPath);
-        deleteParent = path; // #1
-        processWatcher(path, ftpsync.remove, !!config.autoDelete);
+		watcherQueue = watcherQueue.then(()=>{
+			const path = fs.worklize(e.fsPath);
+			deleteParent = path; // #1
+			processWatcher(path, ftpsync.remove, !!config.autoDelete);
+		});
     });
 }
 
-function reserveSyncTaskWith(tasks: ftpsync.TaskList, taskname: string, infocallback: () => Thenable<string>): Promise<void> {
-    if (util.isEmptyObject(tasks)) {
-        util.info("Nothing to DO");
-        return Promise.resolve();
-    }
-    util.showLog();
-    util.log(taskname + ' started');
-    return fs.create(TASK_FILE_PATH, JSON.stringify(tasks, null, 1))
-        .then(() => util.open(TASK_FILE_PATH))
-        .then(infocallback)
-        .then((res) => {
-            if (res !== "OK" && res !== "Retry") {
-                fs.unlink(TASK_FILE_PATH);
-                return;
-            }
-            const startTime = Date.now();
-            return fs.json(TASK_FILE_PATH)
-                .then((data) => fs.unlink(TASK_FILE_PATH).then(() => ftpsync.exec(data)))
-                .then((failed) => {
-                    if (!failed) {
-                        const passedTime = Date.now() - startTime;
-                        if (passedTime > 1000) {
-                            util.info(taskname + " completed");
-                        }
-                        util.showLog();
-                        util.log(taskname + ' completed');
-                        return;
-                    }
-                    return reserveSyncTaskWith(failed.tasks, taskname, () => util.errorConfirm("ftp-kr Task failed, more information in the output", "Retry"));
-                });
-        })
-        .catch(function (err) {
-            fs.unlink(TASK_FILE_PATH).catch(() => { });
-            throw err;
-        });
+async function reserveSyncTaskWith(tasks: ftpsync.TaskList, taskname: string, options:ftpsync.BatchOptions, infocallback: () => Thenable<string>): Promise<void> {
+	try
+	{
+		for (;;)
+		{
+			if (util.isEmptyObject(tasks)) 
+			{
+				util.info("Nothing to DO");
+				return;
+			}
+			util.showLog();
+			util.log(taskname + ' started');
+			await fs.create(TASK_FILE_PATH, JSON.stringify(tasks, null, 1));
+			await util.open(TASK_FILE_PATH);
+			const res = await infocallback();
+			if (res !== "OK" && res !== "Retry") 
+			{
+				fs.unlink(TASK_FILE_PATH);
+				return;
+			}
+			const editor = await util.open(TASK_FILE_PATH);
+			if (editor) await editor.document.save();
+			const startTime = Date.now();
+			const data = await fs.json(TASK_FILE_PATH);
+			await fs.unlink(TASK_FILE_PATH);
+			const failed = await ftpsync.exec(data, options);
+			if (!failed) 
+			{
+				const passedTime = Date.now() - startTime;
+				if (passedTime > 1000) {
+					util.info(taskname + " completed");
+				}
+				util.showLog();
+				util.log(taskname + ' completed');
+				return;
+			}
+
+			tasks = failed.tasks;
+			infocallback = () => util.errorConfirm("ftp-kr Task failed, more information in the output", "Retry");
+		}
+	}
+	catch(err)
+	{
+		try
+		{
+			await fs.unlink(TASK_FILE_PATH);
+		}
+		catch(e)
+		{
+		}
+		throw err;
+	}
 }
 
 function taskTimer(taskname: string, taskpromise: Promise<void>): Promise<void> {
@@ -180,8 +215,8 @@ function taskTimer(taskname: string, taskpromise: Promise<void>): Promise<void> 
 }
 
 
-function reserveSyncTask(tasks: ftpsync.TaskList, taskname: string): Promise<void> {
-    return reserveSyncTaskWith(tasks, taskname, () => util.info("Review Operations to perform.", "OK"));
+function reserveSyncTask(tasks: ftpsync.TaskList, taskname: string, options:ftpsync.BatchOptions): Promise<void> {
+    return reserveSyncTaskWith(tasks, taskname, options, () => util.info("Review Operations to perform.", "OK"));
 }
 
 function fileOrEditorFile(file: vscode.Uri): Thenable<string> {
@@ -205,12 +240,12 @@ function fileOrEditorFile(file: vscode.Uri): Thenable<string> {
 
 function uploadAll(path: string): Promise<void> {
     return ftpsync.syncTestUpload(path)
-        .then((tasks) => reserveSyncTask(tasks, 'Upload All'));
+        .then((tasks) => reserveSyncTask(tasks, 'Upload All', {doNotRefresh:true}));
 }
 
 function downloadAll(path: string): Promise<void> {
     return ftpsync.syncTestDownload(path)
-        .then((tasks) => reserveSyncTask(tasks, 'Download All'));
+        .then((tasks) => reserveSyncTask(tasks, 'Download All', {doNotRefresh:true}));
 }
 
 module.exports = {
@@ -236,7 +271,7 @@ module.exports = {
 							}
 							else
 							{
-								return taskTimer('Upload', ftpsync.upload(path).then(res => {
+								return taskTimer('Upload', ftpsync.upload(path, {doNotMakeDirectory:true}).then(res => {
 									if (res.latestIgnored)
 									{
 										util.log(`latest: ${path}`);
@@ -280,7 +315,7 @@ module.exports = {
                 .then(
                 () => work.ftp.add(
                     () => ftpsync.syncTestClean()
-                        .then((tasks) => reserveSyncTask(tasks, 'Clean All'))
+                        .then((tasks) => reserveSyncTask(tasks, 'Clean All', {doNotRefresh:true}))
                 )
                     .catch(util.error)
                 );

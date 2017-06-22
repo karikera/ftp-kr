@@ -190,7 +190,7 @@ export function makeJson(makejson:string, input?:string):Promise<void>
 		makejson = nfs.workspace+'/';
 	}
 	return nfs.initJson(makejson, makejsonDefault)
-		.then(() => util.open(makejson));
+		.then(() => util.open(makejson)).then(()=>{});
 }
 
 export function make(makejs:string):Promise<void>

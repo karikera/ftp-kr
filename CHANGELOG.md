@@ -1,3 +1,8 @@
+# 1.0.8
+* Fix tree upload by watcher
+* Auto save batch list when press OK
+* Bypass reupload issue
+
 # 1.0.7
 * Stop create test.txt
 

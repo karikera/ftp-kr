@@ -6,6 +6,12 @@ import * as util from './util';
 import * as f from './filesystem';
 import stripJsonComments = require('strip-json-comments');
 
+export interface BatchOptions
+{
+	doNotRefresh?:boolean;
+	doNotMakeDirectory?:boolean;
+}
+
 function testLatest(file:f.State|null, localStat:fs.Stats):boolean
 {
     if (!file) return false;
@@ -98,7 +104,7 @@ class FtpFileSystem extends f.FileSystem
 		super.delete(path);
 	}
 	
-	async ftpDelete(path:string):Promise<void>
+	async ftpDelete(path:string, options?:BatchOptions):Promise<void>
 	{
 		const that = this;
 
@@ -120,12 +126,12 @@ class FtpFileSystem extends f.FileSystem
 			{
 			}
 		}
-		file = await that.ftpStat(path);
+		file = await that.ftpStat(path, options);
 		if (file === null) return;
 		await deleteTest(file);
 	}
 
-	async ftpUpload(path:string, weak?:boolean):Promise<UploadReport>
+	async ftpUpload(path:string, options?:BatchOptions):Promise<UploadReport>
 	{
 		const stats = await fs.stat(path);
 		const report = new UploadReport;
@@ -135,17 +141,17 @@ class FtpFileSystem extends f.FileSystem
 		{
 			if (stats.isDirectory())
 			{
-				if (weak)
+				if (options && options.doNotMakeDirectory)
 				{
 					report.weakIgnored = true;
 					return report;
 				}
 
-				if (oldfile !== null)
+				if (oldfile)
 				{
 					if (oldfile instanceof f.Directory)
 					{
-						oldfile.lmtime = +stats.mtime;
+						oldfile.lmtimeWithThreshold = oldfile.lmtime = +stats.mtime;
 						report.file = oldfile;
 						return report;
 					}
@@ -157,7 +163,7 @@ class FtpFileSystem extends f.FileSystem
 				}
 
 				const dir = that.mkdir(path);
-				dir.lmtime = +stats.mtime;
+				dir.lmtimeWithThreshold = dir.lmtime = +stats.mtime;
 				report.file = dir;
 				return report;
 			}
@@ -169,7 +175,7 @@ class FtpFileSystem extends f.FileSystem
 				await ftp.upload(path, fs.workspace+ path);
 
 				const file = that.create(path);
-				file.lmtime = +stats.mtime;
+				file.lmtimeWithThreshold = file.lmtime = +stats.mtime;
 				file.size = stats.size;
 				report.file = file;
 				return report;
@@ -181,15 +187,11 @@ class FtpFileSystem extends f.FileSystem
 		if (!filedir) return await next(stats);
 		const oldfile = filedir.files[fn.name];
 		if (!oldfile) return await next(stats);
-		if (weak)
+		if (+stats.mtime <= oldfile.lmtimeWithThreshold)
 		{
-			if (Date.now() < oldfile.ignoreUploadTime)
-			{
-				oldfile.ignoreUploadTime = 0;
-				report.weakIgnored = true;
-				report.file = oldfile;
-				return report;
-			}
+			report.latestIgnored = true;
+			report.file = oldfile;
+			return report;
 		}
 		if (+stats.mtime === oldfile.lmtime)
 		{
@@ -201,7 +203,7 @@ class FtpFileSystem extends f.FileSystem
 
 		const oldtype = oldfile.type;
 		const oldsize = oldfile.size;
-		const ftpstats = await this.ftpStat(path);
+		const ftpstats = await this.ftpStat(path, options);
 
 		if (ftpstats.type == oldtype &&  oldsize === ftpstats.size) return await next(stats);
 
@@ -210,18 +212,18 @@ class FtpFileSystem extends f.FileSystem
 		if (selected)
 		{
 			if (selected !== "Download") return await next(stats);
-			this.ftpDownload(path);
+			await this.ftpDownload(path);
 		}
 		report.file = oldfile;
 		return report;
 	}
 
-	async ftpDownload(path:string):Promise<void>
+	async ftpDownload(path:string, options?:BatchOptions):Promise<void>
 	{
 		var file:f.State|null = this.get(path);
 		if (!file)
 		{
-			file = await this.ftpStat(path);
+			file = await this.ftpStat(path, options);
 			if (!file)
 			{
 				util.error(`${path} not found in remote`);
@@ -233,7 +235,7 @@ class FtpFileSystem extends f.FileSystem
 		else await ftp.download(fs.workspace + path, path);
 		const stats = await fs.stat(path);
 		file.lmtime = +stats.mtime;
-		file.ignoreUploadTime = Date.now() + 1000;
+		file.lmtimeWithThreshold = file.lmtime + 1000;
 	}
 
 	async ftpDownloadWithCheck(path:string):Promise<void>
@@ -262,24 +264,24 @@ class FtpFileSystem extends f.FileSystem
 		else await ftp.download(fs.workspace + path, path);
 		stats = await fs.stat(path);
 		file.lmtime = +stats.mtime;
-		file.ignoreUploadTime = Date.now() + 1000;
+		file.lmtimeWithThreshold = file.lmtime + 1000;
 	}
 
-	async ftpStat(path:string):Promise<f.State>
+	async ftpStat(path:string, options?:BatchOptions):Promise<f.State>
 	{
 		const fn = f.splitFileName(path);
-		const dir = await this.ftpList(fn.dir);
+		const dir = await this.ftpList(fn.dir, options);
 		return dir.files[fn.name];
 	}
 
-	ftpList(path:string):Promise<f.Directory>
+	ftpList(path:string, options?:BatchOptions):Promise<f.Directory>
 	{
 		const latest = this.refreshed.get(path);
 		if (latest)
 		{
+			if (options && options.doNotRefresh) return latest.promise;
 			const refreshTime = config.autoDownloadRefreshTime ? config.autoDownloadRefreshTime : 1000;
-			if (latest.accessTime + refreshTime > Date.now())
-			return latest.promise;
+			if (latest.accessTime + refreshTime > Date.now()) return latest.promise;
 		}
 		const deferred = new RefreshedData;
 		this.refreshed.set(path, deferred);
@@ -436,7 +438,7 @@ export interface TaskList
 }
 
 
-export async function exec(task:TaskList):Promise<{tasks:TaskList, count:number}|null>
+export async function exec(task:TaskList, options?:BatchOptions):Promise<{tasks:TaskList, count:number}|null>
 {
 	var errorCount = 0;
 	const failedTasks:TaskList = {};
@@ -448,9 +450,9 @@ export async function exec(task:TaskList):Promise<{tasks:TaskList, count:number}
 		{
 			switch (exec)
 			{
-			case 'upload': await vfs.ftpUpload(file); break;
-			case 'download': await vfs.ftpDownload(file); break;
-			case 'delete': await vfs.ftpDelete(file); break;
+			case 'upload': await vfs.ftpUpload(file, options); break;
+			case 'download': await vfs.ftpDownload(file, options); break;
+			case 'delete': await vfs.ftpDelete(file, options); break;
 			}
 		}
 		catch(err)
@@ -466,14 +468,14 @@ export async function exec(task:TaskList):Promise<{tasks:TaskList, count:number}
 	else return null;
 }
 
-export function upload(path:string, weak?:boolean):Promise<UploadReport>
+export function upload(path:string, options?:BatchOptions):Promise<UploadReport>
 {
-	return vfs.ftpUpload(path, weak);
+	return vfs.ftpUpload(path, options);
 }
 
-export function download(path:string):Promise<void>
+export function download(path:string, doNotRefresh?:boolean):Promise<void>
 {
-	return vfs.ftpDownload(path);
+	return vfs.ftpDownload(path, doNotRefresh);
 }
 
 export function downloadWithCheck(path:string):Promise<void>

@@ -33,7 +33,7 @@ export abstract class State
 	type:string = "";
 	lmtime:number = 0;
 	size:number = 0;
-	ignoreUploadTime:number = 0;
+	lmtimeWithThreshold:number = 0;
 
 	constructor(parent:Directory|null, public name:string)
 	{

@@ -3,7 +3,7 @@
   "displayName": "ftp-kr",
   "description": "FTP sync & Closure Compiler for ME!",
   "license": "MIT",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "publisher": "ruakr",
   "repository": {
     "type": "git",

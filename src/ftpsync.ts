@@ -137,6 +137,8 @@ class FtpFileSystem extends f.FileSystem
 		const report = new UploadReport;
 	
 		const that = this;
+		var oldfile:f.State|undefined = undefined;
+		
 		async function next(stats):Promise<UploadReport>
 		{
 			if (stats.isDirectory())
@@ -185,7 +187,7 @@ class FtpFileSystem extends f.FileSystem
 		const fn = f.splitFileName(path);
 		const filedir = this.get(fn.dir);
 		if (!filedir) return await next(stats);
-		const oldfile = filedir.files[fn.name];
+		oldfile = filedir.files[fn.name];
 		if (!oldfile) return await next(stats);
 		if (+stats.mtime <= oldfile.lmtimeWithThreshold)
 		{

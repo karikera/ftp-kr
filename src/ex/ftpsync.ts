@@ -221,7 +221,7 @@ function reserveSyncTask(tasks: ftpsync.TaskList, taskname: string, options:ftps
 
 function fileOrEditorFile(file: vscode.Uri): Thenable<string> {
     try {
-        if (file) {
+        if (file && file.fsPath) { // file.fsPath is undefined when activated by hotkey
             const path = fs.worklize(file.fsPath);
             return Promise.resolve(path);
         }

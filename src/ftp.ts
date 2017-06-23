@@ -543,6 +543,7 @@ class Sftp extends FileInterface
 			return to;
 		})).catch(e=>{
 			if (e.code === 2) return [];
+			else if(e.code === 550) return [];
 			else throw e;
 		});
 	}

@@ -1,3 +1,7 @@
+# 1.0.9
+* Fix about list 550 error
+* Fix upload & download with shortcut
+
 # 1.0.8
 * Fix tree upload by watcher
 * Auto save batch list when press OK

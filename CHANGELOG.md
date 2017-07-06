@@ -1,3 +1,6 @@
+# 1.0.10
+* Change encoding of sftp file transfer from utf-8 to binary
+
 # 1.0.9
 * Fix about list 550 error
 * Fix upload & download with shortcut

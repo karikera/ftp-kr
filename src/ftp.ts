@@ -517,7 +517,7 @@ class Sftp extends FileInterface
 	_put(localpath:string, ftppath:string):Promise<void>
 	{
 		if (!this.client) return Promise.reject(Error(ALREADY_DESTROYED));
-		return this.client.put(localpath, ftppath)
+		return this.client.put(localpath, ftppath, false, null)
 		.catch(e=>{
 			if (e.code === 2) e.ftpCode = DIRECTORY_NOT_FOUND;
 			throw e;
@@ -527,7 +527,7 @@ class Sftp extends FileInterface
 	_get(ftppath:string):Promise<NodeJS.ReadableStream>
 	{
 		if (!this.client) return Promise.reject(Error(ALREADY_DESTROYED));
-		return this.client.get(ftppath);
+		return this.client.get(ftppath, false, null);
 	}
 
 	_list(ftppath:string):Promise<FileInfo[]>

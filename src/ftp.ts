@@ -113,7 +113,7 @@ abstract class FileInterface
 		client = null;
 	}
 
-	_callWithName<T>(name:string, workpath:string, ignorecode:number, callback:(name:string)=>Promise<T>):Promise<T>
+	_callWithName<T>(name:string, workpath:string, ignorecode:number, defVal:T, callback:(name:string)=>Promise<T>):Promise<T>
 	{
 		this.cancelDestroyTimeout();
 		util.setState(name +" "+workpath);
@@ -124,10 +124,10 @@ abstract class FileInterface
 			this.update();
 			return v;
 		})
-		.catch((err)=>{
+		.catch((err):T=>{
 			util.setState("");
 			this.update();
-			if (err.ftpCode === ignorecode) return;
+			if (err.ftpCode === ignorecode) return defVal;
 			util.log(name+" fail: "+workpath);
 			throw _errorWrap(err);
 		});
@@ -233,22 +233,22 @@ abstract class FileInterface
 
 	rmdir(workpath:string):Promise<void>
 	{
-		return this._callWithName("rmdir", workpath, FILE_NOT_FOUND, ftppath=>this._rmdir(ftppath, true));
+		return this._callWithName("rmdir", workpath, FILE_NOT_FOUND, undefined, ftppath=>this._rmdir(ftppath, true));
 	}
 
 	delete(workpath:string):Promise<void>
 	{
-		return this._callWithName("delete", workpath, FILE_NOT_FOUND, ftppath=>this._delete(ftppath));
+		return this._callWithName("delete", workpath, FILE_NOT_FOUND, undefined, ftppath=>this._delete(ftppath));
 	}
 
 	mkdir(workpath:string):Promise<void>
 	{
-		return this._callWithName("mkdir", workpath, 0, ftppath=>this._mkdir(ftppath, true));
+		return this._callWithName("mkdir", workpath, 0, undefined, ftppath=>this._mkdir(ftppath, true));
 	}
 
 	lastmod(workpath:string):Promise<number>
 	{
-		return this._callWithName("lastmod", workpath, 0, ftppath=>this._lastmod(ftppath));
+		return this._callWithName("lastmod", workpath, 0, 0, ftppath=>this._lastmod(ftppath));
 	}
 
 	abstract _mkdir(path:string, recursive:boolean):Promise<void>;

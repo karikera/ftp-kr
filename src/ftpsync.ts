@@ -477,7 +477,7 @@ export function upload(path:string, options?:BatchOptions):Promise<UploadReport>
 
 export function download(path:string, doNotRefresh?:boolean):Promise<void>
 {
-	return vfs.ftpDownload(path, doNotRefresh);
+	return vfs.ftpDownload(path, {doNotRefresh});
 }
 
 export function downloadWithCheck(path:string):Promise<void>
@@ -517,8 +517,8 @@ export async function load():Promise<void>
 	
 		try
 		{
-			var data = await fs.open(syncDataPath);
-			var obj = JSON.parse(stripJsonComments(data));
+			const data = await fs.open(syncDataPath);
+			const obj = util.parseJson(data);
 			if (obj.version === 1)
 			{
 				vfs.deserialize(obj);

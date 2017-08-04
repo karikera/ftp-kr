@@ -9,6 +9,8 @@ Start with `ftp-kr Init` command! (When exists workspace)
 
 ![init after](images/init-after.png)
 
+It will try to connect when you save it!  
+
 ![download all](images/downloadall.png)
 
 By default, the auto-sync feature is enabled  

@@ -37,16 +37,28 @@ function fireNotFound():Promise<void>
     if (config.state === "NOTFOUND")
         return Promise.resolve();
 
-    config.state = "NOTFOUND";
+	config.state = "NOTFOUND";
+	config.lastError = null;
     return onNotFound.rfire();
 }
 
-function fireInvalid()
+function fireInvalid(err:Error)
 {
-    if (config.state === "INVALID")
+	const regexp = /^Unexpected token a in JSON at line ([0-9]+), column ([0-9]+)$/;
+	if (regexp.test(err.message))
+	{
+		util.open(config.PATH, +RegExp.$1, +RegExp.$2);
+	}
+	else
+	{
+		util.open(config.PATH);
+	}
+	
+    if (config.state === 'INVALID')
         return Promise.resolve();
 
-    config.state = "INVALID";
+    config.state = 'INVALID';
+	config.lastError = err;
     return onInvalid.fire();
 }
 
@@ -54,13 +66,13 @@ function fireLoad()
 {
     return onLoad.fire()
     .then(function(){
-        util.log("ftp-kr.json: loaded");
-        config.state = "LOADED";
-    })
-    .catch(function(err){
-        util.error(err);
-        util.open(config.PATH);
-        return Promise.reject("INVALID");
+		util.log("ftp-kr.json: loaded");
+		if (config.state !== 'LOADED')
+		{
+			util.info('');
+		}
+		config.state = 'LOADED';
+		config.lastError = null;
     });
 }
 
@@ -71,12 +83,10 @@ function onLoadError(err)
     case "NOTFOUND":
         util.log("ftp-kr.json: not found");
         return fireNotFound();
-    case "INVALID":
-        util.log("ftp-kr.json: invalid");
-        return fireInvalid();
     default:
-        util.error(err);
-        return;
+		util.log("ftp-kr.json: error");
+		util.error(err);
+        return fireInvalid(err);
     }
 }
 
@@ -84,9 +94,9 @@ export function loadTest()
 {
 	if (config.state !== 'LOADED')
 	{
-		if (config.state === 'NOTFOUND') return Promise.reject('Config is not loaded');
+		if (config.state === 'NOTFOUND') return Promise.reject('Config is not loaded. Retry it after load');
 		util.open(config.PATH);
-		return Promise.reject(new Error("Need to fix"));
+		return Promise.reject(config.lastError);
 	} 
 	return Promise.resolve();
 }
@@ -103,13 +113,13 @@ export function isFtpDisabled()
 
 export function load()
 {
-	return work.compile.add(
-		()=>work.ftp.add(
-			()=> work.load.add(
-				()=>config.load().then(fireLoad)
-			).end()
-		).end()
-	).catch(onLoadError);
+	return work.compile.work('config loading',
+		()=>work.ftp.work('config loading',
+			()=>work.load.work('config loading',
+				()=>config.load().then(fireLoad).catch(onLoadError)
+			)
+		)
+	);
 }
 
 export function unload()
@@ -122,12 +132,12 @@ export const onNotFound = makeEvent();
 
 export const commands = {
 	'ftpkr.init'(){
-		return work.compile.add(
-			()=>work.ftp.add(
-				()=> work.load.add(
-					()=>config.init().then(fireLoad)
-				).end()
-			).end()
-		).catch(onLoadError);
+		return work.compile.work('ftpkr.init',
+			()=>work.ftp.work('ftpkr.init',
+				()=>work.load.work('ftpkr.init',
+					()=>config.init().then(fireLoad).catch(onLoadError)
+				)
+			)
+		);
 	}
 };

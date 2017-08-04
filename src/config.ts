@@ -1,7 +1,6 @@
 
 import * as fs from "./fs";
 import * as util from "./util";
-import stripJsonComments = require('strip-json-comments');
 
 const CONFIG_PATH = "/.vscode/ftp-kr.json";
 
@@ -101,7 +100,8 @@ export interface Config
 class ConfigNamespace
 {
     PATH:string = CONFIG_PATH;
-    state:string = 'NOTFOUND';
+	state:string = 'NOTFOUND';
+	lastError:(Error|null) = null;
 	ignore:(string|RegExp)[];
 	initTimeForVSBug:number = 0;
 
@@ -185,34 +185,17 @@ class ConfigNamespace
 		}
 		catch(err)
 		{
-			throw "NOTFOUND";
+			throw 'NOTFOUND';
 		}
-		try
-		{
-			config.set(JSON.parse(stripJsonComments(data)));
-		}
-		catch(err)
-		{
-			util.error(err);
-			util.open(CONFIG_PATH);
-			throw "INVALID";
-		}
+		config.set(util.parseJson(data));
     }
 
     async init():Promise<void>
     {
-		try
-		{
-			config.initTimeForVSBug = Date.now();
-			const data:Config = await fs.initJson(CONFIG_PATH, CONFIG_BASE);
-			config.set(data);
-			util.open(CONFIG_PATH);
-		}
-		catch(err)
-		{
-			util.error(err);
-			throw 'INVALID';
-		}
+		config.initTimeForVSBug = Date.now();
+		const data:Config = await fs.initJson(CONFIG_PATH, CONFIG_BASE);
+		config.set(data);
+		util.open(CONFIG_PATH);
     }
 }
 

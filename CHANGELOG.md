@@ -1,3 +1,6 @@
+# 1.0.11
+* Show last error when use command with invalid configuration
+
 # 1.0.10
 * Change encoding of sftp file transfer from utf-8 to binary
 

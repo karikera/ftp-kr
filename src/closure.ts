@@ -8,7 +8,6 @@ import glob from "./pglob";
 import MakeFile from "./make";
 import {config, Config, ClosureConfig} from './config';
 import * as vscode from "vscode";
-import stripJsonComments = require('strip-json-comments');
 import * as nfs from './fs';
 
 const workspace = vscode.workspace;
@@ -67,7 +66,7 @@ function closure(options:MakeJsonConfig):Promise<string>
                 ls.on('close', (code) => {
                     if (code === 0)
                     {
-                        resolve("COMPLETED");
+                        resolve(false);
                     }
                     else
                     {
@@ -120,7 +119,7 @@ async function build(makejson:string):Promise<void>
     {
         throw Error("workspace: " + workspacedir+"\nproject: " + projectdir+"\nout of workspace");
     }
-    var options = JSON.parse(stripJsonComments(fs.readFileSync(makejson, 'utf8')));
+    var options = util.parseJson(fs.readFileSync(makejson, 'utf8'));
 
     if (!options.name)
         options.name = projectdir;

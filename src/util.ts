@@ -1,6 +1,8 @@
 
 import * as vscode from "vscode";
 import * as fs from './fs';
+import stripJsonComments = require('strip-json-comments');
+
 const window = vscode.window;
 const workspace = vscode.workspace;
 
@@ -21,7 +23,7 @@ export class Deferred<T>
 		return this.promise.then(onfulfilled, onreject);
 	}
 
-	catch(func:(v:any)=>void):Promise<T>
+	catch<T2>(func:(v:any)=>T2):Promise<T|T2>
 	{
 		return this.promise.catch(func);
 	}
@@ -144,10 +146,10 @@ export function errorConfirm(err:Error|string, ...items:string[]):Thenable<strin
 	return window.showErrorMessage(message, ...items);
 }
 
-export function openWithError(path:string, message:string):Thenable<vscode.TextEditor>
+export function openWithError(path:string, message:string, line?:number, column?:number):Promise<vscode.TextEditor>
 {
 	window.showErrorMessage(path + ": " + message);
-	return open(path);
+	return open(path, line, column);
 }
 
 export function select(list:string[]|Promise<string[]>):Thenable<string>
@@ -155,10 +157,49 @@ export function select(list:string[]|Promise<string[]>):Thenable<string>
 	return window.showQuickPick(list);
 }
 
-export function open(path:string):Thenable<vscode.TextEditor>
+export function parseJson(text:string):any
 {
-	return workspace.openTextDocument(fs.workspace + path)
-	.then(doc=>window.showTextDocument(doc));
+	try
+	{
+		return JSON.parse(stripJsonComments(text));
+	}
+	catch(err)
+	{
+		const regexp = /^(.+) JSON at position ([0-9]+)$/;
+		if (regexp.test(err.message))
+		{
+			const pos = +RegExp.$2;
+			const front = text.substring(0, pos);
+			var line = 1;
+			var lastidx = 0;
+			for (;;)
+			{
+				const idx = front.indexOf('\n', lastidx);
+				if (idx === -1) break;
+				line ++;
+				lastidx = idx + 1;
+			}
+			const column = pos - lastidx;
+			err.message = `${RegExp.$1} JSON at line ${line}, column ${column}`;
+		}
+		throw err;
+	}
+}
+
+export async function open(path:string, line?:number, column?:number):Promise<vscode.TextEditor>
+{
+	const doc = await workspace.openTextDocument(fs.workspace + path);
+	const editor = await window.showTextDocument(doc);
+	if (line !== undefined)
+	{
+		line --;
+		if (column === undefined) column = 0;
+		
+		const pos = new vscode.Position(line, column);
+		editor.selection = new vscode.Selection(pos, pos);
+		editor.revealRange(new vscode.Range(pos, pos));		
+	}
+	return editor;
 }
 
 export async function cascadingPromise<T,T2>(func:(args:T)=>Promise<T2>, params:T[]):Promise<T2[]>

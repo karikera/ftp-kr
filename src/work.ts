@@ -1,49 +1,26 @@
 
-class Work implements Thenable<any>
+class Work
 {
 	promise:Promise<void> = Promise.resolve();
-	busy:number = 0;
-	endIsBusy:boolean = false;
+	commandName:string = '';
 
-	add(func:()=>any):this
+	work(name:string, func:()=>any):Promise<any>
 	{
-		if (!this.endIsBusy)
+		if (this.commandName !== '')
 		{
-			this.busy++;
-			this.endIsBusy = true;
+			return Promise.reject('ftp-kr is busy: '+this.commandName+' is being proceesed');
 		}
-		this.promise = this.promise.then(func);
-		return this;
-	}
-
-	end():Promise<any>
-	{
-		if (this.endIsBusy)
-		{
-			this.endIsBusy = false;
-			return new Promise<void>((resolve, reject)=>{
-				this.promise = this.promise
-				.then(() => { resolve(); this.busy--; })
-				.catch((err) => { reject(err); this.busy--; });
-			});
-		}
-		return this.promise;
-	}
-
-	catch(func:(v:any)=>any):Promise<any>
-	{
-		return new Promise(resolve=>{
-			this.promise = this.end()
-			.then((data) => resolve(data))
-			.catch((err) => resolve(func(err)))
+		this.commandName = name;
+		const prom = this.promise.then(func)
+		.then(v=>{
+			this.commandName = '';
+			return v;
 		});
+		this.promise = prom.catch(err=>{
+			this.commandName = '';
+		});
+		return prom;
 	}
-
-	then(func:()=>any):Promise<any>
-	{
-		return this.end().then(func);
-	}
-
 }
 
 export const compile = new Work;

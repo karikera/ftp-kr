@@ -22,13 +22,11 @@ function getSelectedMakeJson():string
     return filename.substr(0, filename.lastIndexOf('/')+1) + "make.json";
 }
 
-function generateConfirm(makejson:string, input:string, err:Error):Thenable<void>
+async function generateConfirm(makejson:string, input:string, err:Error):Promise<void>
 {
-	return util.errorConfirm(err, 'Generate make.json')
-	.then((select)=>{
-		if (!select) return;
-		return closure.makeJson(makejson, input);
-	});
+	const select = await util.errorConfirm(err, 'Generate make.json');
+	if (!select) return;
+	await closure.makeJson(makejson, input);
 }
 
 export function load()
@@ -42,62 +40,58 @@ export function unload()
 export var commands = {
 	'ftpkr.makejson' (){
 		if (!window.activeTextEditor) return;
-		return closure.makeJson(getSelectedMakeJson(), getSelectedFilePath()).catch(util.error);
+		return closure.makeJson(getSelectedMakeJson(), getSelectedFilePath());
 	},
-	'ftpkr.closureCompile' (){
-		return cfg.loadTest()
-		.then(() => workspace.saveAll())
-		.then(() => work.compile.add(() => {
-				if (!window.activeTextEditor) return;
-				const input = getSelectedFilePath();
-				const makejson = getSelectedMakeJson();
-				return closure.make(makejson)
-				.then(() => { latestCompilePath = makejson; })
-				.catch((err)=>{
-					if (err.code !== 'ENOENT')
-					{
-						util.log(err);
-						return;
-					}
-					if (latestCompilePath)
-					{
-						return closure.make(latestCompilePath)
-						.catch((err)=>{
-							if (err.code !== 'ENOENT')
-							{
-								util.log(err);
-								return;
-							}
-							latestCompilePath = '';
-							return generateConfirm(makejson, input, err);
-						});
-					}
-					else
-					{
+	async 'ftpkr.closureCompile' (){
+		await cfg.loadTest();
+		await workspace.saveAll();
+		await work.compile.work('ftpkr.closureCompile', async () => {
+			if (!window.activeTextEditor) return;
+			const input = getSelectedFilePath();
+			const makejson = getSelectedMakeJson();
+			try
+			{
+				await closure.make(makejson);
+				latestCompilePath = makejson;
+			}
+			catch(err)
+			{
+				if (err.code !== 'ENOENT')
+				{
+					util.log(err);
+					return;
+				}
+				if (latestCompilePath)
+				{
+					return closure.make(latestCompilePath)
+					.catch((err)=>{
+						if (err.code !== 'ENOENT')
+						{
+							util.log(err);
+							return;
+						}
+						latestCompilePath = '';
 						return generateConfirm(makejson, input, err);
-					}
-				})
-			})
-		)
-		.catch(util.error);
+					});
+				}
+				else
+				{
+					return generateConfirm(makejson, input, err);
+				}
+			}
+		});
 	},
-	'ftpkr.closureCompileAll'(){
-		return cfg.loadTest()
-		.then(() => workspace.saveAll())
-		.then(() => work.compile.add(() => closure.all()).catch(util.error))
-		.catch(util.error);
+	async 'ftpkr.closureCompileAll'(){
+		await cfg.loadTest();
+		await workspace.saveAll();
+		await work.compile.work('ftpkr.closureCompileAll', () => closure.all());
 	},
-	'ftpkr.generateExtern'(){
-		return cfg.loadTest()
-		.then(() => workspace.saveAll())
-		.then(() => work.compile.add(() => {
-				if (!window.activeTextEditor) return;
-				return externgen.gen(getSelectedFilePath())
-				.catch((err)=>{
-					util.error(err);
-				});
-			})
-		)
-		.catch(util.error);
+	async 'ftpkr.generateExtern'(){
+		await cfg.loadTest();
+		await workspace.saveAll();
+		await work.compile.work('ftpkr.generateExtern', () => {
+			if (!window.activeTextEditor) return;
+			return externgen.gen(getSelectedFilePath());
+		});
 	}
 };

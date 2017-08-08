@@ -1,3 +1,6 @@
+# 1.0.12
+* Whether or not ftp-kr is busy, reserve auto upload/download
+
 # 1.0.11
 * Show last error when use command with invalid configuration
 

@@ -47,7 +47,7 @@ function processWatcher(path: string, upload: (path: string) => void, autoSync: 
     function commit() {
         if (!autoSync) return;
         if (config.checkIgnorePath(path)) return;
-		work.ftp.work('upload '+path, () => upload(path))
+		work.ftp.reserveWork('upload '+path, () => upload(path))
 		.catch(util.error);
     }
     try {
@@ -87,7 +87,7 @@ function attachOpenWatcher(mode: boolean): void {
             try {
                 if (!config.autoDownload) return;
                 if (config.checkIgnorePath(workpath)) return;
-				work.ftp.work('download '+workpath, () => ftpsync.downloadWithCheck(workpath))
+				work.ftp.reserveWork('download '+workpath, () => ftpsync.downloadWithCheck(workpath))
 				.catch(util.error);
             }
             catch (err) {
@@ -286,7 +286,7 @@ module.exports = {
             await cfg.loadTest();
             await cfg.isFtpDisabled();
             const path = await fileOrEditorFile(file);
-			work.ftp.work('ftpkr.download', async () => {
+			await work.ftp.work('ftpkr.download', async () => {
 				const isdir = await fs.isDirectory(path);
 				if (isdir)
 				{

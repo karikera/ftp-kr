@@ -1,6 +1,5 @@
 
 import glob_inner = require("glob");
-import * as util from "./util";
 
 function glob(pattern:string):Promise<string[]>
 {
@@ -13,10 +12,14 @@ function glob(pattern:string):Promise<string[]>
     });
 }
 
-function globAll(files:string[]):Promise<string[]>
+async function globAll(files:string[]):Promise<string[]>
 {
-    return util.cascadingPromise(glob, files)
-    .then((fileses) => (<string[]>[]).concat(...fileses));
+	const res:string[] = [];
+	for (const file of files)
+	{
+		res.push(... await glob(file));
+	}
+    return res;
 }
 
 export default function(pattern:string|string[]):Promise<string[]>

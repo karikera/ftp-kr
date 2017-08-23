@@ -43,7 +43,7 @@ cfg.onNotFound(() => {
 });
 
 
-function processWatcher(path: string, upload: (path: string) => void, autoSync: boolean): void {
+function processWatcher(path: string, upload: (path: string) => Promise<any>, autoSync: boolean): void {
     function commit() {
         if (!autoSync) return;
         if (config.checkIgnorePath(path)) return;
@@ -221,25 +221,6 @@ function reserveSyncTask(tasks: ftpsync.TaskList, taskname: string, options:ftps
     return reserveSyncTaskWith(tasks, taskname, options, () => util.info("Review Operations to perform.", "OK"));
 }
 
-function fileOrEditorFile(file: vscode.Uri): Thenable<string> {
-    try {
-        if (file && file.fsPath) { // file.fsPath is undefined when activated by hotkey
-            const path = fs.worklize(file.fsPath);
-            return Promise.resolve(path);
-        }
-        else {
-            const editor = window.activeTextEditor;
-            if (!editor) throw new Error("No file opened");
-            const doc = editor.document;
-            const path = fs.worklize(doc.fileName);
-            return doc.save().then(() => path);
-        }
-    }
-    catch (err) {
-        return Promise.reject(err);
-    }
-}
-
 function uploadAll(path: string): Promise<void> {
     return ftpsync.syncTestUpload(path)
         .then((tasks) => reserveSyncTask(tasks, 'Upload All', {doNotRefresh:true}));
@@ -262,7 +243,7 @@ module.exports = {
 			util.showLog();
 			await cfg.loadTest()
 			await cfg.isFtpDisabled();
-			const path = await fileOrEditorFile(file);
+			const path = await util.fileOrEditorFile(file);
 			await work.ftp.work('ftpkr.upload', async() => {
 				const isdir = await fs.isDirectory(path);
 				if (isdir)
@@ -285,7 +266,7 @@ module.exports = {
 			util.showLog();
             await cfg.loadTest();
             await cfg.isFtpDisabled();
-            const path = await fileOrEditorFile(file);
+			const path = await util.fileOrEditorFile(file);
 			await work.ftp.work('ftpkr.download', async () => {
 				const isdir = await fs.isDirectory(path);
 				if (isdir)

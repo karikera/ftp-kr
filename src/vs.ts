@@ -3,7 +3,6 @@ import {Tag,Reader} from "./reader";
 import * as fs from "fs";
 import * as path from "path";
 
-
 export class Includer
 {
 	included:Object = {};
@@ -21,6 +20,7 @@ export class Includer
 			}
 			return;
 		}
+		src = path.resolve(src).replace(/\\/g, '/');
 		if (src in this.included)
 			return;
 		if (src in this.including)

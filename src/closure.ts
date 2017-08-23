@@ -24,7 +24,8 @@ export interface MakeJsonConfig
 	export?:boolean;
 	makejson:string;
 	projectdir:string;
-	closure:ClosureConfig;
+	closure?:ClosureConfig;
+	includeReference?:boolean;
 }
 
 function closure(options:MakeJsonConfig):Promise<string>
@@ -36,7 +37,7 @@ function closure(options:MakeJsonConfig):Promise<string>
         return Promise.reject(Error("No source"));
     options.export = !!options.export;
     
-    var makeFile = new MakeFile;
+    const makeFile = new MakeFile;
 
     makeFile.on(out, src.concat([options.makejson]), ()=>{
         return new Promise((resolve, reject)=> {
@@ -83,42 +84,22 @@ function closure(options:MakeJsonConfig):Promise<string>
         });
     });
 
-    return makeFile.make(out).then(v=>v ? 'MODIFIED' : 'LATEST');
-}
-
-function include(src:string[]):string[]
-{
-    var includer = new vs.Includer;
-    includer.include(src);
-
-    if (includer.errors.length !== 0)
-    {
-        for(var err of includer.errors)
-        {
-            util.log(path.resolve(err[0])+":"+err[1]+"\n\t"+err[2]);
-        }
-    }
-    return includer.list;
+    return makeFile.make(out).then(v=>v ? 'COMPILED' : 'LATEST');
 }
 
 async function build(makejson:string):Promise<void>
 {
-    makejson = path.resolve(makejson).replace(/\\/g, '/');
-    const workspacedir = workspace.rootPath.replace(/\\/g, '/'); 
-
     function toAbsolute(path:string):string
     {
         if (path.startsWith('/'))
-            return workspacedir + path;
+            return nfs.workspace + path;
         else
             return projectdir + "/" + path;
     }
 
+	makejson = nfs.workspace + makejson;
+	
     const projectdir = makejson.substr(0, makejson.lastIndexOf("/"));
-    if (!makejson.startsWith(workspacedir))
-    {
-        throw Error("workspace: " + workspacedir+"\nproject: " + projectdir+"\nout of workspace");
-    }
     var options = util.parseJson(fs.readFileSync(makejson, 'utf8'));
 
     if (!options.name)
@@ -131,8 +112,20 @@ async function build(makejson:string):Promise<void>
 
     const arg = await glob(options.src.map(toAbsolute));
 
-    if (options.includeReference !== false)
-        options.src = include(arg);
+	if (options.includeReference !== false)
+	{
+		const includer = new vs.Includer;
+		includer.include(arg);
+		if (includer.errors.length !== 0)
+		{
+			for(var err of includer.errors)
+			{
+				util.log(path.resolve(err[0])+":"+err[1]+"\n\t"+err[2]);
+			}
+			return;
+		}
+		options.src = includer.list;
+	}
 
 	try
 	{
@@ -157,7 +150,10 @@ export async function all():Promise<void>
 		util.clearLog();
 		util.showLog();
 		const files = await glob(workspace.rootPath+"/**/make.json");
-		await util.cascadingPromise(build, files);
+		for (const file of files)
+		{
+			await build(nfs.worklize(file));
+		}
 		util.log('FINISH ALL');
 	}
 	catch(err)
@@ -180,14 +176,7 @@ export function makeJson(makejson:string, input?:string):Promise<void>
 		closure: {}
 	};
 
-	try
-	{
-		makejson = nfs.worklize(makejson);
-	}
-	catch(e)
-	{
-		makejson = nfs.workspace+'/';
-	}
+	makejson = nfs.worklize(makejson);
 	return nfs.initJson(makejson, makejsonDefault)
 		.then(() => util.open(makejson)).then(()=>{});
 }

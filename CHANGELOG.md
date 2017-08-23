@@ -1,3 +1,7 @@
+# 1.0.13
+* Suppress duplicated input(Closure Compiler)
+* Save latest compile target(Closure Compiler)
+
 # 1.0.12
 * Whether or not ftp-kr is busy, reserve auto upload/download
 

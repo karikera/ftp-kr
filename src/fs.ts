@@ -100,7 +100,7 @@ export function open(path:string):Promise<string>
 
 export function exists(path:string):Promise<boolean>
 {
-	if (!path.startsWith("/")) return Promise.reject(new Error("Path must starts with slash: "+path));
+	if (!path.startsWith("/")) return Promise.resolve(false);
 	return new Promise((resolve) => fs.exists(workspace + path, resolve));
 }
 

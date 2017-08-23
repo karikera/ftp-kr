@@ -9,6 +9,13 @@ const workspace = vscode.workspace;
 var output:vscode.OutputChannel|null = null;
 var statebar:vscode.StatusBarItem|null = null;
 
+export var context:vscode.ExtensionContext;
+
+export function setContext(ctx:vscode.ExtensionContext)
+{
+	context = ctx;
+}
+
 export class Deferred<T>
 {
 	resolve:((v:T)=>void);
@@ -26,6 +33,27 @@ export class Deferred<T>
 	catch<T2>(func:(v:any)=>T2):Promise<T|T2>
 	{
 		return this.promise.catch(func);
+	}
+}
+
+export function fileOrEditorFile(file: vscode.Uri): Promise<string> {
+	try
+	{
+		if (file && file.fsPath) { // file.fsPath is undefined when activated by hotkey
+			const path = fs.worklize(file.fsPath);
+			return Promise.resolve(path);
+		}
+		else {
+			const editor = window.activeTextEditor;
+			if (!editor) throw Error('No file selected');
+			const doc = editor.document;
+			const path = fs.worklize(doc.fileName);
+			return Promise.resolve().then(()=>doc.save()).then(()=>path);
+		}
+	}
+	catch(e)
+	{
+		return Promise.reject(e);
 	}
 }
 
@@ -200,28 +228,6 @@ export async function open(path:string, line?:number, column?:number):Promise<vs
 		editor.revealRange(new vscode.Range(pos, pos));		
 	}
 	return editor;
-}
-
-export async function cascadingPromise<T,T2>(func:(args:T)=>Promise<T2>, params:T[]):Promise<T2[]>
-{
-	try
-	{
-		if (params.length == 0)
-		{
-			return Promise.resolve([]);
-		}
-		const response:T2[] = [];
-		for (const param of params)
-		{
-			const res = await func(param);
-			response.push(res);
-		}
-		return response;
-	}
-	catch(e)
-	{
-		throw e; // maybe unusable code?
-	}
 }
 
 export function addOptions(args:string[], options:Object):void

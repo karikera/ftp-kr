@@ -3,7 +3,7 @@
   "displayName": "ftp-kr",
   "description": "FTP sync & Closure Compiler for ME!",
   "license": "MIT",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "publisher": "ruakr",
   "repository": {
     "type": "git",
@@ -123,14 +123,14 @@
   },
   "devDependencies": {
     "@types/ftp": "^0.3.29",
-    "@types/glob": "^5.0.30",
+    "@types/glob": "^5.0.32",
     "@types/iconv-lite": "0.0.1",
-    "@types/mocha": "^2.2.41",
-    "@types/node": "^6.0.85",
-    "@types/ssh2-sftp-client": "^1.0.5",
+    "@types/mocha": "^2.2.42",
+    "@types/node": "^6.0.87",
+    "@types/ssh2-sftp-client": "^1.0.6",
     "@types/strip-json-comments": "0.0.28",
     "mocha": "^2.3.3",
-    "typescript": "^2.4.2",
-    "vscode": "^1.1.4"
+    "typescript": "^2.5.1",
+    "vscode": "^1.1.5"
   }
 }

@@ -19,7 +19,7 @@ enum WatcherMode
 	NONE,
 	CONFIG,
 	FULL,
-};
+}
 
 var watcherMode:WatcherMode = WatcherMode.NONE;
 var openWatcherMode = false;

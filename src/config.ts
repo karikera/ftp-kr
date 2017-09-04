@@ -97,10 +97,17 @@ export interface Config
 	sftpOverride?:SftpOptions,
 }
 
+export enum ConfigState
+{
+	NOTFOUND,
+	INVALID,
+	LOADED
+}
+
 class ConfigNamespace
 {
-    PATH:string = CONFIG_PATH;
-	state:string = 'NOTFOUND';
+    readonly PATH:string = CONFIG_PATH;
+	state:ConfigState = ConfigState.NOTFOUND;
 	lastError:(Error|null) = null;
 	ignore:(string|RegExp)[];
 	initTimeForVSBug:number = 0;

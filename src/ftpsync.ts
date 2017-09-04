@@ -1,5 +1,5 @@
 
-import config from './config';
+import {config, ConfigState} from './config';
 import * as fs from './fs';
 import * as ftp from './ftp';
 import * as util from './util';
@@ -503,7 +503,7 @@ export function syncTestDownload(path:string):Promise<TaskList>
 export function saveSync():void
 {
 	if(!syncDataPath) return;
-	if (config.state !== 'LOADED') return;
+	if (config.state !== ConfigState.LOADED) return;
 	if (!config.createSyncCache) return;
 	fs.mkdir("/.vscode");
 	return fs.createSync(syncDataPath, JSON.stringify(vfs.serialize(), null, 4));

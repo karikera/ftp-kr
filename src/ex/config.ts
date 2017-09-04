@@ -1,5 +1,5 @@
 
-import config from '../config';
+import {config, ConfigState} from '../config';
 import * as work from '../work';
 import * as util from '../util';
 
@@ -34,10 +34,10 @@ function makeEvent():Event
 
 function fireNotFound():Promise<void>
 {
-    if (config.state === "NOTFOUND")
+    if (config.state === ConfigState.NOTFOUND)
         return Promise.resolve();
 
-	config.state = "NOTFOUND";
+	config.state = ConfigState.NOTFOUND;
 	config.lastError = null;
     return onNotFound.rfire();
 }
@@ -54,10 +54,10 @@ function fireInvalid(err:Error)
 		util.open(config.PATH);
 	}
 	
-    if (config.state === 'INVALID')
+    if (config.state === ConfigState.INVALID)
         return Promise.resolve();
 
-    config.state = 'INVALID';
+    config.state = ConfigState.INVALID;
 	config.lastError = err;
     return onInvalid.fire();
 }
@@ -67,11 +67,11 @@ function fireLoad()
     return onLoad.fire()
     .then(function(){
 		util.log("ftp-kr.json: loaded");
-		if (config.state !== 'LOADED')
+		if (config.state !== ConfigState.LOADED)
 		{
 			util.info('');
 		}
-		config.state = 'LOADED';
+		config.state = ConfigState.LOADED;
 		config.lastError = null;
     });
 }
@@ -92,9 +92,9 @@ function onLoadError(err)
 
 export function loadTest()
 {
-	if (config.state !== 'LOADED')
+	if (config.state !== ConfigState.LOADED)
 	{
-		if (config.state === 'NOTFOUND') return Promise.reject('Config is not loaded. Retry it after load');
+		if (config.state === ConfigState.NOTFOUND) return Promise.reject('Config is not loaded. Retry it after load');
 		util.open(config.PATH);
 		return Promise.reject(config.lastError);
 	} 

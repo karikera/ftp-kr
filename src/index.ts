@@ -10,7 +10,7 @@ const extensions = [
 	require('./ex/compiler')
 ];
 
-function activate(context:vscode.ExtensionContext) {
+export function activate(context:vscode.ExtensionContext) {
     console.log('[extension: ftp-kr] activate');
 	fs.setWorkspace(workspace.rootPath.replace(/\\/g, "/"));
 	util.setContext(context);
@@ -27,7 +27,7 @@ function activate(context:vscode.ExtensionContext) {
         }
     }
 }
-function deactivate() {
+export function deactivate() {
     try
     {
         for(var i= extensions.length - 1; i >= 0 ; i--)
@@ -39,6 +39,3 @@ function deactivate() {
         util.error(err);
     }
 }
-
-exports.activate = activate;
-exports.deactivate = deactivate;

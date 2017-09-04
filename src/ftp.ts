@@ -108,7 +108,7 @@ abstract class FileInterface
 
 	destroy():void
 	{
-		util.log('Disconnected');
+		util.message('Disconnected');
 		this.cancelDestroyTimeout();
 		client = null;
 	}
@@ -117,7 +117,7 @@ abstract class FileInterface
 	{
 		this.cancelDestroyTimeout();
 		util.setState(name +" "+workpath);
-		util.log(name +": "+workpath);
+		util.message(name +": "+workpath);
 		const ftppath = toftpPath(workpath);
 		return callback(ftppath).then(v=>{
 			util.setState("");
@@ -128,7 +128,7 @@ abstract class FileInterface
 			util.setState("");
 			this.update();
 			if (err.ftpCode === ignorecode) return defVal;
-			util.log(name+" fail: "+workpath);
+			util.message(name+" fail: "+workpath);
 			throw _errorWrap(err);
 		});
 	}
@@ -137,7 +137,7 @@ abstract class FileInterface
 	{
 		this.cancelDestroyTimeout();
 		util.setState("upload "+workpath);
-		util.log("upload: "+workpath);
+		util.message("upload: "+workpath);
 		const ftppath = toftpPath(workpath);
 
 		return this._put(localpath, ftppath)
@@ -155,7 +155,7 @@ abstract class FileInterface
 		.catch((err)=>{
 			util.setState("");
 			this.update();
-			util.log("upload fail: "+workpath);
+			util.message("upload fail: "+workpath);
 			throw _errorWrap(err);
 		});
 	}
@@ -164,7 +164,7 @@ abstract class FileInterface
 	{
 		this.cancelDestroyTimeout();
 		util.setState("download "+workpath);
-		util.log("download: "+workpath);
+		util.message("download: "+workpath);
 		const ftppath = toftpPath(workpath);
 
 		return this._get(ftppath)
@@ -181,7 +181,7 @@ abstract class FileInterface
 		.catch(err=>{
 			util.setState("");
 			this.update();
-			util.log("download fail: "+workpath);
+			util.message("download fail: "+workpath);
 			throw _errorWrap(err);
 		});
 	}
@@ -190,7 +190,7 @@ abstract class FileInterface
 	{
 		this.cancelDestroyTimeout();
 		util.setState("list "+workpath);
-		util.log("list: "+workpath);
+		util.message("list: "+workpath);
 
 		var ftppath = toftpPath(workpath);
 		if (!ftppath) ftppath = ".";
@@ -226,7 +226,7 @@ abstract class FileInterface
 		.catch(err=>{
 			util.setState("");
 			this.update();
-			util.log("list fail: "+workpath);
+			util.message("list fail: "+workpath);
 			throw _errorWrap(err);
 		});
 	}
@@ -588,10 +588,10 @@ function init():Promise<FileInterface>
 	url += config.remotePath;
 	url += '/';
 
-	util.log(`Try connect to ${url} with user ${config.username}`);
+	util.message(`Try connect to ${url} with user ${config.username}`);
 
 	return newclient.connect().then(()=>{
-		util.log('Connected');
+		util.message('Connected');
 		return newclient;
 	});
 }

@@ -14,7 +14,7 @@ export function gen(jsfile:string):Promise<void>
 		proc.on('message', data=>{
 			if (typeof data  === 'string')
 			{
-				util.log(data);
+				util.message(data);
 				return;
 			}
 			end = true;
@@ -24,7 +24,7 @@ export function gen(jsfile:string):Promise<void>
 			}
 			else
 			{
-				util.log(data.output);
+				util.message(data.output);
 				res();
 			}
 		});

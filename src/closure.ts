@@ -45,7 +45,7 @@ function closure(options:MakeJsonConfig):Promise<string>
             try
             {
                 process.chdir(options.projectdir);
-                util.log(projname + ": BUILD");
+                util.message(projname + ": BUILD");
                 const args = ['-jar', closurecompiler];
 
                 const ex_parameter:ClosureConfig = {
@@ -62,8 +62,8 @@ function closure(options:MakeJsonConfig):Promise<string>
 
                 util.addOptions(args, finalOptions);
                 const ls = cp.spawn("java", args);
-                ls.stdout.on('data', (data:string) => util.log(data));
-                ls.stderr.on('data', (data:string) => util.log(data));
+                ls.stdout.on('data', (data:string) => util.message(data));
+                ls.stderr.on('data', (data:string) => util.message(data));
                 ls.on('close', (code) => {
                     if (code === 0)
                     {
@@ -120,7 +120,7 @@ async function build(makejson:string):Promise<void>
 		{
 			for(var err of includer.errors)
 			{
-				util.log(path.resolve(err[0])+":"+err[1]+"\n\t"+err[2]);
+				util.message(path.resolve(err[0])+":"+err[1]+"\n\t"+err[2]);
 			}
 			return;
 		}
@@ -130,11 +130,11 @@ async function build(makejson:string):Promise<void>
 	try
 	{
 		const msg = await closure(options);
-		util.log(options.name + ": "+msg);
+		util.message(options.name + ": "+msg);
 	}
 	catch(err)
 	{
-		util.log(err);
+		util.message(err);
 	}
 }
 
@@ -154,11 +154,11 @@ export async function all():Promise<void>
 		{
 			await build(nfs.worklize(file));
 		}
-		util.log('FINISH ALL');
+		util.message('FINISH ALL');
 	}
 	catch(err)
 	{
-		util.log(err);
+		util.message(err);
 	}
 }
 

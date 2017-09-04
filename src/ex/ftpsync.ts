@@ -51,11 +51,15 @@ cfg.onNotFound(() => {
 });
 
 
-function processWatcher(path: string, upload: (path: string) => Promise<any>, autoSync: boolean): void {
-    function commit() {
+function processWatcher(path: string, 
+	workFunc: (path: string) => Promise<any>, 
+	workName: string,
+	autoSync: boolean): void 
+{
+    function commit():void {
         if (!autoSync) return;
         if (config.checkIgnorePath(path)) return;
-		work.ftp.reserveWork('upload '+path, () => upload(path))
+		work.ftp.reserveWork(workName+' '+path, () => workFunc(path))
 		.catch(util.error);
     }
     try {
@@ -64,7 +68,7 @@ function processWatcher(path: string, upload: (path: string) => Promise<any>, au
             if (config.initTimeForVSBug) {
                 const inittime = config.initTimeForVSBug;
                 config.initTimeForVSBug = 0;
-                if (upload === ftpsync.upload) {
+                if (workFunc === ftpsync.upload) {
                     if (Date.now() <= inittime + 500) {
                         util.open(config.PATH);
                         return;
@@ -111,9 +115,9 @@ function attachOpenWatcher(mode: boolean): void {
     }
 }
 
-async function uploadCascade(path: string)
+async function uploadCascade(path: string):Promise<void>
 {
-	processWatcher(path, ftpsync.upload, !!config.autoUpload);
+	processWatcher(path, ftpsync.upload, 'upload', !!config.autoUpload);
 	if (!(await fs.isDirectory(path))) return;
 
 	for(const cs of await fs.list(path))
@@ -124,8 +128,14 @@ async function uploadCascade(path: string)
 
 function attachWatcher(mode: WatcherMode): void {
     if (watcherMode === mode) return;
-    if (watcher) watcher.dispose();
-    watcherMode = mode;
+	if (watcher)
+	{
+		watcher.dispose();
+		watcher = null;
+	}
+	watcherMode = mode;
+	util.verbose('watcherMode = '+WatcherMode[mode]);
+
     var watcherPath = fs.workspace;
     switch (watcherMode) {
         case WatcherMode.FULL: watcherPath += "/**/*"; break;
@@ -138,13 +148,18 @@ function attachWatcher(mode: WatcherMode): void {
     var deleteParent = ""; // #1
 
     watcher.onDidChange(e => {
+		util.verbose('watcher.onDidChange: '+e.fsPath);
 		watcherQueue = watcherQueue.then(()=>{
 			const path = fs.worklize(e.fsPath);
 			if (deleteParent && path.startsWith(deleteParent + "/")) return; // #1
-			processWatcher(path, path => ftpsync.upload(path, {doNotMakeDirectory: true}), !!config.autoUpload);
+			processWatcher(path, 
+				path => ftpsync.upload(path, {doNotMakeDirectory: true}), 
+				'upload',
+				!!config.autoUpload);
 		});
     });
     watcher.onDidCreate(e => {
+		util.verbose('watcher.onDidCreate: '+e.fsPath);
 		watcherQueue = watcherQueue.then(()=>{
 			const path = fs.worklize(e.fsPath);
 			if (deleteParent && deleteParent === path) deleteParent = ""; // #1
@@ -152,10 +167,14 @@ function attachWatcher(mode: WatcherMode): void {
 		});
     });
     watcher.onDidDelete(e => {
+		util.verbose('watcher.onDidDelete: '+e.fsPath);
 		watcherQueue = watcherQueue.then(()=>{
 			const path = fs.worklize(e.fsPath);
 			deleteParent = path; // #1
-			processWatcher(path, ftpsync.remove, !!config.autoDelete);
+			processWatcher(path, 
+				ftpsync.remove, 
+				'remove',
+				!!config.autoDelete);
 		});
     });
 }
@@ -171,7 +190,7 @@ async function reserveSyncTaskWith(tasks: ftpsync.TaskList, taskname: string, op
 				return;
 			}
 			util.showLog();
-			util.log(taskname + ' started');
+			util.message(taskname + ' started');
 			await fs.create(TASK_FILE_PATH, JSON.stringify(tasks, null, 1));
 			await util.open(TASK_FILE_PATH);
 			const res = await infocallback();
@@ -193,7 +212,7 @@ async function reserveSyncTaskWith(tasks: ftpsync.TaskList, taskname: string, op
 					util.info(taskname + " completed");
 				}
 				util.showLog();
-				util.log(taskname + ' completed');
+				util.message(taskname + ' completed');
 				return;
 			}
 
@@ -239,89 +258,89 @@ function downloadAll(path: string): Promise<void> {
         .then((tasks) => reserveSyncTask(tasks, 'Download All', {doNotRefresh:true}));
 }
 
-module.exports = {
-    load() {
-    },
-    unload() {
-        ftpsync.saveSync();
-    },
+export function load()
+{
+}
+	
+export function unload()
+{
+	ftpsync.saveSync();
+}
 
-    commands: {
-        async 'ftpkr.upload'(file: vscode.Uri) {
-			util.showLog();
-			await cfg.loadTest()
-			await cfg.isFtpDisabled();
-			const path = await util.fileOrEditorFile(file);
-			await work.ftp.work('ftpkr.upload', async() => {
-				const isdir = await fs.isDirectory(path);
-				if (isdir)
-				{
-					await uploadAll(path);
-				}
-				else
-				{
-					await taskTimer('Upload', ftpsync.upload(path, {doNotMakeDirectory:true}).then(res => {
-						if (res.latestIgnored)
-						{
-							util.log(`latest: ${path}`);
-						}
-					}));
-				}
-			});
-		},
-		
-        async 'ftpkr.download'(file: vscode.Uri) {
-			util.showLog();
-            await cfg.loadTest();
-            await cfg.isFtpDisabled();
-			const path = await util.fileOrEditorFile(file);
-			await work.ftp.work('ftpkr.download', async () => {
-				const isdir = await fs.isDirectory(path);
-				if (isdir)
-				{
-					await downloadAll(path);
-				}
-				else
-				{
-					await taskTimer('Download', ftpsync.download(path))
-				}
-			});
-		},
-		
-        async 'ftpkr.uploadAll'() {
-			await cfg.loadTest();
-			await cfg.isFtpDisabled();
-			await workspace.saveAll();
-            await work.ftp.work('ftpkr.uploadAll', () => uploadAll(""));
-        },
+export const commands = {
+	async 'ftpkr.upload'(file: vscode.Uri) {
+		util.showLog();
+		await cfg.loadTest()
+		await cfg.isFtpDisabled();
+		const path = await util.fileOrEditorFile(file);
+		await work.ftp.work('ftpkr.upload', async() => {
+			const isdir = await fs.isDirectory(path);
+			if (isdir)
+			{
+				await uploadAll(path);
+			}
+			else
+			{
+				await taskTimer('Upload', ftpsync.upload(path, {doNotMakeDirectory:true}).then(res => {
+					if (res.latestIgnored)
+					{
+						util.message(`latest: ${path}`);
+					}
+				}));
+			}
+		});
+	},
+	
+	async 'ftpkr.download'(file: vscode.Uri) {
+		util.showLog();
+		await cfg.loadTest();
+		await cfg.isFtpDisabled();
+		const path = await util.fileOrEditorFile(file);
+		await work.ftp.work('ftpkr.download', async () => {
+			const isdir = await fs.isDirectory(path);
+			if (isdir)
+			{
+				await downloadAll(path);
+			}
+			else
+			{
+				await taskTimer('Download', ftpsync.download(path))
+			}
+		});
+	},
+	
+	async 'ftpkr.uploadAll'() {
+		await cfg.loadTest();
+		await cfg.isFtpDisabled();
+		await workspace.saveAll();
+		await work.ftp.work('ftpkr.uploadAll', () => uploadAll(""));
+	},
 
-        async 'ftpkr.downloadAll'() {
-			await cfg.loadTest();
-			await cfg.isFtpDisabled();
-			await workspace.saveAll();
-			await work.ftp.work('ftpkr.downloadAll', () => downloadAll(""));
-        },
+	async 'ftpkr.downloadAll'() {
+		await cfg.loadTest();
+		await cfg.isFtpDisabled();
+		await workspace.saveAll();
+		await work.ftp.work('ftpkr.downloadAll', () => downloadAll(""));
+	},
 
-        async 'ftpkr.cleanAll'() {
-			await cfg.loadTest();
-			await cfg.isFtpDisabled();
-			await workspace.saveAll();
-			await work.ftp.work('ftpkr.cleanAll', async () => {
-				const tasks = await ftpsync.syncTestClean();
-				await reserveSyncTask(tasks, 'ftpkr.Clean All', {doNotRefresh:true});
-			});
-        },
-        async 'ftpkr.refreshAll'() {
-			await cfg.loadTest();
-			await cfg.isFtpDisabled();
-            await work.ftp.work('ftpkr.refreshAll', () => ftpsync.refreshForce());
-        },
-        async 'ftpkr.list'() {
-            await cfg.loadTest();
-            await cfg.isFtpDisabled();
-            await work.ftp.work('ftpkr.list', () => ftpsync.list(''));
-        },
+	async 'ftpkr.cleanAll'() {
+		await cfg.loadTest();
+		await cfg.isFtpDisabled();
+		await workspace.saveAll();
+		await work.ftp.work('ftpkr.cleanAll', async () => {
+			const tasks = await ftpsync.syncTestClean();
+			await reserveSyncTask(tasks, 'ftpkr.Clean All', {doNotRefresh:true});
+		});
+	},
+	async 'ftpkr.refreshAll'() {
+		await cfg.loadTest();
+		await cfg.isFtpDisabled();
+		await work.ftp.work('ftpkr.refreshAll', () => ftpsync.refreshForce());
+	},
+	async 'ftpkr.list'() {
+		await cfg.loadTest();
+		await cfg.isFtpDisabled();
+		await work.ftp.work('ftpkr.list', () => ftpsync.list(''));
+	},
 
-    }
 };
-

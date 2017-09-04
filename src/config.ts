@@ -93,8 +93,9 @@ export interface Config
 	autoDownloadRefreshTime?:number;
 	privateKey?:string;
 
-	ftpOverride?:FtpOptions,
-	sftpOverride?:SftpOptions,
+	ftpOverride?:FtpOptions;
+	sftpOverride?:SftpOptions;
+	logLevel?:util.LogLevel;
 }
 
 export enum ConfigState
@@ -189,6 +190,7 @@ class ConfigNamespace
 			}
 		}
 		
+		util.setLogLevel(obj.logLevel || 'NORMAL');
 		setConfig(obj);
     }
 

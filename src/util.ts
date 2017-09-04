@@ -11,7 +11,21 @@ var statebar:vscode.StatusBarItem|null = null;
 
 export var context:vscode.ExtensionContext;
 
-export function setContext(ctx:vscode.ExtensionContext)
+export type LogLevel = 'VERBOSE' | 'NORMAL';
+enum LogLevelEnum
+{
+	VERBOSE,
+	NORMAL
+}
+
+export var logLevel:LogLevelEnum = LogLevelEnum.NORMAL;
+
+export function setLogLevel(level:LogLevel):void
+{
+	logLevel = LogLevelEnum[level];
+}
+
+export function setContext(ctx:vscode.ExtensionContext):void
 {
 	context = ctx;
 }
@@ -91,10 +105,21 @@ export function showLog():void
 	out.show();
 }
 
-export function log(...message:string[]):void
+export function log(level:LogLevelEnum, ...message:string[]):void
 {
+	if (level < logLevel) return;
 	const out = getOutput();
 	out.appendLine(message.join(' '));
+}
+
+export function message(...message:string[]):void
+{
+	log(LogLevelEnum.NORMAL, ...message);
+}
+
+export function verbose(...message:string[]):void
+{
+	log(LogLevelEnum.VERBOSE, ...message);
 }
 
 export function wrap(func:()=>void):void
@@ -117,7 +142,7 @@ export function info(info:string, ...items:string[]):Thenable<string>
 export function error(err:NodeJS.ErrnoException|string):void
 {
 	console.error(err);
-	log(err.toString());
+	message(err.toString());
 	if (err instanceof Error)
 	{
 		window.showErrorMessage(err.message, 'Detail')
@@ -145,7 +170,7 @@ export function error(err:NodeJS.ErrnoException|string):void
 			.then(()=>open(LOGFILE))
 			.catch(()=>{
 				showLog();
-				log(output);
+				message(output);
 			});
 		});
 	}
@@ -157,21 +182,21 @@ export function error(err:NodeJS.ErrnoException|string):void
 
 export function errorConfirm(err:Error|string, ...items:string[]):Thenable<string>
 {
-	var message:string;
+	var msg:string;
 	if (err instanceof Error)
 	{
-		message = err.message;
+		msg = err.message;
 		console.error(err);
-		log(err.toString());
+		message(err.toString());
 	}
 	else
 	{
-		message = err;
+		msg = err;
 		console.error(new Error(err));
-		log(err);
+		message(err);
 	}
 
-	return window.showErrorMessage(message, ...items);
+	return window.showErrorMessage(msg, ...items);
 }
 
 export function openWithError(path:string, message:string, line?:number, column?:number):Promise<vscode.TextEditor>

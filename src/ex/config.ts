@@ -38,11 +38,12 @@ function fireNotFound():Promise<void>
         return Promise.resolve();
 
 	config.state = ConfigState.NOTFOUND;
+	util.verbose('config.state = '+ConfigState[config.state]);
 	config.lastError = null;
     return onNotFound.rfire();
 }
 
-function fireInvalid(err:Error)
+function fireInvalid(err:Error):Promise<void>
 {
 	const regexp = /^Unexpected token a in JSON at line ([0-9]+), column ([0-9]+)$/;
 	if (regexp.test(err.message))
@@ -58,20 +59,22 @@ function fireInvalid(err:Error)
         return Promise.resolve();
 
     config.state = ConfigState.INVALID;
+	util.verbose('config.state = '+ConfigState[config.state]);
 	config.lastError = err;
     return onInvalid.fire();
 }
 
-function fireLoad()
+function fireLoad():Promise<void>
 {
     return onLoad.fire()
     .then(function(){
-		util.log("ftp-kr.json: loaded");
+		util.message("ftp-kr.json: loaded");
 		if (config.state !== ConfigState.LOADED)
 		{
 			util.info('');
 		}
 		config.state = ConfigState.LOADED;
+		util.verbose('config.state = '+ConfigState[config.state]);
 		config.lastError = null;
     });
 }
@@ -81,16 +84,16 @@ function onLoadError(err)
     switch (err)
     {
     case "NOTFOUND":
-        util.log("ftp-kr.json: not found");
+        util.message("ftp-kr.json: not found");
         return fireNotFound();
     default:
-		util.log("ftp-kr.json: error");
+		util.message("ftp-kr.json: error");
 		util.error(err);
         return fireInvalid(err);
     }
 }
 
-export function loadTest()
+export function loadTest():Promise<void>
 {
 	if (config.state !== ConfigState.LOADED)
 	{

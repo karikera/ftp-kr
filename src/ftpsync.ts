@@ -461,7 +461,7 @@ export async function exec(task:TaskList, options?:BatchOptions):Promise<{tasks:
 		{
 			failedTasks[file] = exec;
 			console.error(err);
-			util.log(err);
+			util.message(err);
 			errorCount ++;
 		}
 	}

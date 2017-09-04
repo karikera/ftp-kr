@@ -13,7 +13,15 @@ import * as cfg from './config';
 var watcherQueue : Promise<void> = Promise.resolve();
 var watcher: vscode.FileSystemWatcher | null = null;
 var openWatcher: vscode.Disposable | null = null;
-var watcherMode = "";
+
+enum WatcherMode
+{
+	NONE,
+	CONFIG,
+	FULL,
+};
+
+var watcherMode:WatcherMode = WatcherMode.NONE;
 var openWatcherMode = false;
 var initTime = 0;
 
@@ -22,24 +30,24 @@ const TASK_FILE_PATH = "/.vscode/ftp-kr.task.json";
 cfg.onLoad(function () {
     if (config.disableFtp) {
         attachOpenWatcher(false);
-        attachWatcher("CONFIG");
+        attachWatcher(WatcherMode.CONFIG);
         return;
     }
 
     return ftpsync.load()
         .then(() => ftpsync.refresh(""))
         .then(() => {
-            attachWatcher(config.autoUpload || config.autoDelete ? "FULL" : "CONFIG");
+            attachWatcher(config.autoUpload || config.autoDelete ? WatcherMode.FULL : WatcherMode.CONFIG);
             attachOpenWatcher(!!config.autoDownload);
         });
 });
 cfg.onInvalid(() => {
     attachOpenWatcher(false);
-    attachWatcher("CONFIG");
+    attachWatcher(WatcherMode.CONFIG);
 });
 cfg.onNotFound(() => {
     attachOpenWatcher(false);
-    attachWatcher("");
+    attachWatcher(WatcherMode.NONE);
 });
 
 
@@ -66,7 +74,7 @@ function processWatcher(path: string, upload: (path: string) => Promise<any>, au
 
             util.showLog();
             let promise = cfg.load();
-            if (watcherMode !== 'CONFIG')
+            if (watcherMode !== WatcherMode.CONFIG)
                 promise = promise.then(() => commit());
             promise.catch(util.error);
         }
@@ -114,15 +122,15 @@ async function uploadCascade(path: string)
 	}
 }
 
-function attachWatcher(mode: string): void {
+function attachWatcher(mode: WatcherMode): void {
     if (watcherMode === mode) return;
     if (watcher) watcher.dispose();
     watcherMode = mode;
     var watcherPath = fs.workspace;
     switch (watcherMode) {
-        case "FULL": watcherPath += "/**/*"; break;
-        case "CONFIG": watcherPath += config.PATH; break;
-        case "": watcher = null; return;
+        case WatcherMode.FULL: watcherPath += "/**/*"; break;
+        case WatcherMode.CONFIG: watcherPath += config.PATH; break;
+        case WatcherMode.NONE: watcher = null; return;
     }
     watcher = workspace.createFileSystemWatcher(watcherPath);
 

@@ -150,31 +150,39 @@ class ConfigNamespace
 		}
 		if (!obj.disableFtp)
 		{
+			if ((typeof obj.host) === 'string')
+			{
+				throw new Error('host field must be string');
+			}
 			if (!obj.host)
 			{
 				throw new Error("Need host");
+			}
+			if ((typeof obj.username) === 'string')
+			{
+				throw new Error('username field must be string');
 			}
 			if (!obj.username)
 			{
 				throw new Error("Need username");
 			}
+			
+			if (!obj.remotePath) obj.remotePath = '/';
+			else if (obj.remotePath.endsWith("/"))
+				obj.remotePath = obj.remotePath.substr(0, obj.remotePath.length-1);
+			switch (obj.protocol)
+			{
+			case 'ftps':
+			case 'sftp':
+			case 'ftp': break;
+			default:
+				util.error(`Unsupported protocol "${obj.protocol}", It will treat as ftp`);
+				obj.protocol = 'ftp';
+				break;
+			}
 		}
 		
 		setConfig(obj);
-
-		if (!config.remotePath) config.remotePath = '/';
-		else if (config.remotePath.endsWith("/"))
-			config.remotePath = config.remotePath.substr(0, config.remotePath.length-1);
-		switch (config.protocol)
-		{
-		case 'ftps':
-		case 'sftp':
-		case 'ftp': break;
-		default:
-			util.error(`Unsupported protocol "${config.protocol}", It will treat as ftp`);
-			config.protocol = 'ftp';
-			break;
-		}
     }
 
     async load():Promise<void>

@@ -158,7 +158,7 @@ class ConfigNamespace
 		}
 		if (!obj.disableFtp)
 		{
-			if ((typeof obj.host) === 'string')
+			if ((typeof obj.host) !== 'string')
 			{
 				throw new Error('host field must be string');
 			}
@@ -166,7 +166,7 @@ class ConfigNamespace
 			{
 				throw new Error("Need host");
 			}
-			if ((typeof obj.username) === 'string')
+			if ((typeof obj.username) !== 'string')
 			{
 				throw new Error('username field must be string');
 			}

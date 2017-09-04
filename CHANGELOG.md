@@ -1,3 +1,6 @@
+# 1.0.14
+* Add logLevel option to config
+
 # 1.0.13
 * Suppress duplicated input(Closure Compiler)
 * Save latest compile target(Closure Compiler)

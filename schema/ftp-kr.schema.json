@@ -232,7 +232,14 @@
                 "type": "string",
                 "description": "Ignore file or directory"
             }
-        },
+		},
+		"logLevel": {
+			"enum": [
+				"VERBOSE",
+				"NORMAL"
+			],
+            "description": "Log level setting for debug"
+		},
         "closure": { "$ref": "closure.schema.json" },
 		"ftpOverride": { "$ref": "ftp.schema.json" },
 		"sftpOverride": { "$ref": "sftp.schema.json" }

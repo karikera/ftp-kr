@@ -23,6 +23,7 @@ export var logLevel:LogLevelEnum = LogLevelEnum.NORMAL;
 export function setLogLevel(level:LogLevel):void
 {
 	logLevel = LogLevelEnum[level];
+	verbose(`logLevel = ${level}`);
 }
 
 export function setContext(ctx:vscode.ExtensionContext):void
@@ -30,21 +31,22 @@ export function setContext(ctx:vscode.ExtensionContext):void
 	context = ctx;
 }
 
-export class Deferred<T>
+export class Deferred<T> implements Promise<T>
 {
-	resolve:((v:T)=>void);
-	reject:((v:T)=>void);
-	promise:Promise<T> = new Promise<T>((res, rej)=>{
+	public resolve:((v:T)=>void);
+	public reject:((v:any)=>void);
+	public readonly [Symbol.toStringTag] = "Promise";
+	private promise:Promise<T> = new Promise<T>((res, rej)=>{
 		this.resolve = res;
 		this.reject = rej;
 	});
 	
-	then(onfulfilled?:(v:T)=>T, onreject?:(v:any)=>T):Promise<T>
+	public then<R1,R2>(onfulfilled:(v:T)=>R1|Promise<R1>, onreject?:(v:any)=>R2|Promise<R2>):Promise<R1|R2>
 	{
 		return this.promise.then(onfulfilled, onreject);
 	}
 
-	catch<T2>(func:(v:any)=>T2):Promise<T|T2>
+	public catch<R2>(func:(v:any)=>R2|Promise<R2>):Promise<T|R2>
 	{
 		return this.promise.catch(func);
 	}
@@ -109,7 +111,15 @@ export function log(level:LogLevelEnum, ...message:string[]):void
 {
 	if (level < logLevel) return;
 	const out = getOutput();
-	out.appendLine(message.join(' '));
+	switch (logLevel)
+	{
+	case LogLevelEnum.VERBOSE:
+		out.appendLine(LogLevelEnum[level]+': '+message.join(' ').replace(/\n/g, '\nVERBOSE: '));
+		break;
+	default:
+		out.appendLine(message.join(' '));
+		break;
+	}
 }
 
 export function message(...message:string[]):void
@@ -119,7 +129,7 @@ export function message(...message:string[]):void
 
 export function verbose(...message:string[]):void
 {
-	log(LogLevelEnum.VERBOSE, ...message);
+	log(LogLevelEnum.VERBOSE, ... message);
 }
 
 export function wrap(func:()=>void):void

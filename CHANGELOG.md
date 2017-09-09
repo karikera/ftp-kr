@@ -1,3 +1,10 @@
+# 1.1.0
+* Add `Cancel All` command
+* Prompt password when `password` field is not existed
+* Ignore directory not found error by `remotePath`
+* Closure Compiler update(closure-compiler-v20170806)
+* Add new bug what i don't know
+
 # 1.0.14
 * Add logLevel option to config
 
@@ -140,7 +147,6 @@
 * Fix creating dot ended directory when open
 
 # 0.0.4
-
 * Fix init command not found error (npm package dependency error)
 * Fix init command error when not exists .vscode folder
 * Fix ignorePath error of init command when use twice
@@ -148,15 +154,12 @@
 * Decide to use MIT license
 
 # 0.0.3
-
 * Add git repository address!
 
 # 0.0.2
-
 * Fix Closure-Compiler
 * Add Download This command
 * Add Upload This command 
 
 # 0.0.1
-
 * I publish It!

@@ -29,6 +29,11 @@
         "category": "ftp-kr"
       },
       {
+        "command": "ftpkr.cancel",
+        "title": "Cancel All",
+        "category": "ftp-kr"
+      },
+      {
         "command": "ftpkr.makejson",
         "title": "Generate make.json",
         "category": "ftp-kr"

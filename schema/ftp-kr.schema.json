@@ -13,7 +13,7 @@
         "host": {
             "type": "string",
             "description": "Address of the FTP/SFTP server",
-            "format": "hostname"
+			"format": "hostname"
         },
         "username": {
             "type": "string",
@@ -23,6 +23,10 @@
             "type": "string",
             "description": "FTP/SFTP password"
         },
+		"keepPasswordInMemory":{
+			"type": "boolean",
+			"description": "Keep password into internal variable for reconnection (default: false)"
+		},
         "remotePath": {
             "type": "string",
             "description": "FTP/SFTP side directory"

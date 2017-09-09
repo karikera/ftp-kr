@@ -3,6 +3,8 @@ const workspace = vscode.workspace;
 
 import * as util from './util';
 import * as fs from './fs';
+import * as work from './work';
+
 
 const extensions = [
 	require('./ex/config'), 
@@ -22,7 +24,27 @@ export function activate(context:vscode.ExtensionContext) {
         for(const p in ex.commands)
         {
             let command = ex.commands[p];
-            const disposable = vscode.commands.registerCommand(p,(...arg) => command(...arg).catch(util.error));
+            const disposable = vscode.commands.registerCommand(p, async(...arg) => {
+				try
+				{
+					await command(...arg);
+				}
+				catch(err)
+				{
+					switch (err)
+					{
+					case work.CANCELLED:
+						util.verbose(`[Command:${p}]: cancelled`);
+						break;
+					case 'PASSWORD_CANCEL':
+						util.verbose(`[Command:${p}]: cancelled by password input`);
+						break;
+					default:
+						util.error(err);
+						break;
+					}
+				}
+			});
 			context.subscriptions.push(disposable);
         }
     }

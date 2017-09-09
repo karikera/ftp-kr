@@ -6,15 +6,18 @@ import * as vs from "./vs";
 import * as util from "./util";
 import glob from "./pglob";
 import MakeFile from "./make";
-import {config, Config, ClosureConfig} from './config';
+import * as cfg from './config';
 import * as vscode from "vscode";
 import * as nfs from './fs';
+import * as work from './work';
+const config = cfg.config;
+
 
 const workspace = vscode.workspace;
 
 const ftpkrRoot:string = path.join(path.dirname(__filename),'..').replace(/\\/g, '/');
 
-const closurecompiler:string = ftpkrRoot + "/compiler-latest/closure-compiler-v20170124.jar";
+const closurecompiler:string = ftpkrRoot + "/compiler-latest/closure-compiler-v20170806.jar";
 
 export interface MakeJsonConfig
 {
@@ -24,11 +27,11 @@ export interface MakeJsonConfig
 	export?:boolean;
 	makejson:string;
 	projectdir:string;
-	closure?:ClosureConfig;
+	closure?:cfg.ClosureConfig;
 	includeReference?:boolean;
 }
 
-function closure(options:MakeJsonConfig):Promise<string>
+function closure(task:work.Task, options:MakeJsonConfig):Promise<string>
 {
     var projname = options.name;
     var out = options.output;
@@ -48,10 +51,10 @@ function closure(options:MakeJsonConfig):Promise<string>
                 util.message(projname + ": BUILD");
                 const args = ['-jar', closurecompiler];
 
-                const ex_parameter:ClosureConfig = {
+                const ex_parameter:cfg.ClosureConfig = {
                     js_output_file_filename: out.substr(out.lastIndexOf("/")+1)
                 };
-                const parameter:ClosureConfig = {
+                const parameter:cfg.ClosureConfig = {
                     js: src, 
                     js_output_file: out,
                     generate_exports: options.export
@@ -61,10 +64,17 @@ function closure(options:MakeJsonConfig):Promise<string>
                 finalOptions = util.merge(finalOptions, options.closure, ex_parameter);
 
                 util.addOptions(args, finalOptions);
-                const ls = cp.spawn("java", args);
-                ls.stdout.on('data', (data:string) => util.message(data));
-                ls.stderr.on('data', (data:string) => util.message(data));
-                ls.on('close', (code) => {
+                const java = cp.spawn("java", args);
+                java.stdout.on('data', (data:string) => util.message(data));
+				java.stderr.on('data', (data:string) => util.message(data));
+				const oncancel = task.oncancel(()=>java.kill());
+                java.on('close', (code, signal) => {
+					if (signal === 'SIGTERM')
+					{
+						oncancel.dispose();
+						reject(work.CANCELLED);
+						return;
+					}
                     if (code === 0)
                     {
                         resolve(false);
@@ -87,7 +97,7 @@ function closure(options:MakeJsonConfig):Promise<string>
     return makeFile.make(out).then(v=>v ? 'COMPILED' : 'LATEST');
 }
 
-async function build(makejson:string):Promise<void>
+async function build(task:work.Task, makejson:string):Promise<void>
 {
     function toAbsolute(path:string):string
     {
@@ -129,7 +139,7 @@ async function build(makejson:string):Promise<void>
 
 	try
 	{
-		const msg = await closure(options);
+		const msg = await closure(task, options);
 		util.message(options.name + ": "+msg);
 	}
 	catch(err)
@@ -143,16 +153,16 @@ export function help()
 	cp.spawnSync("java", ["-jar",closurecompiler,"--help"], {stdio: ['inherit', 'inherit', 'inherit']});
 }
 
-export async function all():Promise<void>
+export async function all(task:work.Task):Promise<void>
 {
 	try
 	{
 		util.clearLog();
 		util.showLog();
-		const files = await glob(workspace.rootPath+"/**/make.json");
+		const files = await task.with(glob(workspace.rootPath+"/**/make.json"));
 		for (const file of files)
 		{
-			await build(nfs.worklize(file));
+			await build(task, nfs.worklize(file));
 		}
 		util.message('FINISH ALL');
 	}
@@ -181,9 +191,9 @@ export function makeJson(makejson:string, input?:string):Promise<void>
 		.then(() => util.open(makejson)).then(()=>{});
 }
 
-export function make(makejs:string):Promise<void>
+export function make(task:work.Task, makejs:string):Promise<void>
 {
 	util.clearLog();
 	util.showLog();
-	return build(makejs);
+	return build(task, makejs);
 }

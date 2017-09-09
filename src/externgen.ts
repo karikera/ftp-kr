@@ -2,8 +2,9 @@
 import * as cp from 'child_process';
 import * as path from 'path';
 import * as util from './util';
+import * as work from './work';
 
-export function gen(jsfile:string):Promise<void>
+export function gen(task:work.Task, jsfile:string):Promise<void>
 {
 	return new Promise<void>((res, rej)=>{
 		util.showLog();
@@ -28,7 +29,14 @@ export function gen(jsfile:string):Promise<void>
 				res();
 			}
 		});
-		proc.on('close', exitCode=>{
+		const oncancel = task.oncancel(()=>proc.kill());
+		proc.on('close', (exitCode, signal)=>{
+			if (signal === 'SIGTERM')
+			{
+				oncancel.dispose();
+				rej(work.CANCELLED);
+				return;
+			}			
 			if (!end) rej(Error('exit code:'+exitCode));
 		});
 	});

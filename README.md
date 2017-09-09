@@ -10,8 +10,10 @@ Start with `ftp-kr Init` command! (When exists workspace)
 ![init after](images/init-after.png)
 
 It will try to connect when you save it!  
-
 ![download all](images/downloadall.png)
+
+You can use password input instead of password field  
+![password input](images/password.png)
 
 By default, the auto-sync feature is enabled  
 If you want to disable auto-sync, please set autoUpload/autoDelete to false  

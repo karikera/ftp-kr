@@ -1,146 +1,165 @@
 
-import {config, ConfigState} from '../config';
+import * as cfg from '../config';
 import * as work from '../work';
 import * as util from '../util';
+import * as ftpsync from '../ftpsync';
 
-interface Event
+const config = cfg.config;
+
+interface Event<T>
 {
-	(onfunc:()=>void):void
+	(onfunc:(value:T)=>void):void
 	
-	fire():Promise<void>;
-	rfire():Promise<void>;
+	fire(value?:T):Promise<void>;
+	rfire(value?:T):Promise<void>;
 }
 
-function makeEvent():Event
+function makeEvent<T>():Event<T>
 {
-    const list:(()=>void|Promise<void>)[] = [];
+    const list:((value:T)=>void|Promise<void>)[] = [];
 	
-    const event = <Event>function event(onfunc:()=>void):void
+    const event = <Event<T>>function event(onfunc:()=>void):void
     {
         list.push(onfunc);
     };
-    event.fire = async function():Promise<void>
+    event.fire = async function(value:T):Promise<void>
     {
         for(const func of list)
-            await func();
+            await func(value);
     };
-    event.rfire = async function():Promise<void>
+    event.rfire = async function(value:T):Promise<void>
     {
         for(var i = list.length -1 ; i>= 0; i--)
-            await list[i]();
+            await list[i](value);
     };
 	return event;
 }
 
 function fireNotFound():Promise<void>
 {
-    if (config.state === ConfigState.NOTFOUND)
+    if (cfg.state === cfg.State.NOTFOUND)
         return Promise.resolve();
 
-	config.state = ConfigState.NOTFOUND;
-	util.verbose('config.state = '+ConfigState[config.state]);
-	config.lastError = null;
+	cfg.setState(cfg.State.NOTFOUND, 'NOTFOUND');
     return onNotFound.rfire();
 }
 
-function fireInvalid(err:Error):Promise<void>
+function fireInvalid(err:Error|string):Promise<void>
 {
-	const regexp = /^Unexpected token a in JSON at line ([0-9]+), column ([0-9]+)$/;
-	if (regexp.test(err.message))
+	if (err instanceof Error)
 	{
-		util.open(config.PATH, +RegExp.$1, +RegExp.$2);
-	}
-	else
-	{
-		util.open(config.PATH);
+		const regexp = /^Unexpected token a in JSON at line ([0-9]+), column ([0-9]+)$/;
+		if (regexp.test(err.message))
+		{
+			util.open(cfg.PATH, +RegExp.$1, +RegExp.$2);
+		}
+		else
+		{
+			util.open(cfg.PATH);
+		}
 	}
 	
-    if (config.state === ConfigState.INVALID)
+    if (cfg.state === cfg.State.INVALID)
         return Promise.resolve();
 
-    config.state = ConfigState.INVALID;
-	util.verbose('config.state = '+ConfigState[config.state]);
-	config.lastError = err;
+    cfg.setState(cfg.State.INVALID, err);
     return onInvalid.fire();
 }
 
-function fireLoad():Promise<void>
+function fireLoad(task:work.Task):Promise<void>
 {
-    return onLoad.fire()
+    return onLoad.fire(task)
     .then(function(){
 		util.message("ftp-kr.json: loaded");
-		if (config.state !== ConfigState.LOADED)
+		if (cfg.state !== cfg.State.LOADED)
 		{
 			util.info('');
 		}
-		config.state = ConfigState.LOADED;
-		util.verbose('config.state = '+ConfigState[config.state]);
-		config.lastError = null;
+		cfg.setState(cfg.State.LOADED, null);
     });
 }
 
-function onLoadError(err)
+function onLoadError(err):Promise<void>
 {
     switch (err)
     {
-    case "NOTFOUND":
+    case 'NOTFOUND':
         util.message("ftp-kr.json: not found");
-        return fireNotFound();
+		return fireNotFound();
+	case 'PASSWORD_CANCEL':
+		util.info('ftp-kr Login Request', 'Login').then(confirm=>{
+			if (confirm === 'Login')
+			{
+				taskForceRun('login', task=>Promise.resolve());
+			}
+		});
+        return fireInvalid(err);
     default:
 		util.message("ftp-kr.json: error");
-		util.error(err);
+		if(!err.suppress) util.error(err);
         return fireInvalid(err);
     }
 }
 
 export function loadTest():Promise<void>
 {
-	if (config.state !== ConfigState.LOADED)
+	if (cfg.state !== cfg.State.LOADED)
 	{
-		if (config.state === ConfigState.NOTFOUND) return Promise.reject('Config is not loaded. Retry it after load');
-		util.open(config.PATH);
-		return Promise.reject(config.lastError);
+		if (cfg.state === cfg.State.NOTFOUND)
+		{
+			return Promise.reject('Config is not loaded. Retry it after load');
+		}
+		return onLoadError(cfg.lastError).then(()=>{throw work.CANCELLED;});
 	} 
 	return Promise.resolve();
 }
 
-export function isFtpDisabled()
+export function isFtpDisabled():Promise<void>
 {
 	if (config.disableFtp)
 	{
-		util.open(config.PATH);
+		util.open(cfg.PATH);
 		return Promise.reject(new Error("FTP is disabled. Please set disableFtp to false"));
 	}
 	return Promise.resolve();
 }
 
-export function load()
+function taskForceRun(name:string, onwork:(task:work.Task)=>Promise<void>):Thenable<void>
 {
-	return work.compile.work('config loading',
-		()=>work.ftp.work('config loading',
-			()=>work.load.work('config loading',
-				()=>config.load().then(fireLoad).catch(onLoadError)
+	work.load.cancel();
+	return work.load.task(name,
+		()=>{
+			work.ftp.throwIfBusy();
+			work.compile.throwIfBusy();
+			return work.ftp.task(name,
+				()=>work.compile.task(name,
+					task=>onwork(task).then(()=>fireLoad(task)).catch(onLoadError)
+				)
 			)
-		)
+		}
 	);
 }
 
-export function unload()
+export async function load():Promise<void>
+{
+	taskForceRun('config loading', task=>cfg.load());
+}
+
+export function unload():void
 {
 }
 
-export const onLoad = makeEvent();
-export const onInvalid = makeEvent();
-export const onNotFound = makeEvent();
+export const onLoad = makeEvent<work.Task>();
+export const onInvalid = makeEvent<void>();
+export const onNotFound = makeEvent<void>();
 
 export const commands = {
-	'ftpkr.init'(){
-		return work.compile.work('ftpkr.init',
-			()=>work.ftp.work('ftpkr.init',
-				()=>work.load.work('ftpkr.init',
-					()=>config.init().then(fireLoad).catch(onLoadError)
-				)
-			)
-		);
-	}
+	'ftpkr.init'(task:work.Task){
+		taskForceRun('ftpkr.init', task=>cfg.init());
+	},
+	'ftpkr.cancel'(){
+		work.compile.cancel();
+		work.ftp.cancel();
+		work.load.cancel();
+	},
 };

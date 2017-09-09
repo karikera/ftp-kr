@@ -1,10 +1,13 @@
 
-import {config, ConfigState} from './config';
+import * as cfg from './config';
 import * as fs from './fs';
 import * as ftp from './ftp';
 import * as util from './util';
+import * as work from './work';
 import * as f from './filesystem';
 import stripJsonComments = require('strip-json-comments');
+
+const config = cfg.config;
 
 export interface BatchOptions
 {
@@ -51,8 +54,8 @@ async function _getUpdatedFileInDir(cmp:f.Directory|null, path:string, list:{[ke
 }
 
 async function _getUpdatedFile(cmp:f.State|null, path:string, list:{[key:string]:fs.Stats}):Promise<void>
-{    
-    if (config.checkIgnorePath(path)) return;
+{
+    if (cfg.checkIgnorePath(path)) return;
 	try
 	{
 		const st = await fs.lstat(path);
@@ -104,14 +107,14 @@ class FtpFileSystem extends f.FileSystem
 		super.delete(path);
 	}
 	
-	async ftpDelete(path:string, options?:BatchOptions):Promise<void>
+	async ftpDelete(task:work.Task, path:string, options?:BatchOptions):Promise<void>
 	{
 		const that = this;
 
 		async function deleteTest(file:f.State):Promise<void>
 		{
-			if (file instanceof f.Directory) await ftp.rmdir(path);
-			else await ftp.remove(path);
+			if (file instanceof f.Directory) await ftp.rmdir(task, path);
+			else await ftp.remove(task, path);
 			that.delete(path);
 		}
 
@@ -126,12 +129,12 @@ class FtpFileSystem extends f.FileSystem
 			{
 			}
 		}
-		file = await that.ftpStat(path, options);
+		file = await that.ftpStat(task, path, options);
 		if (file === null) return;
 		await deleteTest(file);
 	}
 
-	async ftpUpload(path:string, options?:BatchOptions):Promise<UploadReport>
+	async ftpUpload(task:work.Task, path:string, options?:BatchOptions):Promise<UploadReport>
 	{
 		const stats = await fs.stat(path);
 		const report = new UploadReport;
@@ -157,11 +160,11 @@ class FtpFileSystem extends f.FileSystem
 						report.file = oldfile;
 						return report;
 					}
-					await that.ftpDelete(path).then(() => ftp.mkdir(path));
+					await that.ftpDelete(task, path).then(() => ftp.mkdir(task, path));
 				}
 				else
 				{
-					await ftp.mkdir(path);
+					await ftp.mkdir(task, path);
 				}
 
 				const dir = that.mkdir(path);
@@ -174,7 +177,7 @@ class FtpFileSystem extends f.FileSystem
 				that.refreshed.delete(path);
 				const fn = f.splitFileName(path);
 				that.refreshed.delete(fn.dir);
-				await ftp.upload(path, fs.workspace+ path);
+				await ftp.upload(task, path, fs.workspace+ path);
 
 				const file = that.create(path);
 				file.lmtimeWithThreshold = file.lmtime = +stats.mtime;
@@ -205,7 +208,7 @@ class FtpFileSystem extends f.FileSystem
 
 		const oldtype = oldfile.type;
 		const oldsize = oldfile.size;
-		const ftpstats = await this.ftpStat(path, options);
+		const ftpstats = await this.ftpStat(task, path, options);
 
 		if (ftpstats.type == oldtype &&  oldsize === ftpstats.size) return await next(stats);
 
@@ -214,18 +217,18 @@ class FtpFileSystem extends f.FileSystem
 		if (selected)
 		{
 			if (selected !== "Download") return await next(stats);
-			await this.ftpDownload(path);
+			await this.ftpDownload(task, path);
 		}
 		report.file = oldfile;
 		return report;
 	}
 
-	async ftpDownload(path:string, options?:BatchOptions):Promise<void>
+	async ftpDownload(task:work.Task, path:string, options?:BatchOptions):Promise<void>
 	{
 		var file:f.State|null = this.get(path);
 		if (!file)
 		{
-			file = await this.ftpStat(path, options);
+			file = await this.ftpStat(task, path, options);
 			if (!file)
 			{
 				util.error(`${path} not found in remote`);
@@ -234,13 +237,13 @@ class FtpFileSystem extends f.FileSystem
 		}
 
 		if (file instanceof f.Directory) await fs.mkdir(path);
-		else await ftp.download(fs.workspace + path, path);
+		else await ftp.download(task, fs.workspace + path, path);
 		const stats = await fs.stat(path);
 		file.lmtime = +stats.mtime;
 		file.lmtimeWithThreshold = file.lmtime + 1000;
 	}
 
-	async ftpDownloadWithCheck(path:string):Promise<void>
+	async ftpDownloadWithCheck(task:work.Task, path:string):Promise<void>
 	{
 		try
 		{
@@ -251,60 +254,95 @@ class FtpFileSystem extends f.FileSystem
 			if (e.code === 'ENOENT') return; // Somethings vscode open "%s.git" file, why?
 			throw e;
 		}
-		const file = await this.ftpStat(path);
+		const file = await this.ftpStat(task, path);
 		if (!file)
 		{
 			if (config.autoUpload)
 			{
-				await this.ftpUpload(path);
+				await this.ftpUpload(task, path);
 			}
 			return;
 		}
 
 		if (file instanceof f.File && stats.size === file.size) return;
 		if (file instanceof f.Directory) await fs.mkdir(path);
-		else await ftp.download(fs.workspace + path, path);
+		else await ftp.download(task, fs.workspace + path, path);
 		stats = await fs.stat(path);
 		file.lmtime = +stats.mtime;
 		file.lmtimeWithThreshold = file.lmtime + 1000;
 	}
 
-	async ftpStat(path:string, options?:BatchOptions):Promise<f.State>
+	async ftpStat(task:work.Task, path:string, options?:BatchOptions):Promise<f.State>
 	{
 		const fn = f.splitFileName(path);
-		const dir = await this.ftpList(fn.dir, options);
+		const dir = await this.ftpList(task, fn.dir, options);
 		return dir.files[fn.name];
 	}
 
-	ftpList(path:string, options?:BatchOptions):Promise<f.Directory>
+	async init(task:work.Task):Promise<void>
+	{
+		try
+		{
+			await this.ftpList(task, '');
+		}
+		catch(e)
+		{
+			if (e.ftpError !== ftp.DIRECTORY_NOT_FOUND) 
+			{
+				throw e;
+			}
+			// ftp.list function suppress not found error
+			// so..   these codes are useless
+			const selected = await util.errorConfirm(`remotePath(${config.remotePath}) does not exsisted", "Create Directory`);
+			task.checkCanceled();
+			if (!selected)
+			{
+				e.suppress = true;
+				throw e;
+			}
+			await ftp.mkdir(task, '');
+			task.checkCanceled();
+
+			await this.ftpList(task, '');
+		}
+	}
+
+	ftpList(task:work.Task, path:string, options?:BatchOptions):Promise<f.Directory>
 	{
 		const latest = this.refreshed.get(path);
 		if (latest)
 		{
-			if (options && options.doNotRefresh) return latest.promise;
+			if (options && options.doNotRefresh) return latest;
 			const refreshTime = config.autoDownloadRefreshTime ? config.autoDownloadRefreshTime : 1000;
-			if (latest.accessTime + refreshTime > Date.now()) return latest.promise;
+			if (latest.accessTime + refreshTime > Date.now()) return latest;
 		}
 		const deferred = new RefreshedData;
 		this.refreshed.set(path, deferred);
-		return ftp.list(path)
-		.then(ftpfiles=>{
-			const dir = this.refresh(path, ftpfiles);
-			deferred.resolve(dir);
-			return dir;
-		})
-		.catch(err=>{
-			deferred.catch(() => {});
-			deferred.reject(err);
-			if (this.refreshed.get(path) === deferred)
+
+		return (async()=>{
+			await ftp.init(task);
+
+			try
 			{
-				this.refreshed.delete(path);
+				const ftpfiles = await ftp.list(task, path);
+				const dir = this.refresh(path, ftpfiles);
+				deferred.resolve(dir);
+				return dir;
 			}
-			throw err;
-		});
+			catch(err)
+			{
+				deferred.catch(() => {});
+				deferred.reject(err);
+				if (this.refreshed.get(path) === deferred)
+				{
+					this.refreshed.delete(path);
+				}
+				throw err;
+			}
+		})();
 	}
 
-	syncTestUpload(path:string):Promise<TaskList>
+	syncTestUpload(task:work.Task, path:string):Promise<TaskList>
 	{
 		const output = {};
 		const list = {};
@@ -315,7 +353,7 @@ class FtpFileSystem extends f.FileSystem
 			{
 				const st = list[filepath];
 				promise = promise
-				.then(() => this.ftpStat(filepath))
+				.then(() => this.ftpStat(task, filepath))
 				.then((file) => testLatest(file, st))
 				.then((res) => { if(!res) output[filepath] = "upload"; });
 			}
@@ -324,9 +362,9 @@ class FtpFileSystem extends f.FileSystem
 		.then(() => output);
 	}
 		
-	async _listNotExists(path:string, list:TaskList, download:boolean):Promise<void>
+	async _listNotExists(task:work.Task, path:string, list:TaskList, download:boolean):Promise<void>
 	{
-        if (config.checkIgnorePath(path)) return;
+        if (cfg.checkIgnorePath(path)) return;
 		const that = this;
 		const command = download ? "download" : "delete"; 
 		
@@ -343,14 +381,14 @@ class FtpFileSystem extends f.FileSystem
 
 		try
 		{
-			const dir = await that.ftpList(path);
+			const dir = await that.ftpList(task, path);
 			const willDel:{[key:string]:boolean} = {};
 
 			const dirlist:string[] = [];
 			for(const p in dir.files)
 			{
 				const fullPath = path + "/" + p;
-				if (config.checkIgnorePath(fullPath)) continue;
+				if (cfg.checkIgnorePath(fullPath)) continue;
 
 				switch(p)
 				{
@@ -368,18 +406,19 @@ class FtpFileSystem extends f.FileSystem
 			{
 				delete willDel[file];
 			}
-			function flushList()
+
+			function flushList():void
 			{
 				for (const p in willDel)
 				{
 					list[path + "/" + p] = command;
 				}
 			}
-			async function processChild()
+			async function processChild():Promise<void>
 			{
 				for(const child of dirlist)
 				{
-					await that._listNotExists(child, list, download);
+					await that._listNotExists(task, child, list, download);
 				}
 			}
 			if (download)
@@ -399,16 +438,16 @@ class FtpFileSystem extends f.FileSystem
 		}
 	}
 
-	syncTestNotExists(path:string, download:boolean):Promise<TaskList>
+	syncTestNotExists(task:work.Task, path:string, download:boolean):Promise<TaskList>
 	{
 		const list:TaskList = {};
-		return this._listNotExists(path, list, download)
+		return this._listNotExists(task, path, list, download)
 		.then(() => list);
 	}
 
-	async _refeshForce(path:string):Promise<void>
+	async _refeshForce(task:work.Task, path:string):Promise<void>
 	{
-		const dir = await this.ftpList(path);
+		const dir = await this.ftpList(task, path);
 		for(const p in dir.files)
 		{
 			switch(p)
@@ -417,17 +456,17 @@ class FtpFileSystem extends f.FileSystem
 			default:
 				if (dir.files[p] instanceof f.Directory)
 				{
-					await this._refeshForce(path + "/" + p);
+					await this._refeshForce(task, path + "/" + p);
 				}
 				break;
 			}
 		}
 	}
 	
-	ftpRefreshForce()
+	ftpRefreshForce(task:work.Task):Promise<void>
 	{
 		this.refreshed.clear();
-		return this._refeshForce('');
+		return this._refeshForce(task, '');
 	}
 }
 
@@ -440,21 +479,21 @@ export interface TaskList
 }
 
 
-export async function exec(task:TaskList, options?:BatchOptions):Promise<{tasks:TaskList, count:number}|null>
+export async function exec(task:work.Task, tasklist:TaskList, options?:BatchOptions):Promise<{tasks:TaskList, count:number}|null>
 {
 	var errorCount = 0;
 	const failedTasks:TaskList = {};
 
-	for (const file in task)
+	for (const file in tasklist)
 	{
 		const exec = task[file];
 		try
 		{
 			switch (exec)
 			{
-			case 'upload': await vfs.ftpUpload(file, options); break;
-			case 'download': await vfs.ftpDownload(file, options); break;
-			case 'delete': await vfs.ftpDelete(file, options); break;
+			case 'upload': await vfs.ftpUpload(task, file, options); break;
+			case 'download': await vfs.ftpDownload(task, file, options); break;
+			case 'delete': await vfs.ftpDelete(task, file, options); break;
 			}
 		}
 		catch(err)
@@ -470,40 +509,40 @@ export async function exec(task:TaskList, options?:BatchOptions):Promise<{tasks:
 	else return null;
 }
 
-export function upload(path:string, options?:BatchOptions):Promise<UploadReport>
+export function upload(task:work.Task, path:string, options?:BatchOptions):Promise<UploadReport>
 {
-	return vfs.ftpUpload(path, options);
+	return vfs.ftpUpload(task, path, options);
 }
 
-export function download(path:string, doNotRefresh?:boolean):Promise<void>
+export function download(task:work.Task, path:string, doNotRefresh?:boolean):Promise<void>
 {
-	return vfs.ftpDownload(path, {doNotRefresh});
+	return vfs.ftpDownload(task, path, {doNotRefresh});
 }
 
-export function downloadWithCheck(path:string):Promise<void>
+export function downloadWithCheck(task:work.Task, path:string):Promise<void>
 {
-	return vfs.ftpDownloadWithCheck(path);
+	return vfs.ftpDownloadWithCheck(task, path);
 }
 
-export function syncTestClean():Promise<TaskList>
+export function syncTestClean(task:work.Task):Promise<TaskList>
 {
-	return vfs.syncTestNotExists("", false);
+	return vfs.syncTestNotExists(task, "", false);
 }
 
-export function syncTestUpload(path:string):Promise<TaskList>
+export function syncTestUpload(task:work.Task, path:string):Promise<TaskList>
 {
-	return vfs.syncTestUpload(path);
+	return vfs.syncTestUpload(task, path);
 }
 
-export function syncTestDownload(path:string):Promise<TaskList>
+export function syncTestDownload(task:work.Task, path:string):Promise<TaskList>
 {
-	return vfs.syncTestNotExists(path, true);
+	return vfs.syncTestNotExists(task, path, true);
 }
 
 export function saveSync():void
 {
 	if(!syncDataPath) return;
-	if (config.state !== ConfigState.LOADED) return;
+	if (cfg.state !== cfg.State.LOADED) return;
 	if (!config.createSyncCache) return;
 	fs.mkdir("/.vscode");
 	return fs.createSync(syncDataPath, JSON.stringify(vfs.serialize(), null, 4));
@@ -523,46 +562,48 @@ export async function load():Promise<void>
 			{
 				vfs.deserialize(obj);
 			}
+			vfs.refreshed.clear();
 		}
 		catch(err)
 		{
 			vfs.reset();
+			vfs.refreshed.clear();
+			if (err === work.CANCELLED) throw err;
 		}
-		vfs.refreshed.clear();
 	}
 	catch(nerr)
 	{
+		if (nerr === work.CANCELLED) throw nerr;
 		util.error(nerr);
 	}
 }
 
-export function refreshForce():Promise<void>
+export function refreshForce(task:work.Task):Promise<void>
 {
-	return vfs.ftpRefreshForce();
+	return vfs.ftpRefreshForce(task);
 }
 
-export async function list(path:string):Promise<void>
+export async function list(task:work.Task, path:string):Promise<void>
 {
 	const NAMES = {
 		'd': '[DIR] ',
 		'-': '[FILE]',
 	};
 
-	var selected = await util.select(vfs.ftpList(path).then(dir=>{
-		const list:string[] = [];
-		for(const filename in dir.files)
+	const dir = await vfs.ftpList(task, path);
+	const filenames:string[] = [];
+	for(const filename in dir.files)
+	{
+		switch(filename)
 		{
-			switch(filename)
-			{
-			case '': case '.': continue;
-			case '..': if(path === '') continue;
-			}
-			const file = dir.files[filename];
-			list.push(NAMES[file.type]+'\t'+filename);
+		case '': case '.': continue;
+		case '..': if(path === '') continue;
 		}
-		list.sort();
-		return list;
-	}));
+		const file = dir.files[filename];
+		filenames.push(NAMES[file.type]+'\t'+filename);
+	}
+	filenames.sort();
+	var selected = await util.select(filenames);
 
 	if (selected === undefined) return;
 	const typecut = selected.indexOf('\t');
@@ -570,33 +611,34 @@ export async function list(path:string):Promise<void>
 	selected = selected.substr(typecut+1);
 	if (selected === '..')
 	{
-		return await list(path.substring(0, path.lastIndexOf('/')));
+		return await list(task, path.substring(0, path.lastIndexOf('/')));
 	}
 
 	const npath = path + '/' + selected;
 	switch (type)
 	{
-	case NAMES['d']: return await list(npath);
+	case NAMES['d']: return await list(task, npath);
 	case NAMES['-']:
 		const act = await util.select(['Download '+selected,'Upload '+selected,'Delete '+selected]);
-		if (act === undefined) return await list(path);
+		if (act === undefined) return await list(task, path);
 
 		const cmd = act.substr(0, act.indexOf(' '));
 		switch(cmd)
 		{
-		case 'Download': await download(npath); break;
-		case 'Upload': await upload(npath); break;
-		case 'Delete': await remove(npath); break;
+		case 'Download': await download(task, npath); break;
+		case 'Upload': await upload(task, npath); break;
+		case 'Delete': await remove(task, npath); break;
 		}
+		break;
 	}
 }
 
-export function refresh(path:string):Promise<f.Directory>
+export function init(task:work.Task):Promise<void>
 {
-	return vfs.ftpList(path);
+	return vfs.init(task);
 }
 
-export function remove(path:string):Promise<void>
+export function remove(task:work.Task, path:string):Promise<void>
 {
-	return vfs.ftpDelete(path);
+	return vfs.ftpDelete(task, path);
 }

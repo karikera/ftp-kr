@@ -2,55 +2,43 @@
 import FtpClient = require('ftp');
 import SftpClient = require('ssh2-sftp-client');
 import * as ssh2 from 'ssh2';
-import config from './config';
+import * as cfg from './config';
 import * as util from './util';
 import * as ofs from 'fs';
 import * as fs from './fs';
 import * as iconv from 'iconv-lite';
 import * as path from 'path';
+import * as vscode from 'vscode';
+import * as work from './work';
 
-const DIRECTORY_NOT_FOUND = 1;
-const FILE_NOT_FOUND = 2;
+const config = cfg.config;
+
+export const DIRECTORY_NOT_FOUND = 1;
+export const FILE_NOT_FOUND = 2;
+
 const ALREADY_DESTROYED = 'destroyed connection access';
 
 var client:FileInterface|null = null;
 
 var connectionInfo:string = '';
 
+var passwordInMemory:string|undefined = undefined;
+
 function makeConnectionInfo():string
 {
 	const usepk = config.protocol === 'sftp' && !!config.privateKey;
-	var info = config.protocol;
-	info += '://';
-	info += config.username;
-
-	if (config.password && !usepk)
-	{
-		info += ':';
-		info += config.password;
-	}
-
-	info += '@';
-	info += config.host;
-	if (config.port)
-	{
-		info += ':';
-		info += config.port;
-	}
-	info += '/';
-	info += config.remotePath;
-	info += '/';
-	if (usepk)
-	{
-		info += '#';
-		info += config.privateKey;
-		if (config.passphrase !== undefined)
-		{
-			info += '#';
-			info += config.passphrase;
-		}
-	}
-	return info;
+	const datas = [
+		config.protocol,
+		config.username,
+		config.password,
+		config.host,
+		config.port,
+		config.remotePath,
+		usepk,
+		usepk ? config.privateKey : undefined,
+		usepk ? config.passphrase : undefined
+	];
+	return JSON.stringify(datas);
 }
 
 function bin2str(bin:string):string
@@ -89,7 +77,9 @@ abstract class FileInterface
 		client = this;
 	}
 
-	abstract connect():Promise<void>;
+	abstract connect(password?:string):Promise<void>;
+
+	abstract destroyed():boolean;
 
 	cancelDestroyTimeout():void
 	{
@@ -103,12 +93,14 @@ abstract class FileInterface
 	update():void
 	{
 		this.cancelDestroyTimeout();
-		this.destroyTimeout = setTimeout(this.destroy.bind(this), config.connectionTimeout ? config.connectionTimeout : 60000);
+		this.destroyTimeout = setTimeout(()=>{
+			util.message('Disconnected');
+			this.destroy();
+		}, config.connectionTimeout ? config.connectionTimeout : 60000);
 	}
 
 	destroy():void
 	{
-		util.message('Disconnected');
 		this.cancelDestroyTimeout();
 		client = null;
 	}
@@ -213,10 +205,10 @@ abstract class FileInterface
 			if (errfiles.length)
 			{
 				util.errorConfirm("Invalid encoding detected. Please set fileNameEncoding correctly\n"+errfiles.join('\n'), 'Open config', 'Ignore after')
-				.then(function(res){
+				.then((res)=>{
 					switch(res)
 					{
-					case 'Open config': util.open(config.PATH); break; 
+					case 'Open config': util.open(cfg.PATH); break; 
 					case 'Ignore after': config.ignoreWrongFileEncoding = true; break;
 					}
 				});
@@ -272,7 +264,12 @@ class Ftp extends FileInterface
 		super();
 	}
 
-	connect():Promise<void>
+	destroyed():boolean
+	{
+		return client === null;
+	}
+
+	connect(password?:string):Promise<void>
 	{
 		client = this;
 
@@ -289,15 +286,7 @@ class Ftp extends FileInterface
 				this.update();
 				resolve();
 			});
-			this.client.on("error", e=>{
-				reject(e);
-				if (this.client)
-				{
-					this.client.end();
-					this.client = null;
-				}
-				client = null;
-			});
+			this.client.on("error", reject);
 
 			var options:FtpClient.Options;
 			if (config.protocol === 'ftps')
@@ -318,9 +307,8 @@ class Ftp extends FileInterface
 			options.host = config.host;
 			options.port = config.port ? config.port : 21;
 			options.user = config.username;
-			options.password = config.password;
-				
-			/// 
+			options.password = password;
+			
 			options = util.merge(options, config.ftpOverride);
 			this.client.connect(options);
 		});
@@ -404,7 +392,11 @@ class Ftp extends FileInterface
 			to.date = +from.date;
 			to.size = +from.size;
 			return to;
-		}));
+		}))
+		.catch(e=>{
+			if (e.code === 550) return [];
+			throw e;
+		});
 	}
 
 	_lastmod(ftppath:string):Promise<number>
@@ -426,11 +418,16 @@ class Sftp extends FileInterface
 		super();
 	}
 	
-	async connect()
+	destroyed():boolean
+	{
+		return client === null;
+	}
+
+	async connect(password?:string):Promise<void>
 	{
 		try
 		{
-			if (!this.client) return Promise.reject(Error(ALREADY_DESTROYED));
+			if (!this.client) throw Error(ALREADY_DESTROYED);
 
 			var options:ssh2.ConnectConfig;
 			if (config.privateKey)
@@ -454,7 +451,7 @@ class Sftp extends FileInterface
 			else
 			{
 				options = {
-					password: config.password,
+					password,
 				};
 			}
 
@@ -469,21 +466,16 @@ class Sftp extends FileInterface
 		}
 		catch(err)
 		{
-			if (this.client)
-			{
-				this.client.end();
-				this.client = null;
-			}
-			client = null;
 			throw err;
 		}
 	}
-	destroy()
+	
+	destroy():void
 	{
 		super.destroy();
 		if (this.client)
 		{
-			this.client.end();
+			this.client.end().catch(()=>{});
 			this.client = null;
 		}
 	}
@@ -554,7 +546,19 @@ class Sftp extends FileInterface
 	}
 }
 
-function init():Promise<FileInterface>
+function _errorWrap(err):Error
+{
+	if (err.code)
+	{
+		return new Error(err.message + "[" + err.code + "]");
+	}
+	else
+	{
+		return new Error(err.message);
+	}
+}
+
+export async function init(task:work.Task):Promise<FileInterface>
 {
 	const coninfo = makeConnectionInfo();
     if (client)
@@ -564,7 +568,9 @@ function init():Promise<FileInterface>
 			client.update();
 			return Promise.resolve(client);
 		}
+		util.message('Disconnected');
 		client.destroy();
+		passwordInMemory = undefined;
     }
 	connectionInfo = coninfo;
 	
@@ -576,6 +582,7 @@ function init():Promise<FileInterface>
 	case 'ftps': newclient = new Ftp; break;
 	default: throw Error(`Invalid protocol ${config.protocol}`);
 	}
+
 	var url = '';
 	url += config.protocol;
 	url += '://';
@@ -588,45 +595,117 @@ function init():Promise<FileInterface>
 	url += config.remotePath;
 	url += '/';
 
-	util.message(`Try connect to ${url} with user ${config.username}`);
+	const usepk = config.protocol === 'sftp' && !!config.privateKey;
 
-	return newclient.connect().then(()=>{
-		util.message('Connected');
-		return newclient;
-	});
+	async function tryToConnect(password:string|undefined):Promise<void>
+	{
+		util.message(`Try connect to ${url} with user ${config.username}`);
+		await task.with(newclient.connect(password));
+	}
+
+	async function tryToConnectOrErrorMessage(password:string|undefined):Promise<string|undefined>
+	{
+		try
+		{
+			await tryToConnect(password);
+			return undefined;
+		}
+		catch(err)
+		{
+			var error:string;
+			switch (err.message)
+			{
+			case 'All configured authentication methods failed':
+				error = 'Authentication failed';
+				break;
+			default:
+				newclient.destroy();
+				throw _errorWrap(err);
+			}
+			util.message(error);
+			return error;
+		}
+	}
+
+	_ok:if (!usepk && config.password === undefined)
+	{
+		var errorMessage:string|undefined;
+		if (passwordInMemory !== undefined)
+		{
+			errorMessage = await tryToConnectOrErrorMessage(passwordInMemory);
+			if (errorMessage === undefined) break _ok;
+		}
+		else for (;;)
+		{
+			const promptedPassword = await vscode.window.showInputBox({
+				prompt:'ftp-kr: '+config.protocol.toUpperCase()+" Password Request",
+				password: true,
+				ignoreFocusOut: true,
+				placeHolder: errorMessage
+			});
+			if (promptedPassword === undefined)
+			{
+				newclient.destroy();
+				throw 'PASSWORD_CANCEL';
+			}
+			errorMessage = await tryToConnectOrErrorMessage(promptedPassword);
+			if (errorMessage === undefined)
+			{
+				if (config.keepPasswordInMemory !== false)
+				{
+					passwordInMemory = promptedPassword;
+				}
+				break;
+			}
+		}
+	}
+	else
+	{
+		try
+		{
+			await tryToConnect(config.password);
+		}
+		catch (err) {
+			newclient.destroy();
+			throw _errorWrap(err);
+		}
+	}
+		
+	util.message('Connected');
+	return newclient;
 }
 
-function _errorWrap(err)
+export function rmdir(task:work.Task, workpath:string):Promise<void>
 {
-    return new Error(err.message +"["+err.code+"]");
+	return init(task).then(client => task.with(client.rmdir(workpath)));
 }
 
-export function rmdir(workpath:string):Promise<void>
+export function remove(task:work.Task, workpath:string):Promise<void>
 {
-	return init().then(client => client.rmdir(workpath));
+	return init(task).then(client => task.with(client.delete(workpath)));
 }
 
-export function remove(workpath:string):Promise<void>
+export function mkdir(task:work.Task, workpath:string):Promise<void>
 {
-	return init().then(client => client.delete(workpath));
+	return init(task).then(client => task.with(client.mkdir(workpath)));
 }
 
-export function mkdir(workpath:string):Promise<void>
+export function upload(task:work.Task, workpath:string, localpath:string):Promise<void>
 {
-	return init().then(client => client.mkdir(workpath));
+	return init(task).then(client => task.with(client.upload(workpath, localpath)));
 }
 
-export function upload(workpath:string, localpath:string):Promise<void>
+export function download(task:work.Task, localpath:string, workpath:string):Promise<void>
 {
-	return init().then(client => client.upload(workpath, localpath));
+	return init(task).then(client => task.with(client.download(localpath, workpath)));
 }
 
-export function download(localpath:string, workpath:string):Promise<void>
+export function list(task:work.Task, workpath:string):Promise<FileInfo[]>
 {
-	return init().then(client => client.download(localpath, workpath));
+	return init(task).then(client => task.with(client.list(workpath)));
 }
 
-export function list(workpath:string):Promise<FileInfo[]>
+export function cleanPasswordInMemory():void
 {
-	return init().then(client => client.list(workpath));
+	passwordInMemory = undefined;
 }

@@ -1,5 +1,4 @@
-
-import * as util from './util';
+import * as log from './log';
 
 const resolvedPromise:Promise<void> = Promise.resolve();
 
@@ -35,6 +34,8 @@ export interface Task
 	with<T>(waitWith:Promise<T>):Promise<T>;
 }
 
+var onErrorCallback:(callback:any)=>void = ()=>{};
+
 class TaskImpl implements Task
 {
 	public next:TaskImpl|null = null;
@@ -60,7 +61,7 @@ class TaskImpl implements Task
 		
 		if (this.cancelled) return;
 
-		util.verbose(`[TASK:${this.name}] started`);
+		log.verbose(`[TASK:${this.name}] started`);
 		try
 		{
 			await this.task(this);
@@ -69,12 +70,12 @@ class TaskImpl implements Task
 		{
 			if (e === CANCELLED)
 			{
-				util.verbose(`[TASK:${this.name}] cancelled`);
+				log.verbose(`[TASK:${this.name}] cancelled`);
 				return;
 			}
-			util.error(e);
+			onErrorCallback(e);
 		}
-		util.verbose(`[TASK:${this.name}] done`);
+		log.verbose(`[TASK:${this.name}] done`);
 		this.resolve();
 		return this.promise;
 	}
@@ -161,13 +162,13 @@ class Scheduler
 		if (!task) return;
 
 		task.cancel();
-		util.message(`[${this.name}/${task.name}]task is cancelled`);
+		log.message(`[${this.name}/${task.name}]task is cancelled`);
 		this.currentTask = null;
 
 		var next = task.next;
 		while (next)
 		{
-			util.message(`[${this.name}/${next.name}]task is cancelled`);
+			log.message(`[${this.name}/${next.name}]task is cancelled`);
 			next = next.next;
 		}
 
@@ -197,7 +198,7 @@ class Scheduler
 		}
 		if (!this.currentTask)
 		{
-			util.verbose(`[SCHEDULAR:${this.name}] busy`);
+			log.verbose(`[SCHEDULAR:${this.name}] busy`);
 			this.progress();
 		}
 		return task.promise;
@@ -208,7 +209,7 @@ class Scheduler
 		const task = this.nextTask;
 		if (!task)
 		{
-			util.verbose(`[SCHEDULAR:${this.name}] idle`);
+			log.verbose(`[SCHEDULAR:${this.name}] idle`);
 			this.currentTask = null;
 			return;
 		}
@@ -225,6 +226,11 @@ class Scheduler
 		}
 		task.play().then(()=>this.progress());
 	}
+}
+
+export function onError(callback:(message:any)=>void):void
+{
+	onErrorCallback = callback;
 }
 
 export const compile = new Scheduler('compile');

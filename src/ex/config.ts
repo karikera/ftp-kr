@@ -1,7 +1,8 @@
 
+import * as log from '../util/log';
+import * as work from '../util/work';
 import * as cfg from '../config';
-import * as work from '../work';
-import * as util from '../util';
+import * as vsutil from '../vsutil';
 import * as ftpsync from '../ftpsync';
 
 const config = cfg.config;
@@ -51,11 +52,11 @@ function fireInvalid(err:Error|string):Promise<void>
 		const regexp = /^Unexpected token a in JSON at line ([0-9]+), column ([0-9]+)$/;
 		if (regexp.test(err.message))
 		{
-			util.open(cfg.PATH, +RegExp.$1, +RegExp.$2);
+			vsutil.open(cfg.PATH, +RegExp.$1, +RegExp.$2);
 		}
 		else
 		{
-			util.open(cfg.PATH);
+			vsutil.open(cfg.PATH);
 		}
 	}
 	
@@ -70,10 +71,10 @@ function fireLoad(task:work.Task):Promise<void>
 {
     return onLoad.fire(task)
     .then(function(){
-		util.message("ftp-kr.json: loaded");
+		log.message("ftp-kr.json: loaded");
 		if (cfg.state !== cfg.State.LOADED)
 		{
-			util.info('');
+			vsutil.info('');
 		}
 		cfg.setState(cfg.State.LOADED, null);
     });
@@ -84,10 +85,10 @@ function onLoadError(err):Promise<void>
     switch (err)
     {
     case 'NOTFOUND':
-        util.message("ftp-kr.json: not found");
+        log.message("ftp-kr.json: not found");
 		return fireNotFound();
 	case 'PASSWORD_CANCEL':
-		util.info('ftp-kr Login Request', 'Login').then(confirm=>{
+		vsutil.info('ftp-kr Login Request', 'Login').then(confirm=>{
 			if (confirm === 'Login')
 			{
 				taskForceRun('login', task=>Promise.resolve());
@@ -95,8 +96,8 @@ function onLoadError(err):Promise<void>
 		});
         return fireInvalid(err);
     default:
-		util.message("ftp-kr.json: error");
-		if(!err.suppress) util.error(err);
+		log.message("ftp-kr.json: error");
+		if(!err.suppress) vsutil.error(err);
         return fireInvalid(err);
     }
 }
@@ -118,7 +119,7 @@ export function isFtpDisabled():Promise<void>
 {
 	if (config.disableFtp)
 	{
-		util.open(cfg.PATH);
+		vsutil.open(cfg.PATH);
 		return Promise.reject(new Error("FTP is disabled. Please set disableFtp to false"));
 	}
 	return Promise.resolve();

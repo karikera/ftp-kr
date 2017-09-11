@@ -1,7 +1,7 @@
 
-import {Tag,Reader} from "./reader";
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from 'fs';
+import * as path from 'path';
+import {Tag,Reader} from './reader';
 
 export class Includer
 {

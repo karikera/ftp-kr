@@ -1,10 +1,10 @@
 
 export class Reader
 {
-	i:number = 0;
-	data:string = "";
+	public i:number = 0;
+	public data:string = "";
 
-	startsWith(str:string):boolean
+	public startsWith(str:string):boolean
 	{
 		if (this.data.substr(this.i, str.length) !== str)
 			return false;
@@ -12,7 +12,7 @@ export class Reader
 		return true;
 	}
 
-	startsWithList(strs:string[]):string
+	public startsWithList(strs:string[]):string
 	{
 		for(var i=0;i<strs.length;i++)
 		{
@@ -22,12 +22,12 @@ export class Reader
 		return "";
 	}
 
-	peek():string
+	public peek():string
 	{
 		return this.data.charAt(this.i);
 	}
 
-	skipSpace():void
+	public skipSpace():void
 	{
 		for(;;) switch (this.peek())
 		{
@@ -36,7 +36,7 @@ export class Reader
 		}
 	}
 
-	readTo(chr:RegExp|string):string|null
+	public readTo(chr:RegExp|string):string|null
 	{
 		if (chr instanceof RegExp)
 		{
@@ -55,7 +55,7 @@ export class Reader
 		return out;
 	}
 
-	space():boolean
+	public space():boolean
 	{
 		switch (this.peek())
 		{
@@ -68,7 +68,7 @@ export class Reader
 		}
 	}
 
-	readLeft():string
+	public readLeft():string
 	{
 		var out = this.data.substr(this.i);
 		this.i = this.data.length;

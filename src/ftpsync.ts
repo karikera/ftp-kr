@@ -1,10 +1,11 @@
-
-import * as cfg from './config';
-import * as fs from './fs';
+import * as log from './util/log';
+import * as fs from './util/fs';
+import * as work from './util/work';
+import * as f from './util/filesystem';
+import * as util from './util/util';
+import * as vsutil from './vsutil';
 import * as ftp from './ftp';
-import * as util from './util';
-import * as work from './work';
-import * as f from './filesystem';
+import * as cfg from './config';
 import stripJsonComments = require('strip-json-comments');
 
 const config = cfg.config;
@@ -212,7 +213,7 @@ class FtpFileSystem extends f.FileSystem
 
 		if (ftpstats.type == oldtype &&  oldsize === ftpstats.size) return await next(stats);
 
-		const selected = await util.errorConfirm(`${path}: Remote file modified detected.`, "Upload anyway", "Download");
+		const selected = await vsutil.errorConfirm(`${path}: Remote file modified detected.`, "Upload anyway", "Download");
 
 		if (selected)
 		{
@@ -231,7 +232,7 @@ class FtpFileSystem extends f.FileSystem
 			file = await this.ftpStat(task, path, options);
 			if (!file)
 			{
-				util.error(`${path} not found in remote`);
+				vsutil.error(`${path} not found in remote`);
 				return Promise.resolve();
 			}
 		}
@@ -293,7 +294,7 @@ class FtpFileSystem extends f.FileSystem
 			}
 			// ftp.list function suppress not found error
 			// so..   these codes are useless
-			const selected = await util.errorConfirm(`remotePath(${config.remotePath}) does not exsisted", "Create Directory`);
+			const selected = await vsutil.errorConfirm(`remotePath(${config.remotePath}) does not exsisted", "Create Directory`);
 			task.checkCanceled();
 			if (!selected)
 			{
@@ -500,7 +501,7 @@ export async function exec(task:work.Task, tasklist:TaskList, options?:BatchOpti
 		{
 			failedTasks[file] = exec;
 			console.error(err);
-			util.message(err);
+			log.message(err);
 			errorCount ++;
 		}
 	}
@@ -574,7 +575,7 @@ export async function load():Promise<void>
 	catch(nerr)
 	{
 		if (nerr === work.CANCELLED) throw nerr;
-		util.error(nerr);
+		vsutil.error(nerr);
 	}
 }
 
@@ -603,7 +604,7 @@ export async function list(task:work.Task, path:string):Promise<void>
 		filenames.push(NAMES[file.type]+'\t'+filename);
 	}
 	filenames.sort();
-	var selected = await util.select(filenames);
+	var selected = await vsutil.select(filenames);
 
 	if (selected === undefined) return;
 	const typecut = selected.indexOf('\t');
@@ -619,7 +620,7 @@ export async function list(task:work.Task, path:string):Promise<void>
 	{
 	case NAMES['d']: return await list(task, npath);
 	case NAMES['-']:
-		const act = await util.select(['Download '+selected,'Upload '+selected,'Delete '+selected]);
+		const act = await vsutil.select(['Download '+selected,'Upload '+selected,'Delete '+selected]);
 		if (act === undefined) return await list(task, path);
 
 		const cmd = act.substr(0, act.indexOf(' '));

@@ -1,174 +1,30 @@
+import * as path from 'path';
 
-import * as path from "path";
-import * as fs from "fs";
-import * as cp from 'child_process';
-import * as vs from "./vs";
-import * as util from "./util";
-import glob from "./pglob";
-import MakeFile from "./make";
+import * as log from './util/log';
+import glob from './util/pglob';
+import * as fs from './util/fs';
+import * as work from './util/work';
+import * as closure from './util/closure';
+
 import * as cfg from './config';
-import * as vscode from "vscode";
-import * as nfs from './fs';
-import * as work from './work';
-const config = cfg.config;
-
-
-const workspace = vscode.workspace;
-
-const ftpkrRoot:string = path.join(path.dirname(__filename),'..').replace(/\\/g, '/');
-
-const closurecompiler:string = ftpkrRoot + "/compiler-latest/closure-compiler-v20170806.jar";
-
-export interface MakeJsonConfig
-{
-	name:string;
-	output:string;
-	src:string[];
-	export?:boolean;
-	makejson:string;
-	projectdir:string;
-	closure?:cfg.ClosureConfig;
-	includeReference?:boolean;
-}
-
-function closure(task:work.Task, options:MakeJsonConfig):Promise<string>
-{
-    var projname = options.name;
-    var out = options.output;
-    var src = options.src;
-    if (src.length == 0)
-        return Promise.reject(Error("No source"));
-    options.export = !!options.export;
-    
-    const makeFile = new MakeFile;
-
-    makeFile.on(out, src.concat([options.makejson]), ()=>{
-        return new Promise((resolve, reject)=> {
-            const curdir = process.cwd();
-            try
-            {
-                process.chdir(options.projectdir);
-                util.message(projname + ": BUILD");
-                const args = ['-jar', closurecompiler];
-
-                const ex_parameter:cfg.ClosureConfig = {
-                    js_output_file_filename: out.substr(out.lastIndexOf("/")+1)
-                };
-                const parameter:cfg.ClosureConfig = {
-                    js: src, 
-                    js_output_file: out,
-                    generate_exports: options.export
-                };
-
-                var finalOptions = util.merge(parameter, config.closure, ex_parameter);
-                finalOptions = util.merge(finalOptions, options.closure, ex_parameter);
-
-                util.addOptions(args, finalOptions);
-                const java = cp.spawn("java", args);
-                java.stdout.on('data', (data:string) => util.message(data));
-				java.stderr.on('data', (data:string) => util.message(data));
-				const oncancel = task.oncancel(()=>java.kill());
-                java.on('close', (code, signal) => {
-					if (signal === 'SIGTERM')
-					{
-						oncancel.dispose();
-						reject(work.CANCELLED);
-						return;
-					}
-                    if (code === 0)
-                    {
-                        resolve(false);
-                    }
-                    else
-                    {
-                        reject(new Error("RESULT: "+code));
-                    }
-                });
-                process.chdir(curdir);
-            }
-            catch (err)
-            {
-                process.chdir(curdir);
-                reject(err);
-            }
-        });
-    });
-
-    return makeFile.make(out).then(v=>v ? 'COMPILED' : 'LATEST');
-}
-
-async function build(task:work.Task, makejson:string):Promise<void>
-{
-    function toAbsolute(path:string):string
-    {
-        if (path.startsWith('/'))
-            return nfs.workspace + path;
-        else
-            return projectdir + "/" + path;
-    }
-
-	makejson = nfs.workspace + makejson;
-	
-    const projectdir = makejson.substr(0, makejson.lastIndexOf("/"));
-    var options = util.parseJson(fs.readFileSync(makejson, 'utf8'));
-
-    if (!options.name)
-        options.name = projectdir;
-    options.projectdir = projectdir;
-
-    options.src = options.src instanceof Array ? options.src : [options.src];
-    options.makejson = makejson;
-    options.output = toAbsolute(options.output);
-
-    const arg = await glob(options.src.map(toAbsolute));
-
-	if (options.includeReference !== false)
-	{
-		const includer = new vs.Includer;
-		includer.include(arg);
-		if (includer.errors.length !== 0)
-		{
-			for(var err of includer.errors)
-			{
-				util.message(path.resolve(err[0])+":"+err[1]+"\n\t"+err[2]);
-			}
-			return;
-		}
-		options.src = includer.list;
-	}
-
-	try
-	{
-		const msg = await closure(task, options);
-		util.message(options.name + ": "+msg);
-	}
-	catch(err)
-	{
-		util.message(err);
-	}
-}
-
-export function help()
-{
-	cp.spawnSync("java", ["-jar",closurecompiler,"--help"], {stdio: ['inherit', 'inherit', 'inherit']});
-}
+import * as vsutil from './vsutil';
 
 export async function all(task:work.Task):Promise<void>
 {
 	try
 	{
-		util.clearLog();
-		util.showLog();
-		const files = await task.with(glob(workspace.rootPath+"/**/make.json"));
+		vsutil.clearLog();
+		vsutil.showLog();
+		const files = await task.with(glob(fs.workspace+"/**/make.json"));
 		for (const file of files)
 		{
-			await build(task, nfs.worklize(file));
+			await closure.build(task, fs.worklize(file), cfg.config.closure);
 		}
-		util.message('FINISH ALL');
+		log.message('FINISH ALL');
 	}
 	catch(err)
 	{
-		util.message(err);
+		log.message(err);
 	}
 }
 
@@ -186,14 +42,14 @@ export function makeJson(makejson:string, input?:string):Promise<void>
 		closure: {}
 	};
 
-	makejson = nfs.worklize(makejson);
-	return nfs.initJson(makejson, makejsonDefault)
-		.then(() => util.open(makejson)).then(()=>{});
+	makejson = fs.worklize(makejson);
+	return fs.initJson(makejson, makejsonDefault)
+		.then(() => vsutil.open(makejson)).then(()=>{});
 }
 
 export function make(task:work.Task, makejs:string):Promise<void>
 {
-	util.clearLog();
-	util.showLog();
-	return build(task, makejs);
+	vsutil.clearLog();
+	vsutil.showLog();
+	return closure.build(task, makejs, cfg.config.closure);
 }

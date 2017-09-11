@@ -1,6 +1,5 @@
 
-import * as util from "./util";
-import * as fs from "fs";
+import * as fs from './fs';
 
 class MakeFileItem
 {
@@ -38,14 +37,14 @@ class MakeFile
 			{
 				try
 				{
-					const stat = fs.statSync(target);
+					const stat = await fs.stat(target);
 					if(!mtime) mtime = +stat.mtime;
 				}
 				catch(err)
 				{
 					mtime = -1;
 				}
-				const stat = fs.statSync(child);
+				const stat = await fs.stat(child);
 				if (mtime <= +stat.mtime) modified = true;
 			}
 		}

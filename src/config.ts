@@ -1,7 +1,10 @@
 
-import * as fs from "./fs";
-import * as util from "./util";
-import * as work from "./work";
+import * as fs from "./util/fs";
+import * as work from "./util/work";
+import * as log from "./util/log";
+import * as util from "./util/util";
+import * as closure from "./util/closure";
+import * as vsutil from "./vsutil";
 import {Options as FtpOptions} from 'ftp';
 import {ConnectConfig as SftpOptions} from 'ssh2';
 
@@ -126,13 +129,13 @@ export function set(obj:Config):void
 		case 'sftp':
 		case 'ftp': break;
 		default:
-			util.error(`Unsupported protocol "${obj.protocol}", It will treat as ftp`);
+			vsutil.error(`Unsupported protocol "${obj.protocol}", It will treat as ftp`);
 			obj.protocol = 'ftp';
 			break;
 		}
 	}
 	
-	util.setLogLevel(obj.logLevel || 'NORMAL');
+	log.setLogLevel(obj.logLevel || 'NORMAL');
 	setConfig(CONFIG_BASE, obj);
 }
 
@@ -141,7 +144,7 @@ export function setState(newState:State, newLastError:Error|string|null):void
 	if (state === newState) return;
 	state = newState;
 	lastError = newLastError;
-	util.verbose('cfg.state = '+State[newState]);
+	log.verbose('cfg.state = '+State[newState]);
 }
 
 export async function load():Promise<void>
@@ -162,17 +165,7 @@ export async function init():Promise<void>
 	initTimeForVSBug = Date.now();
 	const data:Config = await fs.initJson(CONFIG_PATH, CONFIG_BASE);
 	set(data);
-	util.open(CONFIG_PATH);
-}
-
-export interface ClosureConfig
-{
-	js_output_file_filename?:string;
-	js?:string[]|string;
-	js_output_file?:string;
-	generate_exports?:boolean;
-	create_source_map?:string;
-	output_wrapper?:string;
+	vsutil.open(CONFIG_PATH);
 }
 
 export interface Config
@@ -192,7 +185,7 @@ export interface Config
 	autoDownload?:boolean;
 	disableFtp?:boolean;
 	ignore:(string|RegExp)[];
-	closure:ClosureConfig;
+	closure:closure.Config;
 
 	passphrase?:string;
 	connectionTimeout?:number;
@@ -201,7 +194,7 @@ export interface Config
 
 	ftpOverride?:FtpOptions;
 	sftpOverride?:SftpOptions;
-	logLevel?:util.LogLevel;
+	logLevel?:log.Level;
 }
 
 export enum State

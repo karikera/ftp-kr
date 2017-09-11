@@ -1,10 +1,13 @@
 import * as vscode from 'vscode';
 const workspace = vscode.workspace;
 
-import * as util from './util';
-import * as fs from './fs';
-import * as work from './work';
+import * as log from './util/log';
+import * as fs from './util/fs';
+import * as work from './util/work';
+import * as vsutil from './vsutil';
 
+work.onError(vsutil.error);
+log.set(vsutil.print);
 
 const extensions = [
 	require('./ex/config'), 
@@ -15,7 +18,7 @@ const extensions = [
 export function activate(context:vscode.ExtensionContext) {
     console.log('[extension: ftp-kr] activate');
 	fs.setWorkspace(workspace.rootPath.replace(/\\/g, "/"));
-	util.setContext(context);
+	vsutil.setContext(context);
 
     for(const ex of extensions) ex.load();
 
@@ -34,13 +37,13 @@ export function activate(context:vscode.ExtensionContext) {
 					switch (err)
 					{
 					case work.CANCELLED:
-						util.verbose(`[Command:${p}]: cancelled`);
+						log.verbose(`[Command:${p}]: cancelled`);
 						break;
 					case 'PASSWORD_CANCEL':
-						util.verbose(`[Command:${p}]: cancelled by password input`);
+						log.verbose(`[Command:${p}]: cancelled by password input`);
 						break;
 					default:
-						util.error(err);
+						vsutil.error(err);
 						break;
 					}
 				}
@@ -58,6 +61,6 @@ export function deactivate() {
     }
     catch(err)
     {
-        util.error(err);
+        vsutil.error(err);
     }
 }

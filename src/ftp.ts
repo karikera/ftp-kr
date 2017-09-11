@@ -2,14 +2,16 @@
 import FtpClient = require('ftp');
 import SftpClient = require('ssh2-sftp-client');
 import * as ssh2 from 'ssh2';
-import * as cfg from './config';
-import * as util from './util';
 import * as ofs from 'fs';
-import * as fs from './fs';
 import * as iconv from 'iconv-lite';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import * as work from './work';
+import * as fs from './util/fs';
+import * as log from './util/log';
+import * as work from './util/work';
+import * as util from './util/util';
+import * as cfg from './config';
+import * as vsutil from './vsutil';
 
 const config = cfg.config;
 
@@ -94,7 +96,7 @@ abstract class FileInterface
 	{
 		this.cancelDestroyTimeout();
 		this.destroyTimeout = setTimeout(()=>{
-			util.message('Disconnected');
+			log.message('Disconnected');
 			this.destroy();
 		}, config.connectionTimeout ? config.connectionTimeout : 60000);
 	}
@@ -108,19 +110,19 @@ abstract class FileInterface
 	_callWithName<T>(name:string, workpath:string, ignorecode:number, defVal:T, callback:(name:string)=>Promise<T>):Promise<T>
 	{
 		this.cancelDestroyTimeout();
-		util.setState(name +" "+workpath);
-		util.message(name +": "+workpath);
+		vsutil.setState(name +" "+workpath);
+		log.message(name +": "+workpath);
 		const ftppath = toftpPath(workpath);
 		return callback(ftppath).then(v=>{
-			util.setState("");
+			vsutil.setState("");
 			this.update();
 			return v;
 		})
 		.catch((err):T=>{
-			util.setState("");
+			vsutil.setState("");
 			this.update();
 			if (err.ftpCode === ignorecode) return defVal;
-			util.message(name+" fail: "+workpath);
+			log.message(name+" fail: "+workpath);
 			throw _errorWrap(err);
 		});
 	}
@@ -128,8 +130,8 @@ abstract class FileInterface
 	upload(workpath:string, localpath:string):Promise<void>
 	{
 		this.cancelDestroyTimeout();
-		util.setState("upload "+workpath);
-		util.message("upload: "+workpath);
+		vsutil.setState("upload "+workpath);
+		log.message("upload: "+workpath);
 		const ftppath = toftpPath(workpath);
 
 		return this._put(localpath, ftppath)
@@ -141,13 +143,13 @@ abstract class FileInterface
 			.then(()=>this._put(localpath, ftppath));
 		})
 		.then(()=>{
-			util.setState("");
+			vsutil.setState("");
 			this.update();
 		})
 		.catch((err)=>{
-			util.setState("");
+			vsutil.setState("");
 			this.update();
-			util.message("upload fail: "+workpath);
+			log.message("upload fail: "+workpath);
 			throw _errorWrap(err);
 		});
 	}
@@ -155,15 +157,15 @@ abstract class FileInterface
 	download(localpath:string, workpath:string):Promise<void>
 	{
 		this.cancelDestroyTimeout();
-		util.setState("download "+workpath);
-		util.message("download: "+workpath);
+		vsutil.setState("download "+workpath);
+		log.message("download: "+workpath);
 		const ftppath = toftpPath(workpath);
 
 		return this._get(ftppath)
 		.then((stream)=>{
 			return new Promise<void>(resolve=>{
 				stream.once('close', ()=>{
-					util.setState("");
+					vsutil.setState("");
 					this.update();
 					resolve();
 				});
@@ -171,9 +173,9 @@ abstract class FileInterface
 			});
 		})
 		.catch(err=>{
-			util.setState("");
+			vsutil.setState("");
 			this.update();
-			util.message("download fail: "+workpath);
+			log.message("download fail: "+workpath);
 			throw _errorWrap(err);
 		});
 	}
@@ -181,14 +183,14 @@ abstract class FileInterface
 	list(workpath:string):Promise<FileInfo[]>
 	{
 		this.cancelDestroyTimeout();
-		util.setState("list "+workpath);
-		util.message("list: "+workpath);
+		vsutil.setState("list "+workpath);
+		log.message("list: "+workpath);
 
 		var ftppath = toftpPath(workpath);
 		if (!ftppath) ftppath = ".";
 
 		return this._list(ftppath).then((list)=>{
-			util.setState("");
+			vsutil.setState("");
 			this.update();
 
 			const errfiles:string[] = [];
@@ -204,11 +206,11 @@ abstract class FileInterface
 			}
 			if (errfiles.length)
 			{
-				util.errorConfirm("Invalid encoding detected. Please set fileNameEncoding correctly\n"+errfiles.join('\n'), 'Open config', 'Ignore after')
+				vsutil.errorConfirm("Invalid encoding detected. Please set fileNameEncoding correctly\n"+errfiles.join('\n'), 'Open config', 'Ignore after')
 				.then((res)=>{
 					switch(res)
 					{
-					case 'Open config': util.open(cfg.PATH); break; 
+					case 'Open config': vsutil.open(cfg.PATH); break; 
 					case 'Ignore after': config.ignoreWrongFileEncoding = true; break;
 					}
 				});
@@ -216,9 +218,9 @@ abstract class FileInterface
 			return list;
 		})
 		.catch(err=>{
-			util.setState("");
+			vsutil.setState("");
 			this.update();
-			util.message("list fail: "+workpath);
+			log.message("list fail: "+workpath);
 			throw _errorWrap(err);
 		});
 	}
@@ -568,7 +570,7 @@ export async function init(task:work.Task):Promise<FileInterface>
 			client.update();
 			return Promise.resolve(client);
 		}
-		util.message('Disconnected');
+		log.message('Disconnected');
 		client.destroy();
 		passwordInMemory = undefined;
     }
@@ -599,7 +601,7 @@ export async function init(task:work.Task):Promise<FileInterface>
 
 	async function tryToConnect(password:string|undefined):Promise<void>
 	{
-		util.message(`Try connect to ${url} with user ${config.username}`);
+		log.message(`Try connect to ${url} with user ${config.username}`);
 		await task.with(newclient.connect(password));
 	}
 
@@ -622,7 +624,7 @@ export async function init(task:work.Task):Promise<FileInterface>
 				newclient.destroy();
 				throw _errorWrap(err);
 			}
-			util.message(error);
+			log.message(error);
 			return error;
 		}
 	}
@@ -671,7 +673,7 @@ export async function init(task:work.Task):Promise<FileInterface>
 		}
 	}
 		
-	util.message('Connected');
+	log.message('Connected');
 	return newclient;
 }
 

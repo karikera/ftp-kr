@@ -1,3 +1,7 @@
+# 1.1.1
+* Fix `Download All` command
+* Update Closure Compiler schema
+
 # 1.1.0
 * Add `Cancel All` command
 * Prompt password when `password` field is not existed

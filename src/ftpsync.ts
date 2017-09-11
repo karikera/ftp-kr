@@ -487,7 +487,7 @@ export async function exec(task:work.Task, tasklist:TaskList, options?:BatchOpti
 
 	for (const file in tasklist)
 	{
-		const exec = task[file];
+		const exec = tasklist[file];
 		try
 		{
 			switch (exec)

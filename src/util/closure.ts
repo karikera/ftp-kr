@@ -156,9 +156,7 @@ export async function build(task:work.Task, makejson:string, config:Config):Prom
 export function help():Promise<string>
 {
 	return new Promise<string>(resolve=>{
-		const help = cp.spawn("java", ["-jar", closurecompiler, "--help"], {
-			stdio: ['inherit', 'inherit', 'inherit']
-		});
+		const help = cp.spawn("java", ["-jar", closurecompiler, "--help"]);
 		var str = '';
 		help.stderr.on('data', (data:string) => { str += data; });
 		help.stdout.on('data', (data:string) => { str += data; });

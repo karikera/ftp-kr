@@ -4,6 +4,11 @@ export class Reader
 	public i:number = 0;
 	public data:string = "";
 
+	get eof():boolean
+	{
+		return this.i >= this.data.length;
+	}
+
 	public startsWith(str:string):boolean
 	{
 		if (this.data.substr(this.i, str.length) !== str)
@@ -36,20 +41,20 @@ export class Reader
 		}
 	}
 
-	public readTo(chr:RegExp|string):string|null
+	public readTo(chr:RegExp|string):string
 	{
 		if (chr instanceof RegExp)
 		{
 			var nidx = this.data.substr(this.i).search(chr);
 			if (nidx === -1)
-				return null;
+				return this.readLeft();
 			var out = this.data.substr(this.i, nidx);
 			this.i = this.i + nidx + RegExp.lastMatch.length;
 			return out;
 		}
 		var nidx = this.data.indexOf(chr, this.i);
 		if (nidx === -1)
-			return null;
+			return this.readLeft();
 		var out = this.data.substring(this.i, nidx);
 		this.i = nidx + chr.length;
 		return out;
@@ -87,9 +92,9 @@ export class Tag
 			this.lineNumber = lineNumber;
 
 		const tagname = line.readTo(/[ \t]/);
-		if (tagname === null)
+		if (line.eof)
 		{
-			this.name = line.readLeft();
+			this.name = tagname;
 			return;
 		}
 
@@ -98,14 +103,15 @@ export class Tag
 		{
 			line.skipSpace();
 			var prop = line.readTo("=");
-			if (prop === null)
-				break;
+			if (line.eof) break;
 			line.skipSpace();
 
 			var start = line.startsWithList(["'", '"']);
 			var value = line.readTo(start);
-			this.props[prop] = value === null ? '' : value;
+			this.props[prop] = value;
 		}
 	}
 }
 
+export const WHITE_SPACE = /[ \t\r\n]/g;
+export const LINE = /\r?\n/g;

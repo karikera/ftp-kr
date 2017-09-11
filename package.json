@@ -115,7 +115,8 @@
     }
   },
   "scripts": {
-    "postinstall": "node ./node_modules/vscode/bin/install"
+	"postinstall": "node ./node_modules/vscode/bin/install",
+	"helpgen":"node ./out/help_to_schema/parse.js"
   },
   "dependencies": {
     "esprima": "^3.1.3",

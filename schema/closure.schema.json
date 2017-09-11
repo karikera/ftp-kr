@@ -8,14 +8,16 @@
                 "SIMPLE",
                 "ADVANCED"
             ],
-            "description": "Specifies the compilation level to use. Options: WHITESPACE_ONLY, SIMPLE, ADVANCED"
+            "description": "Specifies the compilation level to use. (default: SIMPLE)",
+            "default": "SIMPLE"
         },
         "env": {
             "enum": [
                 "BROWSER",
                 "CUSTOM"
             ],
-            "description": "Determines the set of builtin externs to load. Options: BROWSER, CUSTOM. Defaults to BROWSER."
+            "description": "Determines the set of builtin externs to load. Defaults to BROWSER. (default: BROWSER)",
+            "default": "BROWSER"
         },
         "externs": {
             "anyOf": [
@@ -26,7 +28,7 @@
                     "type": "string"
                 }
             ],
-            "description": "Determines the set of builtin externs to load. Options: BROWSER, CUSTOM. Defaults to BROWSER."
+            "description": "The file containing JavaScript externs. You may specify multiple"
         },
         "js": {
             "anyOf": [
@@ -41,28 +43,35 @@
         },
         "js_output_file": {
             "type": "string",
-            "description": "Primary output filename. If not specified, output is written to stdout"
+            "description": "Primary output filename. If not specified, output is written to stdout (default: )"
         },
         "language_in": {
             "enum": [
                 "ECMASCRIPT3",
                 "ECMASCRIPT5",
                 "ECMASCRIPT5_STRICT",
-                "ECMASCRIPT6",
-                "ECMASCRIPT6_STRICT",
                 "ECMASCRIPT6_TYPED",
-				"ECMASCRIPT8"
+                "ECMASCRIPT_2015",
+                "ECMASCRIPT_2016",
+                "ECMASCRIPT_2017",
+                "ECMASCRIPT_NEXT"
             ],
-            "description": "Sets what language spec that input sources conform. Options: ECMASCRIPT3, ECMASCRIPT5, ECMASCRIPT5_STRICT, ECMASCRIPT6 (default), ECMASCRIPT6_STRICT, ECMASCRIPT6_TYPED (experimental)"
+            "description": "Sets what language spec that input sources conform. (default: ECMASCRIPT_2017) (experimental: ECMASCRIPT6_TYPED)",
+            "default": "ECMASCRIPT_2017"
         },
         "language_out": {
             "enum": [
                 "ECMASCRIPT3",
                 "ECMASCRIPT5",
                 "ECMASCRIPT5_STRICT",
-                "ECMASCRIPT6_TYPED"
+                "ECMASCRIPT6_TYPED",
+                "ECMASCRIPT_2015",
+                "ECMASCRIPT_2016",
+                "ECMASCRIPT_2017",
+                "ECMASCRIPT_NEXT"
             ],
-            "description": "Sets what language spec the output should conform to. Options: ECMASCRIPT3 (default), ECMASCRIPT5, ECMASCRIPT5_STRICT, ECMASCRIPT6_TYPED (experimental)"
+            "description": "Sets what language spec the output should conform to. (default: ECMASCRIPT5) (experimental: ECMASCRIPT6_TYPED)",
+            "default": "ECMASCRIPT5"
         },
         "warning_level": {
             "enum": [
@@ -70,7 +79,8 @@
                 "DEFAULT",
                 "VERBOSE"
             ],
-            "description": "Specifies the warning level to use. Options: QUIET, DEFAULT, VERBOSE"
+            "description": "Specifies the warning level to use. (default: DEFAULT)",
+            "default": "DEFAULT"
         },
         "conformance_configs": {
             "type": "string",
@@ -98,19 +108,22 @@
         },
         "new_type_inf": {
             "type": "boolean",
-            "description": "Checks for type errors using the new type inference algorithm."
+            "description": "Checks for type errors using the new type inference algorithm. (default: false)",
+            "default": false
         },
         "warnings_whitelist_file": {
             "type": "string",
-            "description": "A file containing warnings to suppress. Each line should be of the form <file-name>:<line-number>? <warning-d escription>AvailableErrorGroups: accessControls,\nambiguousFunctionDecl,\ncheckEventfulObjectDisposal,\ncheckRegExp,\ncheckTypes,\ncheckVars,\nconformanceViolations,\nconst,\nconstantProperty,\ndeprecated,\ndeprecatedAnnotations,\nduplicateMessage,\nes3,\nes5Strict,\nexternsValidation,\nfileoverviewTags,\nglobalThis,\ninternetExplorerChecks,\ninvalidCasts,\nmisplacedTypeAnnotation,\nmissingGetCssName,\nmissingProperties,\nmissingProvide,\nmissingRequire,\nmissingReturn,\nmsgDescriptions,\nnewCheckTypes,\nnonStandardJsDocs,\nreportUnknownTypes,\nsuspiciousCode,\nstrictModuleDepCheck,\ntypeInvalidation,\nundefinedNames,\nundefinedVars,\nunknownDefines,\nunusedLocalVariables,\nunusedPrivateMembers,\nuselessCode,\nuseOfGoogBase,\nunderscore,\nvisibility"
+            "description": "A file containing warnings to suppress. Each line should be of the form <file-name>:<line-number>? <warning-description> (default: )\nAvailable Error Groups: accessControls, ambiguousFunctionDecl, checkRegExp, checkTypes, checkVars, commonJsModuleLoad, conformanceViolations, const, constantProperty, deprecated, deprecatedAnnotations, duplicateMessage, es3, es5Strict, externsValidation, fileoverviewTags, functionParams, globalThis, internetExplorerChecks, invalidCasts, misplacedTypeAnnotation, missingGetCssName, missingOverride, missingPolyfill, missingProperties, missingProvide, missingRequire, missingReturn, msgDescriptions, newCheckTypes, nonStandardJsDocs, missingSourcesWarnings, reportUnknownTypes, suspiciousCode, strictModuleDepCheck, typeInvalidation, undefinedNames, undefinedVars, unknownDefines, unusedLocalVariables, unusedPrivateMembers, uselessCode, useOfGoogBase, underscore, visibility"
         },
         "assume_function_wrapper": {
             "type": "boolean",
-            "description": "Enable additional optimizations based on the assumption that the output will be wrapped with a function wrapper. This flag is used to indicate that \"global\" declarations will not actually be global but instead isolated to the compilation unit. This enables additional optimizations."
+            "description": "Enable additional optimizations based on the assumption that the output will be wrapped with a function wrapper.  This flag is used to indicate that \"global\" declarations will not actually be global but instead isolated to the compilation unit. This enables additional optimizations. (default: false)",
+            "default": false
         },
         "export_local_property_definitions": {
             "type": "boolean",
-            "description": "Generates export code for local properties marked with @export"
+            "description": "Generates export code for local properties marked with @export (default: false)",
+            "default": false
         },
         "formatting": {
             "enum": [
@@ -118,31 +131,35 @@
                 "PRINT_INPUT_DELIMITER",
                 "SINGLE_QUOTES"
             ],
-            "description": "if any, should be applied to the output JS. Options: PRETTY_PRINT, PRINT_INPUT_DELIMITER, SINGLE_QUOTES"
+            "description": "Specifies which formatting options, if any, should be applied to the output JS. "
         },
         "generate_exports": {
             "type": "boolean",
-            "description": "Generates export code for those marked with @export"
+            "description": "Generates export code for those marked with @export (default: false)",
+            "default": false
         },
         "output_wrapper": {
             "type": "string",
-            "description": "Interpolate output into this string at the place denoted by the marker token %output%. Use marker token %output|jsstring% to do js string escaping on the output."
+            "description": "Interpolate output into this string at the place denoted by the marker token %output%. Use marker token %output|jsstring% to do js string escaping on the output. Consider using the --isolation_mode flag instead. (default: )"
         },
         "output_wrapper_file": {
             "type": "string",
-            "description": "Loads the specified file and passes the file contents to the --output_wrapper flag, replacing the value if it exists. This is useful if you want special characters like newline in the wrapper."
+            "description": "Loads the specified file and passes the file contents to the --output_wrapper flag, replacing the value if it exists. This is useful if you want special characters like newline in the wrapper. (default: )"
         },
         "dependency_mode": {
             "enum": [
                 "NONE",
                 "LOOSE",
-                "STRICT"
+                "STRICT",
+                "NONE the compiler will include all src files in the order listed",
+                "STRICT files will be included and sorted by starting from namespaces or files listed by the --entry_point flag - files will only be included if they are referenced by a goog"
             ],
-            "description": "determine the set and order of files for a compilation. Options: NONE the compiler will include all src files in the order listed, STRICT files will be included and sorted by starting from namespaces or files listed by the --entry_point flag-files will only be included if they are referenced by a goog.require or CommonJS require or ES6 import, LOOSE same as with STRICT but files which do not goog.provide a namespace and are not modules will be automatically added as --entry_point entries. Defaults to NONE."
+            "description": "Specifies how the compiler should determine the set and order of files for a compilation. require or CommonJS require or ES6 import, LOOSE same as with STRICT but files which do not goog.provide a namespace and are not modules will be automatically added as --entry_point entries. Defaults to NONE. (default: NONE)",
+            "default": "NONE"
         },
         "entry_point": {
             "type": "string",
-            "description": "A file or namespace to use as the startingpointfordeterminingwhichsrcfilestoincludeinthecompilation.ES6andCommonJSmodulesarespecifiedasfilepaths(withouttheextension).Closure-librarynamespacesarespecifiedwitha\"goog:\" prefix. Example: --entry_point=goog: goog.Promise"
+            "description": "A file or namespace to use as the starting point for determining which src files to include in the compilation. ES6 and CommonJS modules are specified as file paths (without the extension). Closure-library namespaces are specified with a \"goog:\" prefix. Example: --entry_point=goog:goog.Promise"
         },
         "js_module_root": {
             "type": "string",
@@ -150,75 +167,90 @@
         },
         "process_common_js_modules": {
             "type": "boolean",
-            "description": "Process CommonJS modules to a concatenable form."
+            "description": "Process CommonJS modules to a concatenable form. (default: false)",
+            "default": false
         },
         "transform_amd_modules": {
             "type": "boolean",
-            "description": "Transform AMD to CommonJS modules."
+            "description": "Transform AMD to CommonJS modules. (default: false)",
+            "default": false
         },
         "angular_pass": {
             "type": "boolean",
-            "description": "Generate $inject properties for AngularJS for functions annotated with @ngInject"
+            "description": "Generate $inject properties for AngularJS for functions annotated with @ngInject (default: false)",
+            "default": false
         },
         "dart_pass": {
             "type": "boolean",
-            "description": "Rewrite Dart Dev Compiler output to be compiler-friendly."
+            "description": "Rewrite Dart Dev Compiler output to be compiler-friendly. (default: false)",
+            "default": false
         },
         "polymer_pass": {
             "type": "boolean",
-            "description": "Rewrite Polymer classes to be compiler-friendly."
+            "description": "Equivalent to --polymer_version=1 (default: false)",
+            "default": false
         },
         "process_closure_primitives": {
-            "enum": ["false"],
-            "description": "Processes built-ins from the Closure library, such as goog.require(), goog.provide(), and goog.exportSymbol(). True by default."
+            "enum": [
+                "true",
+                "false"
+            ],
+            "description": "Processes built-ins from the Closure library, such as goog.require(), goog.provide(), and goog.exportSymbol( ). True by default. (default: true)",
+            "default": "true"
         },
         "rewrite_polyfills": {
-			"enum": ["false"],
-            "description": "Rewrite ES6 library calls to use polyfills provided by the compiler's runtime."
+            "enum": [
+                "true",
+                "false"
+            ],
+            "description": "Rewrite ES6 library calls to use polyfills provided by the compiler's runtime. (default: true)",
+            "default": "true"
         },
         "module": {
             "type": "string",
-            "description": "A JavaScript module specification. The format is <name>:<num-js-files>[:[<dep>,...][:]]]. Module names must be unique. Each dep is the name of a module that this module depends on. Modules must be listed in dependency order, and JS source files must be listed in the corresponding order. Where --module flags occur in relation to --js flags is unimportant. <num-js-files> may be set to 'auto' for the first module if it has no dependencies. Provide the value 'auto' to trigger module creation from CommonJSmodules."
+            "description": "A JavaScript module specification. The format is <name>:<num-js-files>[:[ <dep>,...][:]]]. Module names must be unique. Each dep is the name of a module that this module depends on. Modules must be listed in dependency order, and JS source files must be listed in the corresponding order. Where --module flags occur in relation to --js flags is unimportant. <num-js-files> may be set to 'auto' for the first module if it has no dependencies. Provide the value 'auto' to trigger module creation from CommonJSmodules."
         },
         "module_output_path_prefix": {
             "type": "string",
-            "description": "Prefix for filenames of compiled JS modules. <module-name>.js will be appended to this prefix. Directories will be created as needed. Use with --module"
+            "description": "Prefix for filenames of compiled JS modules. <module-name>.js will be appended to this prefix. Directories will be created as needed. Use with --module (default: ./)",
+            "default": "./"
         },
         "module_wrapper": {
             "type": "string",
-            "description": "An output wrapper for a JavaScript module (optional). The format is <name>:<wrapper>. The module name must correspond with a module specified using --module The wrapper must contain %s as the code placeholder. The %basename% placeholder can also be used to substitute the base name of the module output file."
+            "description": "An output wrapper for a JavaScript module (optional). The format is <name>:<wrapper>. The module name must correspond with a module specified using --module. The wrapper must contain %s as the code placeholder. The %basename% placeholder can also be used to substitute the base name of the module output file."
         },
         "create_source_map": {
             "type": "string",
-            "description": "If specified, a source map file mapping the generated source files back to the original source file will be output to the specified path. The %outname% placeholder will expand to the name of the output file that the source map corresponds to."
+            "description": "If specified, a source map file mapping the generated source files back to the original source file will be output to the specified path. The %outname% placeholder will expand to the name of the output file that the source map corresponds to. (default: )"
         },
         "output_manifest": {
             "type": "string",
-            "description": "Prints out a list of all the files in the compilation. If --dependency_mode=STRICT or LOOSE is specified, this will not include files that got dropped because they were not required. The %outname% placeholder expands to the JS output file. If you're using modularization, using %outname% will create a manifest for each module."
+            "description": "Prints out a list of all the files in the compilation. If --dependency_mode= STRICT or LOOSE is specified, this will not include files that got dropped because they were not required. The %outname% placeholder expands to the JS output file. If you're using modularization, using %outname% will create a manifest for each module. (default: )"
         },
         "output_module_dependencies": {
             "type": "boolean",
-            "description": "Prints out a JSON file of dependencies between modules."
+            "description": "Prints out a JSON file of dependencies between modules. (default: )"
         },
         "property_renaming_report": {
             "type": "boolean",
-            "description": "File where the serialized version of the property renaming map produced should be saved"
+            "description": "File where the serialized version of the property renaming map produced should be saved (default: )"
         },
         "source_map_location_mapping": {
             "type": "string",
-            "description": "Source map location mapping separated by a '|' (i.e. filesystem-path|webserver-path)"
+            "description": "Source map location mapping separated by a '|' (i.e. filesystem-path|webserv er-path)"
         },
         "variable_renaming_report": {
             "type": "string",
-            "description": "File where the serialized version of the variable renaming map produced should be saved"
+            "description": "File where the serialized version of the variable renaming map produced should be saved (default: )"
         },
         "charset": {
             "type": "string",
-            "description": "Input and output charset for all files. By default, we accept UTF-8 as input and output US_ASCII"
+            "description": "Input and output charset for all files. By default, we accept UTF-8 as input and output US_ASCII (default: )"
         },
         "checks_only": {
             "type": "boolean",
-            "description": "Don't generate output. Run checks but no optimization passes. "
+            "description": "Don't generate output. Run checks, but no optimization passes. (default: false)",
+            "default": false
         },
         "checks-only": {
             "type": "boolean",
@@ -229,20 +261,75 @@
             "description": "Override the value of a variable annotated @define. The format is <name>[=<val>], where <name> is the name of a @define variable and <val> is a boolean, number, or a single-quoted string that contains no single quotes. If [=<val>] is omitted, the variable is marked true"
         },
         "help": {
-            "type": "boolean",
-            "description": "Displays this message on stdout and exit"
+            "description": "Displays this message on stdout and exit (default: true)",
+            "default": "true",
+            "enum": [
+                "true",
+                "false"
+            ]
         },
         "third_party": {
             "type": "boolean",
-            "description": "Check source validity but do not enforce Closure style rules and conventions"
+            "description": "Check source validity but do not enforce Closure style rules and conventions (default: false)",
+            "default": false
         },
         "use_types_for_optimization": {
-            "type": "boolean",
-            "description": "Enable or disable the optimizations based on available type information. Inaccurate type annotations may result in incorrect results."
+            "description": "Enable or disable the optimizations based on available type information. Inaccurate type annotations may result in incorrect results. (default: true)",
+            "default": "true",
+            "enum": [
+                "true",
+                "false"
+            ]
         },
         "version": {
             "type": "boolean",
             "description": "Prints the compiler version to stdout and exit."
+        },
+        "strict_mode_input": {
+            "default": "true",
+            "enum": [
+                "true",
+                "false"
+            ],
+            "description": "Assume input sources are to run in strict mode. (default: true)"
+        },
+        "isolation_mode": {
+            "default": "NONE",
+            "enum": [
+                "NONE",
+                "IIFE"
+            ],
+            "description": "If set to IIFE the compiler output will follow the form: (function(){%output%)).call(this); (default: NONE)"
+        },
+        "module_resolution": {
+            "default": "BROWSER",
+            "enum": [
+                "BROWSER",
+                "NODE"
+            ],
+            "description": "Specifies how the compiler locates modules. BROWSER requires all module imports to begin with a '.' or '/' and have a file extension. NODE uses the node module rules. (default: BROWSER)"
+        },
+        "package_json_entry_names": {
+            "description": "Ordered list of entries to look for in package.json files when processing modules with the NODE module resolution strategy (i.e. esnext:main,browser,main). Defaults to a list with the following entries: \"browser\", \"module\", \"main\"."
+        },
+        "force_inject_library": {
+            "description": "Force injection of named runtime libraries. The format is <name> where <name> is the name of a runtime library. Possible libraries include: base, es6_runtime, runtime_type_check"
+        },
+        "inject_libraries": {
+            "default": "true",
+            "enum": [
+                "true",
+                "false"
+            ],
+            "description": "Allow injecting runtime libraries. (default: true)"
+        },
+        "source_map_include_content": {
+            "default": false,
+            "type": "boolean",
+            "description": "Includes sources content into source map. Greatly increases the size of source maps but offers greater portability (default: false)"
+        },
+        "source_map_input": {
+            "description": "Source map locations for input files, separated by a '|', (i.e. input-file-path|input-source-map)"
         }
     }
 }

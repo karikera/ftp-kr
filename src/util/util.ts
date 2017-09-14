@@ -209,3 +209,13 @@ export function parseJson(text:string):any
 		throw err;
 	}
 }
+
+export function callbackToPromise<T>(call:(callback:(err:Error, value?:T)=>void)=>void):Promise<T>
+{
+    return new Promise<T>((resolve, reject)=>{
+        call((err, data)=>{
+            if (err) reject(err);
+            else resolve(data);
+        });
+    });
+}

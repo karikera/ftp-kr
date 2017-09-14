@@ -104,17 +104,18 @@ export function closure(task:work.Task, options:MakeJsonConfig, config:Config):P
 
 export async function build(task:work.Task, makejson:string, config:Config):Promise<void>
 {
-    function toAbsolute(path:string):string
+    function toAbsolute(p:string):string
     {
-        if (path.startsWith('/'))
-            return fs.workspace + path;
+		var str:string;
+        if (p.startsWith('/'))
+            str = fs.workspace + p;
         else
-            return projectdir + "/" + path;
+			str = projectdir + "/" + p;
+		return path.resolve(str).replace(/\\/g, '/');
     }
 
-	makejson = fs.workspace + makejson;
-	
-    const projectdir = makejson.substr(0, makejson.lastIndexOf("/"));
+	makejson = toAbsolute(makejson);
+    const projectdir = makejson.substr(0, makejson.lastIndexOf("/")+1);
     var options = util.parseJson(ofs.readFileSync(makejson, 'utf8'));
 
     if (!options.name)
@@ -142,15 +143,8 @@ export async function build(task:work.Task, makejson:string, config:Config):Prom
 		options.src = includer.list;
 	}
 
-	try
-	{
-		const msg = await closure(task, options, config);
-		log.message(options.name + ": "+msg);
-	}
-	catch(err)
-	{
-		log.message(err);
-	}
+	const msg = await closure(task, options, config);
+	log.message(options.name + ": "+msg);
 }
 
 export function help():Promise<string>

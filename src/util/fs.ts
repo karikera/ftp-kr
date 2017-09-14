@@ -1,17 +1,9 @@
 
-import * as fs from "fs";
+import * as fs from 'fs';
 import * as path from 'path';
+import * as util from './util';
 import stripJsonComments = require('strip-json-comments');
 
-function callbackToPromise<T>(call:(callback:(err:Error, value?:T)=>void)=>void):Promise<T>
-{
-    return new Promise<T>((resolve, reject)=>{
-        call((err, data)=>{
-            if (err) reject(err);
-            else resolve(data);
-        });
-    });
-}
 
 function mkdirParent(dirPath:string, callback:(err?:Error)=>void):void
 {
@@ -53,13 +45,21 @@ export function worklize(localpath:string):string
 export function list(path:string):Promise<string[]>
 {
 	if (path !== "" && !path.startsWith("/")) return Promise.reject(new Error("Path must starts with slash: "+path));
-	return callbackToPromise((callback)=>fs.readdir(workspace + path, callback));
+	return util.callbackToPromise((callback)=>fs.readdir(workspace + path, callback));
 }
 
 export function stat(path:string):Promise<fs.Stats>
 {
 	if (path !== "" && !path.startsWith("/")) return Promise.reject(new Error("Path must starts with slash: "+path));
-	return callbackToPromise((callback)=>fs.stat(workspace + path, callback));
+	return util.callbackToPromise((callback)=>fs.stat(workspace + path, callback));
+}
+
+export function mtime(path:string):Promise<number>
+{
+	return stat(path).then(stat=>+stat.mtime).catch(e=>{
+		if (e.code === 'ENOENT') return -1;
+		throw e;
+	});
 }
 
 export function mkdir(path:string):Promise<void>
@@ -83,19 +83,19 @@ export function mkdir(path:string):Promise<void>
 export function mkdirp(path:string):Promise<void>
 {
 	if (!path.startsWith("/")) return Promise.reject(new Error("Path must starts with slash: "+path));
-	return callbackToPromise<void>(callback=>mkdirParent(workspace + path, callback));
+	return util.callbackToPromise<void>(callback=>mkdirParent(workspace + path, callback));
 }
 
 export function lstat(path:string):Promise<fs.Stats>
 {
 	if (path !== "" && !path.startsWith("/")) return Promise.reject(new Error("Path must starts with slash: "+path));
-	return callbackToPromise((callback)=>fs.lstat(workspace + path, callback));
+	return util.callbackToPromise((callback)=>fs.lstat(workspace + path, callback));
 }
 
 export function open(path:string):Promise<string>
 {
 	if (!path.startsWith("/")) return Promise.reject(new Error("Path must starts with slash: "+path));
-	return callbackToPromise((callback)=>fs.readFile(workspace + path, "utf-8", callback));
+	return util.callbackToPromise((callback)=>fs.readFile(workspace + path, "utf-8", callback));
 }
 
 export function exists(path:string):Promise<boolean>
@@ -112,7 +112,7 @@ export function json(path:string):Promise<any>
 export function create(filepath:string, data:string):Promise<void>
 {
 	return mkdirp(path.dirname(filepath))
-	.then(() => callbackToPromise<void>((callback)=>fs.writeFile(workspace + filepath, data, "utf-8", callback)));
+	.then(() => util.callbackToPromise<void>((callback)=>fs.writeFile(workspace + filepath, data, "utf-8", callback)));
 }
 
 export function createSync(path:string, data:string)
@@ -124,7 +124,7 @@ export function createSync(path:string, data:string)
 export function unlink(path:string):Promise<void>
 {
 	if (!path.startsWith("/")) return Promise.reject(new Error("Path must starts with slash: "+path));
-	return callbackToPromise<void>((callback)=>fs.unlink(workspace + path, callback));
+	return util.callbackToPromise<void>((callback)=>fs.unlink(workspace + path, callback));
 }
 
 export function initJson<T>(filepath:string, defaultValue:Object):Promise<any>

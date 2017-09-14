@@ -1,5 +1,6 @@
 
-import * as fs from './fs';
+import * as fs from 'fs';
+import * as util from './util';
 
 class MakeFileItem
 {
@@ -35,16 +36,19 @@ class MakeFile
 			modified = modified || mod;
 			if (!modified)
 			{
-				try
+				if(!mtime)
 				{
-					const stat = await fs.stat(target);
-					if(!mtime) mtime = +stat.mtime;
+					try
+					{
+						const stat = await util.callbackToPromise<fs.Stats>(cb=>fs.stat(target, cb));
+						mtime = +stat.mtime;
+					}
+					catch(err)
+					{
+						mtime = -1;
+					}
 				}
-				catch(err)
-				{
-					mtime = -1;
-				}
-				const stat = await fs.stat(child);
+				const stat = await util.callbackToPromise<fs.Stats>(cb=>fs.stat(target, cb));
 				if (mtime <= +stat.mtime) modified = true;
 			}
 		}

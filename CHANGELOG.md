@@ -1,3 +1,6 @@
+# 1.1.2
+* Fix closure compiler error
+
 # 1.1.1
 * Fix `Download All` command
 * Update Closure Compiler schema

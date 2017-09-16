@@ -1,3 +1,6 @@
+# 1.1.3
+* Fix closure compiler error
+
 # 1.1.2
 * Fix closure compiler error
 
@@ -6,6 +9,7 @@
 * Update Closure Compiler schema
 
 # 1.1.0
+* Cancel connection if config file is changed
 * Add `Cancel All` command
 * Prompt password when `password` field is not existed
 * Ignore directory not found error by `remotePath`

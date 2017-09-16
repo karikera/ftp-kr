@@ -212,9 +212,20 @@ export function parseJson(text:string):any
 
 export function callbackToPromise<T>(call:(callback:(err:Error, value?:T)=>void)=>void):Promise<T>
 {
+	const savedStack = new Error('').stack || '';
+	
     return new Promise<T>((resolve, reject)=>{
         call((err, data)=>{
-            if (err) reject(err);
+			if (err)
+			{
+				var stackline = savedStack.indexOf('\n');
+				stackline = savedStack.indexOf('\n', stackline+1);
+				if (stackline !== -1)
+				{
+					err.stack = err.message + savedStack.substr(stackline);
+				}
+				reject(err);
+			}
             else resolve(data);
         });
     });

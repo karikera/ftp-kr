@@ -4,7 +4,7 @@ import * as cp from 'child_process';
 
 import * as log from './log';
 import glob from './pglob';
-import MakeFile from './make';
+import * as make from './make';
 import * as fs from './fs';
 import * as work from './work';
 import * as util from './util';
@@ -45,7 +45,7 @@ export function closure(task:work.Task, options:MakeJsonConfig, config:Config):P
         return Promise.reject(Error("No source"));
     options.export = !!options.export;
     
-    const makeFile = new MakeFile;
+    const makeFile = new make.MakeFile;
 
     makeFile.on(out, src.concat([options.makejson]), ()=>{
         return new Promise((resolve, reject)=> {
@@ -82,11 +82,11 @@ export function closure(task:work.Task, options:MakeJsonConfig, config:Config):P
 					}
                     if (code === 0)
                     {
-                        resolve(false);
+                        resolve(make.State.COMPLETE);
                     }
                     else
                     {
-                        reject(new Error("RESULT: "+code));
+                        resolve(make.State.ERROR);
                     }
                 });
                 process.chdir(curdir);
@@ -99,7 +99,7 @@ export function closure(task:work.Task, options:MakeJsonConfig, config:Config):P
         });
     });
 
-    return makeFile.make(out).then(v=>v ? 'COMPILED' : 'LATEST');
+    return makeFile.make(out).then(v=>make.State[v]);
 }
 
 export async function build(task:work.Task, makejson:string, config:Config):Promise<void>

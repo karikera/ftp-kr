@@ -1,3 +1,7 @@
+# 1.1.4
+* Change ignore list to use glob pattern
+* Ignore ENOENT error while upload
+
 # 1.1.3
 * Fix closure compiler error
 

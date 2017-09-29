@@ -14,6 +14,7 @@ export interface BatchOptions
 {
 	doNotRefresh?:boolean;
 	doNotMakeDirectory?:boolean;
+	ignoreNotExistFile?:boolean;
 }
 
 function testLatest(file:f.State|null, localStat:fs.Stats):boolean
@@ -81,8 +82,9 @@ class RefreshedData extends util.Deferred<f.Directory>
 
 export class UploadReport
 {
-	weakIgnored:boolean = false;
+	directoryIgnored:boolean = false;
 	latestIgnored:boolean = false;
+	noFileIgnored:boolean = false;
 	file:f.State | null = null;
 }
 
@@ -137,19 +139,33 @@ class FtpFileSystem extends f.FileSystem
 
 	async ftpUpload(task:work.Task, path:string, options?:BatchOptions):Promise<UploadReport>
 	{
-		const stats = await fs.stat(path);
 		const report = new UploadReport;
 	
 		const that = this;
+		var stats:fs.Stats;
 		var oldfile:f.State|undefined = undefined;
 		
-		async function next(stats):Promise<UploadReport>
+		try
+		{
+			stats = await fs.stat(path);
+		}
+		catch(e)
+		{
+			if (e.code === 'ENOENT' && options && options.ignoreNotExistFile)
+			{
+				report.noFileIgnored = true;
+				return report;
+			}
+			throw e;
+		}
+		
+		async function next():Promise<UploadReport>
 		{
 			if (stats.isDirectory())
 			{
 				if (options && options.doNotMakeDirectory)
 				{
-					report.weakIgnored = true;
+					report.directoryIgnored = true;
 					return report;
 				}
 
@@ -178,7 +194,19 @@ class FtpFileSystem extends f.FileSystem
 				that.refreshed.delete(path);
 				const fn = f.splitFileName(path);
 				that.refreshed.delete(fn.dir);
-				await ftp.upload(task, path, fs.workspace+ path);
+				try
+				{
+					await ftp.upload(task, path, fs.workspace + path);
+				}
+				catch(e)
+				{
+					if (e.code === 'ENOENT' && options && options.ignoreNotExistFile)
+					{
+						report.noFileIgnored = true;
+						return report;
+					}
+					throw e;
+				}
 
 				const file = that.create(path);
 				file.lmtimeWithThreshold = file.lmtime = +stats.mtime;
@@ -187,12 +215,12 @@ class FtpFileSystem extends f.FileSystem
 				return report;
 			}
 		}
-		
+
 		const fn = f.splitFileName(path);
 		const filedir = this.get(fn.dir);
-		if (!filedir) return await next(stats);
+		if (!filedir) return await next();
 		oldfile = filedir.files[fn.name];
-		if (!oldfile) return await next(stats);
+		if (!oldfile) return await next();
 		if (+stats.mtime <= oldfile.lmtimeWithThreshold)
 		{
 			report.latestIgnored = true;
@@ -205,19 +233,18 @@ class FtpFileSystem extends f.FileSystem
 			report.file = oldfile;
 			return report;
 		}
-		if (!config.autoDownload) return await next(stats);
+		if (!config.autoDownload) return await next();
 
 		const oldtype = oldfile.type;
 		const oldsize = oldfile.size;
 		const ftpstats = await this.ftpStat(task, path, options);
 
-		if (ftpstats.type == oldtype &&  oldsize === ftpstats.size) return await next(stats);
+		if (ftpstats.type == oldtype &&  oldsize === ftpstats.size) return await next();
 
 		const selected = await vsutil.errorConfirm(`${path}: Remote file modified detected.`, "Upload anyway", "Download");
-
 		if (selected)
 		{
-			if (selected !== "Download") return await next(stats);
+			if (selected !== "Download") return await next();
 			await this.ftpDownload(task, path);
 		}
 		report.file = oldfile;
@@ -252,7 +279,7 @@ class FtpFileSystem extends f.FileSystem
 		}
 		catch(e)
 		{
-			if (e.code === 'ENOENT') return; // Somethings vscode open "%s.git" file, why?
+			if (e.code === 'ENOENT') return; // vscode open "%s.git" file, why?
 			throw e;
 		}
 		const file = await this.ftpStat(task, path);

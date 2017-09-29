@@ -94,36 +94,23 @@ class Field
 		if (optionsIdx !== -1)
 		{
 			let options = info.substr(optionsIdx+9);
-			var cutFrom = optionsIdx+9;
 			let endIdx = options.lastIndexOf('(');
 			if (endIdx === -1) endIdx = options.length;
 			let endIdx2 = options.indexOf('.');
 			if (endIdx2 !== -1 && endIdx2 < endIdx) 
 			{
 				endIdx = endIdx2;
-				cutFrom += endIdx + 1;
-			}
-			else
-			{
-				cutFrom += endIdx;
 			}
 			
-			info = info.substr(0, optionsIdx).trim() + ' ' + info.substr(cutFrom).trim();
 			options = options.substr(0, endIdx);
-			const experimentals:string[] = [];
 			for(const v of options.split(','))
 			{
 				let name = v.trim();
 				if (name.endsWith(' (experimental)'))
 				{
 					name = name.substr(0,name.length-15);
-					experimentals.push(name);
 				}
 				this.enums.add(name);
-			}
-			if (experimentals.length !== 0)
-			{
-				info += ' (experimental: '+experimentals.join(', ')+')';
 			}
 		}
 		if (this.enums.size)
@@ -197,13 +184,14 @@ class Field
 			back += ' ';
 			back += new_back.trim();
 		}
-
-		for (const left of leftProps)
-		{
-			delete schema[left];
-		}
 	}
 
+	delete props.help;
+	for (const left of leftProps)
+	{
+		delete props[left];
+	}
+	
 	await fs.create('/schema/closure.schema.json', JSON.stringify(schema, null, 4));
 })().catch(err=>{
 	console.error(err);

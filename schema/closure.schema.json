@@ -8,7 +8,7 @@
                 "SIMPLE",
                 "ADVANCED"
             ],
-            "description": "Specifies the compilation level to use. (default: SIMPLE)",
+            "description": "Specifies the compilation level to use. Options: WHITESPACE_ONLY, SIMPLE, ADVANCED (default: SIMPLE)",
             "default": "SIMPLE"
         },
         "env": {
@@ -16,7 +16,7 @@
                 "BROWSER",
                 "CUSTOM"
             ],
-            "description": "Determines the set of builtin externs to load. Defaults to BROWSER. (default: BROWSER)",
+            "description": "Determines the set of builtin externs to load. Options: BROWSER, CUSTOM. Defaults to BROWSER. (default: BROWSER)",
             "default": "BROWSER"
         },
         "externs": {
@@ -56,7 +56,7 @@
                 "ECMASCRIPT_2017",
                 "ECMASCRIPT_NEXT"
             ],
-            "description": "Sets what language spec that input sources conform. (default: ECMASCRIPT_2017) (experimental: ECMASCRIPT6_TYPED)",
+            "description": "Sets what language spec that input sources conform. Options: ECMASCRIPT3, ECMASCRIPT5, ECMASCRIPT5_STRICT, ECMASCRIPT6_TYPED (experimental), ECMASCRIPT_2015, ECMASCRIPT_2016, ECMASCRIPT_2017, ECMASCRIPT_NEXT (default: ECMASCRIPT_2017)",
             "default": "ECMASCRIPT_2017"
         },
         "language_out": {
@@ -70,7 +70,7 @@
                 "ECMASCRIPT_2017",
                 "ECMASCRIPT_NEXT"
             ],
-            "description": "Sets what language spec the output should conform to. (default: ECMASCRIPT5) (experimental: ECMASCRIPT6_TYPED)",
+            "description": "Sets what language spec the output should conform to. Options: ECMASCRIPT3, ECMASCRIPT5, ECMASCRIPT5_STRICT, ECMASCRIPT6_TYPED (experimental), ECMASCRIPT_2015, ECMASCRIPT_2016, ECMASCRIPT_2017, ECMASCRIPT_NEXT (default: ECMASCRIPT5)",
             "default": "ECMASCRIPT5"
         },
         "warning_level": {
@@ -79,7 +79,7 @@
                 "DEFAULT",
                 "VERBOSE"
             ],
-            "description": "Specifies the warning level to use. (default: DEFAULT)",
+            "description": "Specifies the warning level to use. Options: QUIET, DEFAULT, VERBOSE (default: DEFAULT)",
             "default": "DEFAULT"
         },
         "conformance_configs": {
@@ -131,7 +131,7 @@
                 "PRINT_INPUT_DELIMITER",
                 "SINGLE_QUOTES"
             ],
-            "description": "Specifies which formatting options, if any, should be applied to the output JS. "
+            "description": "Specifies which formatting options, if any, should be applied to the output JS. Options: PRETTY_PRINT, PRINT_INPUT_DELIMITER, SINGLE_QUOTES"
         },
         "generate_exports": {
             "type": "boolean",
@@ -154,7 +154,7 @@
                 "NONE the compiler will include all src files in the order listed",
                 "STRICT files will be included and sorted by starting from namespaces or files listed by the --entry_point flag - files will only be included if they are referenced by a goog"
             ],
-            "description": "Specifies how the compiler should determine the set and order of files for a compilation. require or CommonJS require or ES6 import, LOOSE same as with STRICT but files which do not goog.provide a namespace and are not modules will be automatically added as --entry_point entries. Defaults to NONE. (default: NONE)",
+            "description": "Specifies how the compiler should determine the set and order of files for a compilation. Options: NONE the compiler will include all src files in the order listed, STRICT files will be included and sorted by starting from namespaces or files listed by the --entry_point flag - files will only be included if they are referenced by a goog.require or CommonJS require or ES6 import, LOOSE same as with STRICT but files which do not goog.provide a namespace and are not modules will be automatically added as --entry_point entries. Defaults to NONE. (default: NONE)",
             "default": "NONE"
         },
         "entry_point": {
@@ -252,21 +252,9 @@
             "description": "Don't generate output. Run checks, but no optimization passes. (default: false)",
             "default": false
         },
-        "checks-only": {
-            "type": "boolean",
-            "description": "Don't generate output. Run checks but no optimization passes. "
-        },
         "define": {
             "type": "string",
             "description": "Override the value of a variable annotated @define. The format is <name>[=<val>], where <name> is the name of a @define variable and <val> is a boolean, number, or a single-quoted string that contains no single quotes. If [=<val>] is omitted, the variable is marked true"
-        },
-        "help": {
-            "description": "Displays this message on stdout and exit (default: true)",
-            "default": "true",
-            "enum": [
-                "true",
-                "false"
-            ]
         },
         "third_party": {
             "type": "boolean",
@@ -280,10 +268,6 @@
                 "true",
                 "false"
             ]
-        },
-        "version": {
-            "type": "boolean",
-            "description": "Prints the compiler version to stdout and exit."
         },
         "strict_mode_input": {
             "default": "true",
@@ -299,7 +283,7 @@
                 "NONE",
                 "IIFE"
             ],
-            "description": "If set to IIFE the compiler output will follow the form: (function(){%output%)).call(this); (default: NONE)"
+            "description": "If set to IIFE the compiler output will follow the form: (function(){%output%)).call(this); Options: NONE, IIFE (default: NONE)"
         },
         "module_resolution": {
             "default": "BROWSER",

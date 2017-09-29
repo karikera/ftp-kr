@@ -7,6 +7,7 @@ import * as closure from "./util/closure";
 import * as vsutil from "./vsutil";
 import {Options as FtpOptions} from 'ftp';
 import {ConnectConfig as SftpOptions} from 'ssh2';
+import minimatch = require('minimatch');
 
 const CONFIG_PATH = "/.vscode/ftp-kr.json";
 var initTimeForVSBug:number = 0;
@@ -25,7 +26,7 @@ const CONFIG_BASE:Config = {
 	autoDownload: false,
 	disableFtp: false,
 	ignore:[
-		"/.git",
+		".git",
 		"/.vscode/chrome",
 		"/.vscode/.key",
 		"/.vscode/ftp-kr.task.json",
@@ -77,20 +78,8 @@ export function checkIgnorePath(path:string):boolean
 	const check = config.ignore;
 	for (var i=0;i<check.length;i++)
 	{
-		let pattern = check[i];
-		if (typeof pattern === "string")
-		{
-			let regexp = pattern.replace(/[*.?+\[\]^$]/g, regexpchanger);
-			if (regexp.startsWith("/"))
-				regexp = "^" + regexp;
-			else
-				regexp = ".*/"+regexp;
-			if (!regexp.endsWith("/"))
-				regexp += "(/.*)?$";
-			pattern = check[i] = new RegExp(regexp);
-		}
-		if (pattern.test(path))
-			return true;
+		const pattern = check[i];
+		if (minimatch(path, pattern)) return true;
 	}
 	return false;
 }
@@ -184,7 +173,7 @@ export interface Config
 	autoDelete?:boolean;
 	autoDownload?:boolean;
 	disableFtp?:boolean;
-	ignore:(string|RegExp)[];
+	ignore:string[];
 	closure:closure.Config;
 
 	passphrase?:string;

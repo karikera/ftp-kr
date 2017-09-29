@@ -125,7 +125,19 @@ function attachOpenWatcher(mode: boolean): void {
 async function uploadCascade(path: string):Promise<void>
 {
 	processWatcher(path, ftpsync.upload, 'upload', !!config.autoUpload);
-	if (!(await fs.isDirectory(path))) return;
+	try
+	{
+		if (!(await fs.isDirectory(path))) return;
+	}
+	catch(err)
+	{
+		if (err.code === 'ENOENT')
+		{
+			// already deleted
+			return;
+		}
+		throw err;
+	}
 
 	for(const cs of await fs.list(path))
 	{

@@ -47,13 +47,10 @@ const REGEXP_MAP = {
 	"]": "\\]",
 	"^": "^]",
 	"$": "$]",
-	"*": "[^/]*"
+	"*": "[^/]*",
+	"**": ".*"
 };
 
-function regexpchanger(chr:string):string
-{
-	return REGEXP_MAP[chr];
-}
 function setConfig(...configs:Object[]):void
 {
 	for (const p in config)
@@ -70,16 +67,37 @@ function setConfig(...configs:Object[]):void
 	}
 }
 
+function patternToRegExp(pattern:string):RegExp
+{
+	let regexp = pattern.replace(/([.?+\[\]^$]|\*\*?)/g, chr=>REGEXP_MAP[chr]);
+	if (regexp.startsWith("/"))
+		regexp = "^" + regexp;
+	else
+		regexp = ".*/"+regexp;
+	if (!regexp.endsWith("/"))
+		regexp += "(/.*)?$";
+	return new RegExp(regexp);
+}
+
 export function checkIgnorePath(path:string):boolean
 {
 	if(!path.startsWith("/"))
+	{
 		path = "/" + path;
+	}
 	
 	const check = config.ignore;
 	for (var i=0;i<check.length;i++)
 	{
-		const pattern = check[i];
-		if (minimatch(path, pattern)) return true;
+		var pattern = check[i];
+		if (typeof pattern === "string")
+		{
+			pattern = patternToRegExp(pattern);
+		}
+		if (pattern.test(path))
+		{
+			return true;
+		}
 	}
 	return false;
 }
@@ -173,7 +191,7 @@ export interface Config
 	autoDelete?:boolean;
 	autoDownload?:boolean;
 	disableFtp?:boolean;
-	ignore:string[];
+	ignore:(string|RegExp)[];
 	closure:closure.Config;
 
 	passphrase?:string;

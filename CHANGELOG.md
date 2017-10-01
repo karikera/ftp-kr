@@ -1,3 +1,7 @@
+# 1.1.5
+* Change ignore list to use previous feature
+* FTP rmdir bug fix when path has white space
+
 # 1.1.4
 * Change ignore list to use glob pattern
 * Ignore ENOENT error while upload

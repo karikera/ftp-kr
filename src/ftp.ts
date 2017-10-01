@@ -1,5 +1,5 @@
 
-import FtpClient = require('ftp');
+import FtpClientO = require('ftp');
 import SftpClient = require('ssh2-sftp-client');
 import * as ssh2 from 'ssh2';
 import * as ofs from 'fs';
@@ -12,6 +12,79 @@ import * as work from './util/work';
 import * as util from './util/util';
 import * as cfg from './config';
 import * as vsutil from './vsutil';
+import * as stream from 'stream';
+
+class FtpClient extends FtpClientO
+{
+    // list(path: string, useCompression: boolean, callback: (error: Error, listing: Client.ListingElement[]) => void): void;
+    // list(path: string, callback: (error: Error, listing: Client.ListingElement[]) => void): void;
+    // list(useCompression: boolean, callback: (error: Error, listing: Client.ListingElement[]) => void): void;
+    // list(callback: (error: Error, listing: Client.ListingElement[]) => void): void;
+
+	public list(path:string|boolean|((error:Error|null, list?:FtpClientO.ListingElement[])=>void), zcomp?:boolean|((error:Error|null, list?:FtpClientO.ListingElement[])=>void), cb?:(error:Error|null, list?:FtpClientO.ListingElement[])=>void):void
+	{
+		var pathcmd:string;
+		if (typeof path === 'string')
+		{
+			pathcmd = '-al ' + path;
+			if (typeof zcomp === 'function')
+			{
+				cb = zcomp;
+				zcomp = false;
+			}
+			else if (typeof zcomp === 'boolean')
+			{
+				if (!cb) throw Error('Invalid parameter');
+			}
+			else
+			{
+				if (!cb) throw Error('Invalid parameter');
+				zcomp = false;
+			}
+		}
+		else if (typeof path === 'boolean')
+		{
+			if (typeof zcomp !== 'function')
+			{
+				throw Error('Invalid parameter');
+			}
+			cb = zcomp;
+			zcomp = path;
+			pathcmd = '-al';
+			path = '';
+		}
+		else
+		{
+			cb = path;
+			zcomp = false;
+			pathcmd = '-al';
+			path = '';
+		}
+		if (path.indexOf(' ') === -1)
+			return super.list(pathcmd, zcomp, cb);
+
+		const path_ = path;
+		const callback = cb;
+
+		// store current path
+		this.pwd((err, origpath) => {
+			if (err) return callback(err);
+			// change to destination path
+			this.cwd(path_, err => {
+				if (err) return callback(err);
+				// get dir listing
+				super.list('-al', false, (err, list) => {
+					// change back to original path
+					if (err) return this.cwd(origpath, () => callback(err));
+					this.cwd(origpath, err => {
+						if (err) return callback(err);
+						callback(err, list);
+					});
+				});
+			});
+		});
+	}
+}
 
 const config = cfg.config;
 
@@ -280,17 +353,17 @@ class Ftp extends FileInterface
 
 			this.client.on("ready", ()=>{
 				if (!this.client) return Promise.reject(Error(ALREADY_DESTROYED));
-				const socket = this.client['_socket'];
+				
+				const socket:stream.Duplex = this.client['_socket'];
 				const oldwrite = socket.write;
-				socket.write = str=>{
-					return oldwrite.call(socket, str, 'binary');
-				};
+				socket.write = str=>oldwrite.call(socket, str, 'binary');
+				socket.setEncoding('binary');
 				this.update();
 				resolve();
 			});
 			this.client.on("error", reject);
 
-			var options:FtpClient.Options;
+			var options:FtpClientO.Options;
 			if (config.protocol === 'ftps')
 			{
 				options = {
@@ -386,7 +459,7 @@ class Ftp extends FileInterface
 	{
 		const client = this.client;
 		if (!client) return Promise.reject(Error(ALREADY_DESTROYED));
-		return Ftp.wrapToPromise<FtpClient.ListingElement[]>(callback=>client.list('-al '+ftppath, false, callback))
+		return Ftp.wrapToPromise<FtpClientO.ListingElement[]>(callback=>client.listSafe('-al '+ftppath, false, callback))
 		.then(list=>list.map(from=>{
 			const to = new FileInfo;
 			to.type = from.type;

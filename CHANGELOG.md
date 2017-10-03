@@ -1,3 +1,7 @@
+# 1.1.6
+* FTP fix: Fix `Cancel All` & `Download All` & `List` commands
+* FTP fix: Password fail reconnect
+
 # 1.1.5
 * Change ignore list to use previous feature
 * FTP rmdir bug fix when path has white space

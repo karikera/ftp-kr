@@ -127,7 +127,7 @@ export function set(obj:Config):void
 			throw new Error("Need username");
 		}
 		
-		if (!obj.remotePath) obj.remotePath = '/';
+		if (!obj.remotePath) obj.remotePath = '';
 		else if (obj.remotePath.endsWith("/"))
 			obj.remotePath = obj.remotePath.substr(0, obj.remotePath.length-1);
 		switch (obj.protocol)
@@ -170,7 +170,9 @@ export async function load():Promise<void>
 export async function init():Promise<void>
 {
 	initTimeForVSBug = Date.now();
-	const data:Config = await fs.initJson(CONFIG_PATH, CONFIG_BASE);
+	const nconfig = Object.create(CONFIG_BASE);
+	nconfig.password = '';
+	const data:Config = await fs.initJson(CONFIG_PATH, nconfig);
 	set(data);
 	vsutil.open(CONFIG_PATH);
 }

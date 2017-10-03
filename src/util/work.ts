@@ -44,11 +44,26 @@ class TaskImpl implements Task
 	private resolve:()=>void;
 	private state:TaskState = TaskState.WAIT;
 	private cancelListeners:Array<()=>any> = [];
+	private timeout:NodeJS.Timer;
 	public promise:Promise<void>;
 
-	constructor(public name:string, public task:(task:Task)=>any)
+	constructor(private scheduler:Scheduler,public name:string, public task:(task:Task)=>any)
 	{
 		this.promise = new Promise<void>(resolve=>this.resolve = resolve);
+	}
+
+	public setTimeLimit(timeout:number):void
+	{
+		if (this.timeout) return;
+		if (this.state >= TaskState.STARTED) return;
+
+		this.timeout = setTimeout(()=>{
+			this.cancelled = true;
+
+			const task = this.scheduler.currentTask;
+			if (task === null) onErrorCallback(Error(`ftp-kr is busy: [null...?] is being proceesed. Cannot run [${this.name}]`));
+			else onErrorCallback(Error(`ftp-kr is busy: [${task.name}] is being proceesed. Cannot run [${this.name}]`));
+		}, timeout);
 	}
 
 	public async play():Promise<void>
@@ -58,6 +73,10 @@ class TaskImpl implements Task
 			throw Error('play must call once');
 		}
 		this.state = TaskState.STARTED;
+		if (this.timeout)
+		{
+			clearTimeout(this.timeout);
+		}
 		
 		if (this.cancelled) return;
 
@@ -146,7 +165,7 @@ class TaskImpl implements Task
 
 class Scheduler
 {
-	private currentTask:TaskImpl|null = null;
+	public currentTask:TaskImpl|null = null;
 	private nextTask:TaskImpl|null = null;
 	private lastTask:TaskImpl|null = null;
 
@@ -176,16 +195,31 @@ class Scheduler
 		this.lastTask = null;
 	}
 
-	public throwIfBusy():void
-	{
-		const task = this.currentTask;
-		if (task === null) return;
-		throw Error(`ftp-kr is busy: [${task.name}] is being proceesed`);
-	}
-	
 	public task(name:string, taskfunc:(task:Task)=>any):Thenable<void>
 	{
-		const task = new TaskImpl(name, taskfunc);
+		const task = new TaskImpl(this, name, taskfunc);
+		const last = this.lastTask;
+		if (last)
+		{
+			last.next = task;
+			this.lastTask = task;
+		}
+		else
+		{
+			this.nextTask = this.lastTask = task;
+		}
+		if (!this.currentTask)
+		{
+			log.verbose(`[SCHEDULAR:${this.name}] busy`);
+			this.progress();
+		}
+		return task.promise;
+	}
+	
+	public taskWithTimeout(name:string, timeout:number, taskfunc:(task:Task)=>any):Thenable<void>
+	{
+		const task = new TaskImpl(this, name, taskfunc);
+		task.setTimeLimit(timeout);
 		const last = this.lastTask;
 		if (last)
 		{

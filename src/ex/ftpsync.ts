@@ -332,24 +332,21 @@ export const commands = {
 		await cfgex.loadTest();
 		await cfgex.isFtpDisabled();
 		await workspace.saveAll();
-		work.ftp.throwIfBusy();
-		work.ftp.task('ftpkr.uploadAll', task => uploadAll(task, ""));
+		work.ftp.taskWithTimeout('ftpkr.uploadAll', 1000, task => uploadAll(task, ""));
 	},
 
 	async 'ftpkr.downloadAll'() {
 		await cfgex.loadTest();
 		await cfgex.isFtpDisabled();
 		await workspace.saveAll();
-		work.ftp.throwIfBusy();
-		work.ftp.task('ftpkr.downloadAll', task => downloadAll(task, ""));
+		work.ftp.taskWithTimeout('ftpkr.downloadAll', 1000, task => downloadAll(task, ""));
 	},
 
 	async 'ftpkr.cleanAll'() {
 		await cfgex.loadTest();
 		await cfgex.isFtpDisabled();
 		await workspace.saveAll();
-		work.ftp.throwIfBusy();
-		work.ftp.task('ftpkr.cleanAll', async (task) => {
+		work.ftp.taskWithTimeout('ftpkr.cleanAll', 1000, async (task) => {
 			const tasks = await ftpsync.syncTestClean(task);
 			await reserveSyncTask(task, tasks, 'ftpkr.Clean All', {doNotRefresh:true});
 		});
@@ -357,14 +354,12 @@ export const commands = {
 	async 'ftpkr.refreshAll'() {
 		await cfgex.loadTest();
 		await cfgex.isFtpDisabled();
-		work.ftp.throwIfBusy();
-		work.ftp.task('ftpkr.refreshAll', task => ftpsync.refreshForce(task));
+		work.ftp.taskWithTimeout('ftpkr.refreshAll', 1000, task => ftpsync.refreshForce(task));
 	},
 	async 'ftpkr.list'() {
 		await cfgex.loadTest();
 		await cfgex.isFtpDisabled();
-		work.ftp.throwIfBusy();
-		work.ftp.task('ftpkr.list', task => ftpsync.list(task, ''));
+		work.ftp.taskWithTimeout('ftpkr.list', 1000, task => ftpsync.list(task, ''));
 	},
 
 };

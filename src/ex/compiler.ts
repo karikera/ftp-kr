@@ -41,8 +41,7 @@ export const commands = {
 	async 'ftpkr.closureCompile' (file:vscode.Uri){
 		await cfgex.loadTest();
 		await workspace.saveAll();
-		work.compile.throwIfBusy();
-		work.compile.task('ftpkr.closureCompile', async task => {
+		work.compile.taskWithTimeout('ftpkr.closureCompile', 1000, async task => {
 			const selected = await vsutil.fileOrEditorFile(file).catch(()=>'');
 			var makejson:string = repathToMakeJson(selected);
 			try
@@ -73,8 +72,7 @@ export const commands = {
 	async 'ftpkr.closureCompileAll'(){
 		await cfgex.loadTest();
 		await workspace.saveAll();
-		work.compile.throwIfBusy();
-		work.compile.task('ftpkr.closureCompileAll', task => {
+		work.compile.taskWithTimeout('ftpkr.closureCompileAll', 1000, task => {
 			vsutil.clearLog();
 			vsutil.showLog();
 			return closure.all(task);
@@ -82,8 +80,7 @@ export const commands = {
 	},
 	async 'ftpkr.generateExtern'(file:vscode.Uri){
 		await cfgex.loadTest();
-		work.compile.throwIfBusy();
-		work.compile.task('ftpkr.generateExtern', async (task) => {
+		work.compile.taskWithTimeout('ftpkr.generateExtern', 1000, async (task) => {
 			const selected = await vsutil.fileOrEditorFile(file);
 			vsutil.showLog();
 			return externgen.gen(task, selected);

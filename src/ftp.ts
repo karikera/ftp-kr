@@ -459,7 +459,7 @@ class Ftp extends FileInterface
 	{
 		const client = this.client;
 		if (!client) return Promise.reject(Error(ALREADY_DESTROYED));
-		return Ftp.wrapToPromise<FtpClientO.ListingElement[]>(callback=>client.listSafe('-al '+ftppath, false, callback))
+		return Ftp.wrapToPromise<FtpClientO.ListingElement[]>(callback=>client.list(ftppath, false, callback))
 		.then(list=>list.map(from=>{
 			const to = new FileInfo;
 			to.type = from.type;
@@ -690,6 +690,7 @@ export async function init(task:work.Task):Promise<FileInterface>
 			var error:string;
 			switch (err.message)
 			{
+			case 'Login incorrect.':
 			case 'All configured authentication methods failed':
 				error = 'Authentication failed';
 				break;

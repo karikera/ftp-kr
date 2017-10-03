@@ -130,10 +130,8 @@ function taskForceRun(name:string, onwork:(task:work.Task)=>Promise<void>):Thena
 	work.load.cancel();
 	return work.load.task(name,
 		()=>{
-			work.ftp.throwIfBusy();
-			work.compile.throwIfBusy();
-			return work.ftp.task(name,
-				()=>work.compile.task(name,
+			return work.ftp.taskWithTimeout(name, 1000,
+				()=>work.compile.taskWithTimeout(name, 1000,
 					task=>onwork(task).then(()=>fireLoad(task)).catch(onLoadError)
 				)
 			)

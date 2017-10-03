@@ -3,5 +3,6 @@ Is it possible?
 Should I find other ftp module? (Chilkat?..  Can i use it?)
 Or implement all FTP spec directly?
 
- Remote directory auto creating
+
+I realized that node-ftp has some bug in upload feature ..
  

@@ -631,8 +631,8 @@ export async function list(task:work.Task, path:string):Promise<void>
 		filenames.push(NAMES[file.type]+'\t'+filename);
 	}
 	filenames.sort();
-	var selected = await vsutil.select(filenames);
 
+	var selected = await vsutil.select(filenames);
 	if (selected === undefined) return;
 	const typecut = selected.indexOf('\t');
 	const type = selected.substr(0, typecut);

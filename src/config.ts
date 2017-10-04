@@ -39,6 +39,34 @@ const CONFIG_BASE:Config = {
 	}
 };
 
+const CONFIG_INIT:Config = {
+	host: "",
+	username: "",
+	password: "",
+	remotePath: "",
+	protocol: "ftp",
+	port: 0,
+	fileNameEncoding: "utf8", 
+	ignoreWrongFileEncoding: false,
+	createSyncCache: true, 
+	autoUpload: true,
+	autoDelete: false,
+	autoDownload: false,
+	disableFtp: false,
+	ignore:[
+		".git",
+		"/.vscode/chrome",
+		"/.vscode/.key",
+		"/.vscode/ftp-kr.task.json",
+		"/.vscode/ftp-kr.error.log",
+		"/.vscode/ftp-kr.sync.*.json"
+	],
+	closure:{
+		create_source_map: "%js_output_file%.map",
+		output_wrapper: "%output%\n//# sourceMappingURL=%js_output_file_filename%.map",
+	}
+};
+
 const REGEXP_MAP = {
 	".": "\\.", 
 	"+": "\\+", 
@@ -170,9 +198,7 @@ export async function load():Promise<void>
 export async function init():Promise<void>
 {
 	initTimeForVSBug = Date.now();
-	const nconfig = Object.create(CONFIG_BASE);
-	nconfig.password = '';
-	const data:Config = await fs.initJson(CONFIG_PATH, nconfig);
+	const data:Config = await fs.initJson(CONFIG_PATH, CONFIG_INIT);
 	set(data);
 	vsutil.open(CONFIG_PATH);
 }

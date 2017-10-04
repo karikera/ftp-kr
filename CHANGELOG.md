@@ -1,3 +1,6 @@
+# 1.1.7
+* Fix `Init` command
+
 # 1.1.6
 * FTP fix: Fix `Cancel All` & `Download All` & `List` commands
 * FTP fix: Password fail reconnect

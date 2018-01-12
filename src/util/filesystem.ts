@@ -27,10 +27,12 @@ export function splitFileName(path:string):FileNameSet
     };
 }
 
+export type FileType = ''|'-'|'d'|'l';
+
 export abstract class State
 {
 	parent:Directory;
-	type:string = "";
+	type:FileType = "";
 	lmtime:number = 0;
 	size:number = 0;
 	lmtimeWithThreshold:number = 0;

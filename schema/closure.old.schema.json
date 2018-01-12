@@ -37,7 +37,7 @@
                     "type": "string"
                 }
             ],
-            "description": "The JavaScript filename. You may specify multiple. The flag name is optional, because args are interpreted as files by default. You may also use minimatch-style glob patterns. For example, use --js='**.js' --js='!**_test.js' to recursively include all js files that do not end in _test.js"
+            "description": "The JavaScript filename. You may specify multiple. The flag name is optional, because args are interpreted as files by default. You may also use minimatch-style glob patterns. For example, use --js='**/*.js' --js='!**_test.js' to recursively include all js files that do not end in _test.js"
         },
         "js_output_file": {
             "type": "string",

@@ -613,52 +613,40 @@ export function refreshForce(task:work.Task):Promise<void>
 
 export async function list(task:work.Task, path:string):Promise<void>
 {
-	const NAMES = {
-		'd': '[DIR] ',
-		'-': '[FILE]',
-	};
-
 	const dir = await vfs.ftpList(task, path);
-	const filenames:string[] = [];
+	const pick = new vsutil.QuickPick;
 	for(const filename in dir.files)
 	{
 		switch(filename)
 		{
 		case '': case '.': continue;
-		case '..': if(path === '') continue;
+		case '..':
+			if(path === '') continue;
+			pick.item('[DIR]\t..', ()=>list(task, path.substring(0, path.lastIndexOf('/'))));
+			continue;
 		}
 		const file = dir.files[filename];
-		filenames.push(NAMES[file.type]+'\t'+filename);
-	}
-	filenames.sort();
-
-	var selected = await vsutil.select(filenames);
-	if (selected === undefined) return;
-	const typecut = selected.indexOf('\t');
-	const type = selected.substr(0, typecut);
-	selected = selected.substr(typecut+1);
-	if (selected === '..')
-	{
-		return await list(task, path.substring(0, path.lastIndexOf('/')));
-	}
-
-	const npath = path + '/' + selected;
-	switch (type)
-	{
-	case NAMES['d']: return await list(task, npath);
-	case NAMES['-']:
-		const act = await vsutil.select(['Download '+selected,'Upload '+selected,'Delete '+selected]);
-		if (act === undefined) return await list(task, path);
-
-		const cmd = act.substr(0, act.indexOf(' '));
-		switch(cmd)
+		const npath = path + '/' + filename;
+		
+		switch (file.type)
 		{
-		case 'Download': await download(task, npath); break;
-		case 'Upload': await upload(task, npath); break;
-		case 'Delete': await remove(task, npath); break;
+		case '-':
+			pick.item('[FILE]\t' + file.name, ()=>{
+				pick.clear();
+				pick.item('Download '+file.name, ()=>download(task, npath));
+				pick.item('Upload '+file.name, ()=>upload(task, npath));
+				pick.item('Delete '+file.name, ()=>remove(task, npath));
+				pick.oncancel = ()=>list(task, path);
+				pick.open();
+			});
+			break;
+		case 'd':
+			pick.item('[DIR]\t' + file.name, ()=>list(task, npath));
+			break;
 		}
-		break;
 	}
+	pick.items.sort((a,b)=>a.label.localeCompare(b.label));
+	pick.open();
 }
 
 export function init(task:work.Task):Promise<void>

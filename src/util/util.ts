@@ -204,6 +204,8 @@ export function parseJson(text:string):any
 				lastidx = idx + 1;
 			}
 			const column = pos - lastidx;
+			err.line = line;
+			err.column = column;
 			err.message = `${RegExp.$1} JSON at line ${line}, column ${column}`;
 		}
 		throw err;

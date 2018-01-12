@@ -1,38 +1,46 @@
-import * as path from 'path';
 
-import * as log from './util/log';
-import glob from './util/pglob';
 import * as fs from './util/fs';
 import * as work from './util/work';
 import * as closure from './util/closure';
+import * as vsutil from './util/vsutil';
 
 import * as cfg from './config';
-import * as vsutil from './vsutil';
 
 export async function all(task:work.Task):Promise<void>
 {
 	try
 	{
-		vsutil.clearLog();
-		vsutil.showLog();
-		const files = await task.with(glob(fs.workspace+"/**/make.json"));
-		for (const file of files)
+		task.logger.clear();
+		task.logger.show();
+		
+		for(const ws of fs.Workspace.all())
 		{
-			await closure.build(task, fs.worklize(file), cfg.config.closure);
+			const files = await task.with(ws.child('**/make.json').glob());
+			const config = cfg.get(ws);
+			for (const file of files)
+			{
+				await closure.build(task, file, config.closure);
+			}
 		}
-		log.message('FINISH ALL');
+		task.logger.message('FINISH ALL');
 	}
 	catch(err)
 	{
-		log.message(err);
+		task.logger.message(err);
 	}
 }
 
-export function makeJson(makejson:string, input?:string):Promise<void>
+export function makeJson(makejson:fs.Path, input?:string):Promise<void>
 {
-	if (input) input = path.relative(path.dirname(makejson), input).replace(/\\/g, '/');
-	else input = "./script.js";
-	const output = (input.endsWith('.js') ? input.substring(0, input.length-3) : input) +'.min.js';
+	if (input && input.endsWith('.js'))
+	{
+		input = makejson.child(input).fsPath;
+	}
+	else
+	{
+		input = "./script.js";
+	}
+	const output = input +'.min.js';
 	const makejsonDefault = 
 	{
 		name: "jsproject",
@@ -42,14 +50,13 @@ export function makeJson(makejson:string, input?:string):Promise<void>
 		closure: {}
 	};
 
-	makejson = fs.worklize(makejson);
-	return fs.initJson(makejson, makejsonDefault)
-		.then(() => vsutil.open(makejson)).then(()=>{});
+	return makejson.initJson(makejsonDefault).then(() => vsutil.open(makejson)).then(()=>{});
 }
 
-export function make(task:work.Task, makejs:string):Promise<void>
+export function make(task:work.Task, makejs:fs.Path):Promise<void>
 {
-	vsutil.clearLog();
-	vsutil.showLog();
-	return closure.build(task, makejs, cfg.config.closure);
+	task.logger.clear();
+	task.logger.show();
+	const config = cfg.get(makejs.workspace());
+	return closure.build(task, makejs, config.closure);
 }

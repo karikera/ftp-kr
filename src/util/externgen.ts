@@ -1,15 +1,15 @@
 
 import * as cp from 'child_process';
 import * as path from 'path';
+import * as fs from './fs';
 import * as log from './log';
 import * as work from './work';
 
-export function gen(task:work.Task, jsfile:string):Promise<void>
+export function gen(task:work.Task, jsfile:fs.Path):Promise<void>
 {
 	return new Promise<void>((res, rej)=>{
-		jsfile = path.resolve(jsfile);
-		const jsfiledir = path.dirname(jsfile);
-		const proc = cp.fork(`${__dirname}/externgen_sandbox.js`, [jsfile], {cwd:jsfiledir});
+		const jsfiledir = jsfile.parent();
+		const proc = cp.fork(`${__dirname}/externgen_sandbox.js`, [jsfile.fsPath], {cwd:jsfiledir.fsPath});
 		var end = false;
 		proc.on('message', data=>{
 			if (typeof data  === 'string')

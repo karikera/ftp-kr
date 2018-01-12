@@ -5,22 +5,18 @@ const window = vscode.window;
 
 import * as work from '../util/work';
 import * as fs from '../util/fs';
+import * as log from '../util/log';
 import * as externgen from '../util/externgen';
+import * as vsutil from '../util/vsutil';
+import * as cmd from '../util/cmd';
 import * as cfgex from './config';
 import * as cfg from '../config';
 import * as closure from '../closure';
-import * as vsutil from '../vsutil';
 
-const config = cfg.config;
 
-function repathToMakeJson(path:string):string
+async function generateConfirm(logger:log.Logger, makejson:fs.Path, input:string, err:Error):Promise<void>
 {
-    return path.substr(0, path.lastIndexOf('/')+1) + "make.json";
-}
-
-async function generateConfirm(makejson:string, input:string, err:Error):Promise<void>
-{
-	const select = await vsutil.errorConfirm(err, 'Generate make.json');
+	const select = await logger.errorConfirm(err, 'Generate make.json');
 	if (!select) return;
 	await closure.makeJson(makejson, input);
 }
@@ -33,42 +29,47 @@ export function unload()
 {
 }
 
-export const commands = {
-	async 'ftpkr.makejson' (file:vscode.Uri){
-		const selected = await vsutil.fileOrEditorFile(file);
-		await closure.makeJson(repathToMakeJson(selected), selected);
-	},
-	async 'ftpkr.closureCompile' (file:vscode.Uri){
-		await cfgex.loadTest();
-		await workspace.saveAll();
-		work.compile.taskWithTimeout('ftpkr.closureCompile', 1000, async task => {
-			const selected = await vsutil.fileOrEditorFile(file).catch(()=>'');
-			var makejson:string = repathToMakeJson(selected);
-			try
+export const commands = {};
+
+cmd.commands['ftpkr.makejson'] = async(args:cmd.Args)=>{
+	if (!args.file) throw Error('No file selected');
+	await closure.makeJson(args.file.sibling('make.json'), args.file.fsPath);
+};
+	
+cmd.commands['ftpkr.closureCompile'] = async(args:cmd.Args)=>{
+	if (!args.workspace) args.workspace = fs.Workspace.first();
+	const config = args.workspace.item(cfg.WorkspaceConfig);
+	await cfgex.loadTest();
+	await workspace.saveAll();
+	work.compile.taskWithTimeout('ftpkr.closureCompile', 1000, async(task) => {
+		const selected = await vsutil.fileOrEditorFile(file).catch(()=>fs.Workspace.first());
+		var makejson = selected.sibling('make.json');
+		try
+		{
+			if (!await makejson.exists())
 			{
-				if (!await fs.exists(makejson))
+				const latestPath = vsutil.context.workspaceState.get('latestCompilePath', '');
+				if (!latestPath)
 				{
-					const latestPath = vsutil.context.workspaceState.get('latestCompilePath', '');
-					if (!latestPath)
-					{
-						return generateConfirm(makejson, selected, Error('make.json is not found'));
-					}
-					if (!await fs.exists(latestPath))
-					{
-						vsutil.context.workspaceState.update('latestCompilePath', '');
-						return generateConfirm(makejson, selected, Error('make.json is not found'));
-					}
-					makejson = latestPath;
+					return generateConfirm(makejson, selected.fsPath, Error('make.json is not found'));
 				}
-				await closure.make(task, makejson);
-				vsutil.context.workspaceState.update('latestCompilePath', makejson);
+				if (!await makejson.exists())
+				{
+					vsutil.context.workspaceState.update('latestCompilePath', '');
+					return generateConfirm(makejson, selected.fsPath, Error('make.json is not found'));
+				}
+				makejson = latestPath;
 			}
-			catch(err)
-			{
-				vsutil.error(err);
-			}
-		});
-	},
+			await closure.make(task, makejson);
+			vsutil.context.workspaceState.update('latestCompilePath', makejson);
+		}
+		catch(err)
+		{
+			vsutil.error(err);
+		}
+	});
+};
+
 	async 'ftpkr.closureCompileAll'(){
 		await cfgex.loadTest();
 		await workspace.saveAll();

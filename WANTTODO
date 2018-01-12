@@ -4,5 +4,12 @@ Should I find other ftp module? (Chilkat?..  Can i use it?)
 Or implement all FTP spec directly?
 
 
-I realized that node-ftp has some bug in upload feature ..
- 
+I realized that node-ftp has some bug in upload function ..
+
+localBasePath
+ENOENT when list-download
+multi server
+
+failure[4]
+
+upload all

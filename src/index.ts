@@ -4,10 +4,8 @@ const workspace = vscode.workspace;
 import * as log from './util/log';
 import * as fs from './util/fs';
 import * as work from './util/work';
-import * as vsutil from './vsutil';
-
-work.onError(vsutil.error);
-log.set(vsutil.print);
+import * as vsutil from './util/vsutil';
+import * as command from './util/command';
 
 const extensions = [
 	require('./ex/config'), 
@@ -16,41 +14,16 @@ const extensions = [
 ];
 
 export function activate(context:vscode.ExtensionContext) {
-    console.log('[extension: ftp-kr] activate');
-	fs.setWorkspace(workspace.rootPath.replace(/\\/g, "/"));
+	console.log('[extension: ftp-kr] activate');
 	vsutil.setContext(context);
 
     for(const ex of extensions) ex.load();
 
-    for(const ex of extensions) 
-    {
-        for(const p in ex.commands)
-        {
-            let command = ex.commands[p];
-            const disposable = vscode.commands.registerCommand(p, async(...arg) => {
-				try
-				{
-					await command(...arg);
-				}
-				catch(err)
-				{
-					switch (err)
-					{
-					case work.CANCELLED:
-						log.verbose(`[Command:${p}]: cancelled`);
-						break;
-					case 'PASSWORD_CANCEL':
-						log.verbose(`[Command:${p}]: cancelled by password input`);
-						break;
-					default:
-						vsutil.error(err);
-						break;
-					}
-				}
-			});
-			context.subscriptions.push(disposable);
-        }
-    }
+	for(const name in command.commands)
+	{
+		const disposable = vscode.commands.registerCommand(name, (...args) => command.runCommand(name, ...args));
+		context.subscriptions.push(disposable);
+	}
 }
 export function deactivate() {
     try
@@ -61,6 +34,6 @@ export function deactivate() {
     }
     catch(err)
     {
-        vsutil.error(err);
+        log.defaultLogger.error(err);
     }
 }

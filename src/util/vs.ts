@@ -1,16 +1,16 @@
 
-import * as fs from 'fs';
+import * as fs from './fs';
 import * as path from 'path';
 import {Tag,Reader} from './reader';
 
 export class Includer
 {
-	included:Object = {};
-	including:Object = {};
-	list:string[] = [];
-	errors:Array<[string, number, string]> = [];
+	included:Set<string> = new Set;
+	including:Set<string> = new Set;
+	list:fs.Path[] = [];
+	errors:Array<[fs.Path, number, string]> = [];
 	
-	include(src:string|string[]):void
+	async include(src:fs.Path|fs.Path[]):Promise<void>
 	{
 		if (src instanceof Array)
 		{
@@ -20,17 +20,16 @@ export class Includer
 			}
 			return;
 		}
-		src = path.resolve(src).replace(/\\/g, '/');
-		if (src in this.included)
+		if (this.included.has(src.fsPath))
 			return;
-		if (src in this.including)
+		if (this.including.has(src.fsPath))
 			throw Error("SELF_INCLUDE");
-		this.included[src] = true;
-		this.including[src] = true;
+		this.included.add(src.fsPath);
+		this.including.add(src.fsPath);
 
 		try
 		{
-			var data:string = fs.readFileSync(src, "utf8");
+			var data:string = await src.open();
 		}
 		catch(e)
 		{
@@ -38,13 +37,14 @@ export class Includer
 		}
 		const arr:Tag[] = readXml(data);
 
-		var dir = src.substr(0, src.lastIndexOf("/")+ 1);
+		var dir = src.parent();
 		for (const tag of arr)
 		{
 			switch (tag.name)
 			{
 			case "reference":
-				var file = path.normalize(dir + tag.props.path).replace(/\\/g, "/");
+				var file = dir.child(tag.props.path);
+				if (file.ext() === 'd.ts') break;
 				try
 				{
 					this.include(file);
@@ -74,6 +74,7 @@ export function readXml(data:string):Tag[]
 {
 	const page = new Reader;
 	page.data = data;
+	if (data.charCodeAt(0) === 0xfeff) page.i = 1;
 
 	var lineNumber = 0;
 	const line = new Reader;
@@ -86,7 +87,7 @@ export function readXml(data:string):Tag[]
 		
 		lineNumber++;
 		line.i = 0;
-		var linestr = page.readTo("\n");;
+		var linestr = page.readTo("\n");
 		if (!linestr) continue;
 	
 		line.data = linestr;

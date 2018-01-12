@@ -11,7 +11,7 @@
   },
   "bugs": "https://github.com/karikera/ftp-kr/issues",
   "engines": {
-    "vscode": "^1.5.0"
+    "vscode": "^1.17.0"
   },
   "categories": [
     "Other"
@@ -129,14 +129,14 @@
   },
   "devDependencies": {
     "@types/ftp": "^0.3.29",
-    "@types/glob": "^5.0.32",
+    "@types/glob": "^5.0.33",
     "@types/iconv-lite": "0.0.1",
-    "@types/mocha": "^2.2.43",
-    "@types/node": "^6.0.88",
-    "@types/ssh2-sftp-client": "^1.0.6",
+    "@types/mocha": "^2.2.44",
+    "@types/node": "^6.0.92",
+    "@types/ssh2-sftp-client": "^1.1.0",
     "@types/strip-json-comments": "0.0.28",
     "mocha": "^2.3.3",
-    "typescript": "^2.5.3",
-    "vscode": "^1.1.5"
+    "typescript": "^2.6.2",
+    "vscode": "^1.1.10"
   }
 }

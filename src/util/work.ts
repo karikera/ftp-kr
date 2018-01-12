@@ -1,3 +1,5 @@
+
+import * as fs from './fs';
 import * as log from './log';
 
 const resolvedPromise:Promise<void> = Promise.resolve();
@@ -28,13 +30,12 @@ export class OnCancel
 export interface Task
 {
 	readonly cancelled:boolean;
+	readonly logger:log.Logger;
 	
 	oncancel(oncancel:()=>any):OnCancel;
 	checkCanceled():void;
 	with<T>(waitWith:Promise<T>):Promise<T>;
 }
-
-var onErrorCallback:(callback:any)=>void = ()=>{};
 
 class TaskImpl implements Task
 {
@@ -46,9 +47,11 @@ class TaskImpl implements Task
 	private cancelListeners:Array<()=>any> = [];
 	private timeout:NodeJS.Timer;
 	public promise:Promise<void>;
+	public readonly logger:log.Logger;
 
 	constructor(private scheduler:Scheduler,public name:string, public task:(task:Task)=>any)
 	{
+		this.logger = scheduler.logger;
 		this.promise = new Promise<void>(resolve=>this.resolve = resolve);
 	}
 
@@ -61,8 +64,8 @@ class TaskImpl implements Task
 			this.cancelled = true;
 
 			const task = this.scheduler.currentTask;
-			if (task === null) onErrorCallback(Error(`ftp-kr is busy: [null...?] is being proceesed. Cannot run [${this.name}]`));
-			else onErrorCallback(Error(`ftp-kr is busy: [${task.name}] is being proceesed. Cannot run [${this.name}]`));
+			if (task === null) this.logger.error(Error(`ftp-kr is busy: [null...?] is being proceesed. Cannot run [${this.name}]`));
+			else this.logger.error(Error(`ftp-kr is busy: [${task.name}] is being proceesed. Cannot run [${this.name}]`));
 		}, timeout);
 	}
 
@@ -80,7 +83,7 @@ class TaskImpl implements Task
 		
 		if (this.cancelled) return;
 
-		log.verbose(`[TASK:${this.name}] started`);
+		this.logger.verbose(`[TASK:${this.name}] started`);
 		try
 		{
 			await this.task(this);
@@ -89,12 +92,12 @@ class TaskImpl implements Task
 		{
 			if (e === CANCELLED)
 			{
-				log.verbose(`[TASK:${this.name}] cancelled`);
+				this.logger.verbose(`[TASK:${this.name}] cancelled`);
 				return;
 			}
-			onErrorCallback(e);
+			this.logger.error(e);
 		}
-		log.verbose(`[TASK:${this.name}] done`);
+		this.logger.verbose(`[TASK:${this.name}] done`);
 		this.resolve();
 		return this.promise;
 	}
@@ -163,7 +166,7 @@ class TaskImpl implements Task
 	}
 }
 
-class Scheduler
+export class Scheduler
 {
 	public currentTask:TaskImpl|null = null;
 	private nextTask:TaskImpl|null = null;
@@ -171,7 +174,7 @@ class Scheduler
 
 	private promise:Promise<void> = Promise.resolve();
 
-	constructor(private name:string)
+	constructor(readonly logger:log.Logger, private name:string)
 	{
 	}
 
@@ -181,13 +184,14 @@ class Scheduler
 		if (!task) return;
 
 		task.cancel();
-		log.message(`[${this.name}/${task.name}]task is cancelled`);
+
+		this.logger.message(`[${this.name}/${task.name}]task is cancelled`);
 		this.currentTask = null;
 
 		var next = task.next;
 		while (next)
 		{
-			log.message(`[${this.name}/${next.name}]task is cancelled`);
+			this.logger.message(`[${this.name}/${next.name}]task is cancelled`);
 			next = next.next;
 		}
 
@@ -210,7 +214,7 @@ class Scheduler
 		}
 		if (!this.currentTask)
 		{
-			log.verbose(`[SCHEDULAR:${this.name}] busy`);
+			this.logger.verbose(`[SCHEDULAR:${this.name}] busy`);
 			this.progress();
 		}
 		return task.promise;
@@ -232,7 +236,7 @@ class Scheduler
 		}
 		if (!this.currentTask)
 		{
-			log.verbose(`[SCHEDULAR:${this.name}] busy`);
+			this.logger.verbose(`[SCHEDULAR:${this.name}] busy`);
 			this.progress();
 		}
 		return task.promise;
@@ -243,7 +247,7 @@ class Scheduler
 		const task = this.nextTask;
 		if (!task)
 		{
-			log.verbose(`[SCHEDULAR:${this.name}] idle`);
+			this.logger.verbose(`[SCHEDULAR:${this.name}] idle`);
 			this.currentTask = null;
 			return;
 		}
@@ -261,13 +265,3 @@ class Scheduler
 		task.play().then(()=>this.progress());
 	}
 }
-
-export function onError(callback:(message:any)=>void):void
-{
-	onErrorCallback = callback;
-}
-
-export const compile = new Scheduler('compile');
-export const ftp = new Scheduler('ftp');
-export const load = new Scheduler('load');
-

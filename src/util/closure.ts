@@ -2,8 +2,6 @@ import * as path from 'path';
 import * as ofs from 'fs';
 import * as cp from 'child_process';
 
-import * as log from './log';
-import glob from './pglob';
 import * as make from './make';
 import * as fs from './fs';
 import * as work from './work';
@@ -53,7 +51,7 @@ export function closure(task:work.Task, options:MakeJsonConfig, config:Config):P
             try
             {
                 process.chdir(options.projectdir);
-                log.message(projname + ": BUILD");
+                task.logger.message(projname + ": BUILD");
                 const args = ['-jar', closurecompiler];
 
                 const ex_parameter:Config = {
@@ -70,8 +68,8 @@ export function closure(task:work.Task, options:MakeJsonConfig, config:Config):P
 
                 util.addOptions(args, finalOptions);
                 const java = cp.spawn("java", args);
-                java.stdout.on('data', (data:string) => log.message(data));
-				java.stderr.on('data', (data:string) => log.message(data));
+                java.stdout.on('data', (data:string) => task.logger.message(data));
+				java.stderr.on('data', (data:string) => task.logger.message(data));
 				const oncancel = task.oncancel(()=>java.kill());
                 java.on('close', (code, signal) => {
 					if (signal === 'SIGTERM')
@@ -102,22 +100,26 @@ export function closure(task:work.Task, options:MakeJsonConfig, config:Config):P
     return makeFile.make(out).then(v=>make.State[v]);
 }
 
-export async function build(task:work.Task, makejson:string, config:Config):Promise<void>
+export async function build(task:work.Task, makejson:fs.Path, config:Config):Promise<void>
 {
-    function toAbsolute(p:string):string
+	const projectdir = makejson.parent();
+	const workspace = makejson.workspace();
+    function toAbsolute(p:string):fs.Path
     {
-		var str:string;
+		var str:fs.Path;
         if (p.startsWith('/'))
-            str = fs.workspace + p;
+            return workspace.child(p);
         else
-			str = projectdir + "/" + p;
-		return path.resolve(str).replace(/\\/g, '/');
+			return projectdir.child(p);
     }
 
-	makejson = toAbsolute(makejson);
-    const projectdir = makejson.substr(0, makejson.lastIndexOf("/")+1);
-    var options = util.parseJson(ofs.readFileSync(makejson, 'utf8'));
-
+	var options = await makejson.json();
+	if (!options)
+	{
+		const err:fs.FileError = Error('invalid make.json');
+		err.path = makejson;
+		throw err;
+	}
     if (!options.name)
         options.name = projectdir;
     options.projectdir = projectdir;
@@ -126,17 +128,17 @@ export async function build(task:work.Task, makejson:string, config:Config):Prom
     options.makejson = makejson;
     options.output = toAbsolute(options.output);
 
-    const arg = await glob(options.src.map(toAbsolute));
+    const arg = await fs.Path.glob(options.src.map(toAbsolute));
 
 	if (options.includeReference !== false)
 	{
 		const includer = new vs.Includer;
-		includer.include(arg);
+		await includer.include(arg);
 		if (includer.errors.length !== 0)
 		{
 			for(var err of includer.errors)
 			{
-				log.message(path.resolve(err[0])+":"+err[1]+"\n\t"+err[2]);
+				task.logger.message(path.resolve(err[0])+":"+err[1]+"\n\t"+err[2]);
 			}
 			return;
 		}
@@ -144,7 +146,7 @@ export async function build(task:work.Task, makejson:string, config:Config):Prom
 	}
 
 	const msg = await closure(task, options, config);
-	log.message(options.name + ": "+msg);
+	task.logger.message(options.name + ": "+msg);
 }
 
 export function help():Promise<string>

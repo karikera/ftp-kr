@@ -103,7 +103,7 @@ function attachOpenWatcher(mode: boolean): void {
     openWatcherMode = mode;
     if (mode) {
         openWatcher = workspace.onDidOpenTextDocument(e => {
-            const workpath = fs.worklize(e.fileName);
+            const workpath = fs.Path.fromUri(e.uri);
             try {
                 if (!config.autoDownload) return;
                 if (cfg.checkIgnorePath(workpath)) return;

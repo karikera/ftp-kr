@@ -1,6 +1,6 @@
 
 import FtpClientO = require('ftp');
-import SftpClient = require('ssh2-sftp-client');
+import SftpClientO = require('ssh2-sftp-client');
 import * as ssh2 from 'ssh2';
 import * as ofs from 'fs';
 import * as iconv from 'iconv-lite';
@@ -85,6 +85,55 @@ class FtpClient extends FtpClientO
 		});
 	}
 }
+
+class SftpClient extends SftpClientO
+{
+	public mkdir(path:string, recursive?:boolean):Promise<void>
+	{
+		recursive = recursive || false;
+	
+		return new Promise((resolve, reject) => {
+			const sftp = (<any>this).sftp;
+	
+			if (sftp) {
+				if (!recursive) {
+					sftp.mkdir(path, (err) => {
+						if (err) {
+							reject(err);
+							return false;
+						}
+						resolve();
+					});
+					return false;
+				}
+	
+				const tokens = path.split(/\//g);
+				let p = '';
+	
+				const mkdir = () => {
+					let token = tokens.shift();
+	
+					if (!token && !tokens.length) {
+						resolve();
+						return false;
+					}
+					p = p + token;
+					sftp.mkdir(p, (err) => {
+						if (err && err.code !== 3 && err.code !== 5) {
+							reject(err);
+						}
+						p += '/';
+						mkdir();
+					});
+				};
+				return mkdir();
+			} else {
+				reject('sftp connect error');
+			}
+		});
+	}
+}
+
 
 const config = cfg.config;
 
@@ -486,7 +535,7 @@ class Ftp extends FileInterface
 
 class Sftp extends FileInterface
 {
-	client:SftpClient.Client|null = new SftpClient;
+	client:SftpClientO|null = new SftpClient;
 
 	constructor()
 	{
@@ -504,7 +553,7 @@ class Sftp extends FileInterface
 		{
 			if (!this.client) throw Error(ALREADY_DESTROYED);
 
-			var options:ssh2.ConnectConfig;
+			var options:ssh2.ConnectConfig = {};
 			if (config.privateKey)
 			{
 				var keyPath = config.privateKey;
@@ -518,16 +567,12 @@ class Sftp extends FileInterface
 						else resolve(data);
 					});
 				});
-				options = {
-					privateKey: keybuf,
-					passphrase: config.passphrase
-				}
+				options.privateKey = keybuf;
+				options.passphrase = config.passphrase;
 			}
 			else
 			{
-				options = {
-					password,
-				};
+				options.password = password;
 			}
 
 			options.host = config.host;
@@ -623,14 +668,16 @@ class Sftp extends FileInterface
 
 function _errorWrap(err):Error
 {
+	var nerr:Error;
 	if (err.code)
 	{
-		return new Error(err.message + "[" + err.code + "]");
+		nerr = new Error(err.message + "[" + err.code + "]");
 	}
 	else
 	{
-		return new Error(err.message);
+		nerr = new Error(err.message);
 	}
+	return nerr;
 }
 
 export async function init(task:work.Task):Promise<FileInterface>

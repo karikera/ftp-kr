@@ -57,7 +57,7 @@ export class Includer
 						this.errors.push([src, tag.lineNumber, e.message]);
 						break;
 					case "FILE_NOT_FOUND":
-						this.errors.push([src, tag.lineNumber, "File not found: "+path.resolve(file)]);
+						this.errors.push([src, tag.lineNumber, "File not found: "+file.fsPath]);
 						break;
 					default: throw e;
 					}

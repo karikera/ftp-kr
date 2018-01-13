@@ -2,7 +2,6 @@
 import FtpClientO = require('ftp');
 import SftpClientO = require('ssh2-sftp-client');
 import * as ssh2 from 'ssh2';
-import * as ofs from 'fs';
 import * as iconv from 'iconv-lite';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -10,8 +9,8 @@ import * as fs from './util/fs';
 import * as log from './util/log';
 import * as work from './util/work';
 import * as util from './util/util';
+import * as vsutil from './util/vsutil';
 import * as cfg from './config';
-import * as vsutil from './vsutil';
 import * as stream from 'stream';
 
 class FtpClient extends FtpClientO
@@ -134,77 +133,67 @@ class SftpClient extends SftpClientO
 	}
 }
 
-
-const config = cfg.config;
-
-export const DIRECTORY_NOT_FOUND = 1;
-export const FILE_NOT_FOUND = 2;
-
-const ALREADY_DESTROYED = 'destroyed connection access';
-
-var client:FileInterface|null = null;
-
-var connectionInfo:string = '';
-
-var passwordInMemory:string|undefined = undefined;
-
-function makeConnectionInfo():string
-{
-	const usepk = config.protocol === 'sftp' && !!config.privateKey;
-	const datas = [
-		config.protocol,
-		config.username,
-		config.password,
-		config.host,
-		config.port,
-		config.remotePath,
-		usepk,
-		usepk ? config.privateKey : undefined,
-		usepk ? config.passphrase : undefined
-	];
-	return JSON.stringify(datas);
-}
-
-function bin2str(bin:string):string
-{
-    var buf = iconv.encode(bin, 'binary');
-    return iconv.decode(buf, config.fileNameEncoding);
-}
-function str2bin(str:string):string
-{
-    var buf = iconv.encode(str, config.fileNameEncoding);
-    return iconv.decode(buf, 'binary');
-}
-function toftpPath(workpath:string):string
-{
-    return str2bin(config.remotePath+workpath);
-}
-
 class FileInfo
 {
 	type:string = '';
 	name:string = '';
 	size:number = 0;
 	date:number = 0;
-
-	constructor()
-	{
-	}
 }
+
+export const DIRECTORY_NOT_FOUND = 1;
+export const FILE_NOT_FOUND = 2;
+
+const ALREADY_DESTROYED = 'destroyed connection access';
+
+function _errorWrap(err):Error
+{
+	var nerr:Error;
+	if (err.code)
+	{
+		nerr = new Error(err.message + "[" + err.code + "]");
+	}
+	else
+	{
+		nerr = new Error(err.message);
+	}
+	return nerr;
+}
+
 
 abstract class FileInterface
 {
-	destroyTimeout:NodeJS.Timer|null = null;
+	protected destroyTimeout:NodeJS.Timer|null = null;
+	protected readonly config:cfg.Config;
+	protected readonly logger:log.Logger;
+	protected readonly state:vsutil.StateBar;
 	
-	constructor()
+	constructor(public readonly workspace:fs.Workspace)
 	{
-		client = this;
+		this.config = workspace.query(cfg.Config);
+		this.logger = workspace.query(log.Logger);
+		this.state = workspace.query(vsutil.StateBar);
 	}
 
 	abstract connect(password?:string):Promise<void>;
 
 	abstract destroyed():boolean;
 
+	private bin2str(bin:string):string
+	{
+		var buf = iconv.encode(bin, 'binary');
+		return iconv.decode(buf, this.config.options.fileNameEncoding);
+	}
+	private str2bin(str:string):string
+	{
+		var buf = iconv.encode(str, this.config.options.fileNameEncoding);
+		return iconv.decode(buf, 'binary');
+	}
+	private toftpPath(workpath:string):string
+	{
+		return this.str2bin(this.config.options.remotePath+'/'+workpath);
+	}
+	
 	cancelDestroyTimeout():void
 	{
 		if (!this.destroyTimeout)
@@ -218,43 +207,44 @@ abstract class FileInterface
 	{
 		this.cancelDestroyTimeout();
 		this.destroyTimeout = setTimeout(()=>{
-			log.message('Disconnected');
+			this.logger.message('Disconnected');
 			this.destroy();
-		}, config.connectionTimeout ? config.connectionTimeout : 60000);
+		}, this.config.options.connectionTimeout ? this.config.options.connectionTimeout : 60000);
 	}
 
 	destroy():void
 	{
 		this.cancelDestroyTimeout();
-		client = null;
+		const ftp = this.workspace.query(FtpManager);
+		ftp.client = null;
 	}
 
 	_callWithName<T>(name:string, workpath:string, ignorecode:number, defVal:T, callback:(name:string)=>Promise<T>):Promise<T>
 	{
 		this.cancelDestroyTimeout();
-		vsutil.setState(name +" "+workpath);
-		log.message(name +": "+workpath);
-		const ftppath = toftpPath(workpath);
+		this.state.set(name +" "+workpath);
+		this.logger.message(name +": "+workpath);
+		const ftppath = this.toftpPath(workpath);
 		return callback(ftppath).then(v=>{
-			vsutil.setState("");
+			this.state.close();
 			this.update();
 			return v;
 		})
 		.catch((err):T=>{
-			vsutil.setState("");
+			this.state.close();
 			this.update();
 			if (err.ftpCode === ignorecode) return defVal;
-			log.message(name+" fail: "+workpath);
+			this.logger.message(name+" fail: "+workpath);
 			throw _errorWrap(err);
 		});
 	}
 
-	upload(workpath:string, localpath:string):Promise<void>
+	upload(workpath:string, localpath:fs.Path):Promise<void>
 	{
 		this.cancelDestroyTimeout();
-		vsutil.setState("upload "+workpath);
-		log.message("upload: "+workpath);
-		const ftppath = toftpPath(workpath);
+		this.state.set("upload "+workpath);
+		this.logger.message("upload: "+workpath);
+		const ftppath = this.toftpPath(workpath);
 
 		return this._put(localpath, ftppath)
 		.catch(err=>{
@@ -265,39 +255,39 @@ abstract class FileInterface
 			.then(()=>this._put(localpath, ftppath));
 		})
 		.then(()=>{
-			vsutil.setState("");
+			this.state.close();
 			this.update();
 		})
 		.catch((err)=>{
-			vsutil.setState("");
+			this.state.close();
 			this.update();
-			log.message("upload fail: "+workpath);
+			this.logger.message("upload fail: "+workpath);
 			throw _errorWrap(err);
 		});
 	}
 
-	download(localpath:string, workpath:string):Promise<void>
+	download(localpath:fs.Path, workpath:string):Promise<void>
 	{
 		this.cancelDestroyTimeout();
-		vsutil.setState("download "+workpath);
-		log.message("download: "+workpath);
-		const ftppath = toftpPath(workpath);
+		this.state.set("download "+workpath);
+		this.logger.message("download: "+workpath);
+		const ftppath = this.toftpPath(workpath);
 
 		return this._get(ftppath)
 		.then((stream)=>{
 			return new Promise<void>(resolve=>{
 				stream.once('close', ()=>{
-					vsutil.setState("");
+					this.state.close();
 					this.update();
 					resolve();
 				});
-				stream.pipe(ofs.createWriteStream(localpath));
+				stream.pipe(localpath.createWriteStream());
 			});
 		})
 		.catch(err=>{
-			vsutil.setState("");
+			this.state.close();
 			this.update();
-			log.message("download fail: "+workpath);
+			this.logger.message("download fail: "+workpath);
 			throw _errorWrap(err);
 		});
 	}
@@ -305,22 +295,22 @@ abstract class FileInterface
 	list(workpath:string):Promise<FileInfo[]>
 	{
 		this.cancelDestroyTimeout();
-		vsutil.setState("list "+workpath);
-		log.message("list: "+workpath);
+		this.state.set("list "+workpath);
+		this.logger.message("list: "+workpath);
 
-		var ftppath = toftpPath(workpath);
+		var ftppath = this.toftpPath(workpath);
 		if (!ftppath) ftppath = ".";
 
 		return this._list(ftppath).then((list)=>{
-			vsutil.setState("");
+			this.state.close();
 			this.update();
 
 			const errfiles:string[] = [];
 			for (var i = 0; i<list.length; i++)
 			{
 				const file = list[i];
-				const fn = file.name = bin2str(file.name);
-				if (!config.ignoreWrongFileEncoding)
+				const fn = file.name = this.bin2str(file.name);
+				if (!this.config.options.ignoreWrongFileEncoding)
 				{
 					if (fn.indexOf('�') !== -1 || fn.indexOf('?') !== -1)
 						errfiles.push(fn);
@@ -328,21 +318,21 @@ abstract class FileInterface
 			}
 			if (errfiles.length)
 			{
-				vsutil.errorConfirm("Invalid encoding detected. Please set fileNameEncoding correctly\n"+errfiles.join('\n'), 'Open config', 'Ignore after')
+				this.logger.errorConfirm("Invalid encoding detected. Please set fileNameEncoding correctly\n"+errfiles.join('\n'), 'Open config', 'Ignore after')
 				.then((res)=>{
 					switch(res)
 					{
-					case 'Open config': vsutil.open(cfg.PATH); break; 
-					case 'Ignore after': config.ignoreWrongFileEncoding = true; break;
+					case 'Open config': vsutil.open(this.config.path); break; 
+					case 'Ignore after': this.config.options.ignoreWrongFileEncoding = true; break;
 					}
 				});
 			}
 			return list;
 		})
 		.catch(err=>{
-			vsutil.setState("");
+			this.state.close();
 			this.update();
-			log.message("list fail: "+workpath);
+			this.logger.message("list fail: "+workpath);
 			throw _errorWrap(err);
 		});
 	}
@@ -370,7 +360,7 @@ abstract class FileInterface
 	abstract _mkdir(path:string, recursive:boolean):Promise<void>;
 	abstract _rmdir(path:string, recursive:boolean):Promise<void>;
 	abstract _delete(workpath:string):Promise<void>;
-	abstract _put(localpath:string, ftppath:string):Promise<void>;
+	abstract _put(localpath:fs.Path, ftppath:string):Promise<void>;
 	abstract _get(ftppath:string):Promise<NodeJS.ReadableStream>;
 	abstract _list(ftppath:string):Promise<Array<FileInfo>>;
 	_lastmod(ftppath:string):Promise<number>
@@ -383,20 +373,13 @@ class Ftp extends FileInterface
 {
 	client:FtpClient|null = new FtpClient();
 
-	constructor()
-	{
-		super();
-	}
-
 	destroyed():boolean
 	{
-		return client === null;
+		return this.client === null;
 	}
 
 	connect(password?:string):Promise<void>
 	{
-		client = this;
-
 		return new Promise<void>((resolve, reject)=>{
 			if (!this.client) return Promise.reject(Error(ALREADY_DESTROYED));
 
@@ -413,6 +396,7 @@ class Ftp extends FileInterface
 			this.client.on("error", reject);
 
 			var options:FtpClientO.Options;
+			const config = this.config.options;
 			if (config.protocol === 'ftps')
 			{
 				options = {
@@ -486,11 +470,11 @@ class Ftp extends FileInterface
 		});
 	}
 
-	_put(localpath:string, ftppath:string):Promise<void>
+	_put(localpath:fs.Path, ftppath:string):Promise<void>
 	{
 		const client = this.client;
 		if (!client) return Promise.reject(Error(ALREADY_DESTROYED));
-		return Ftp.wrapToPromise<void>(callback=>client.put(localpath, ftppath, callback))
+		return Ftp.wrapToPromise<void>(callback=>client.put(localpath.fsPath, ftppath, callback))
 		.catch(e=>{
 			if (e.code === 553) e.ftpCode = DIRECTORY_NOT_FOUND;
 			throw e;
@@ -537,14 +521,9 @@ class Sftp extends FileInterface
 {
 	client:SftpClientO|null = new SftpClient;
 
-	constructor()
-	{
-		super();
-	}
-	
 	destroyed():boolean
 	{
-		return client === null;
+		return this.client === null;
 	}
 
 	async connect(password?:string):Promise<void>
@@ -554,19 +533,11 @@ class Sftp extends FileInterface
 			if (!this.client) throw Error(ALREADY_DESTROYED);
 
 			var options:ssh2.ConnectConfig = {};
+			const config = this.config.options;
 			if (config.privateKey)
 			{
 				var keyPath = config.privateKey;
-				const keybuf = await new Promise<Buffer>((resolve, reject)=>{
-					if (!path.isAbsolute(keyPath))
-					{
-						keyPath = path.join(fs.workspace, '.vscode', keyPath);
-					}
-					ofs.readFile(keyPath, 'utf-8', (err, data:Buffer)=>{
-						if (err) reject(err);
-						else resolve(data);
-					});
-				});
+				const keybuf = await this.workspace.child('.vscode',keyPath).open();
 				options.privateKey = keybuf;
 				options.passphrase = config.passphrase;
 			}
@@ -626,10 +597,10 @@ class Sftp extends FileInterface
 		return this.client.mkdir(ftppath, true);
 	}
 
-	_put(localpath:string, ftppath:string):Promise<void>
+	_put(localpath:fs.Path, ftppath:string):Promise<void>
 	{
 		if (!this.client) return Promise.reject(Error(ALREADY_DESTROYED));
-		return this.client.put(localpath, ftppath, false, null)
+		return this.client.put(localpath.fsPath, ftppath, false, null)
 		.catch(e=>{
 			if (e.code === 2) e.ftpCode = DIRECTORY_NOT_FOUND;
 			throw e;
@@ -666,169 +637,208 @@ class Sftp extends FileInterface
 	}
 }
 
-function _errorWrap(err):Error
+export class FtpManager implements fs.WorkspaceItem
 {
-	var nerr:Error;
-	if (err.code)
-	{
-		nerr = new Error(err.message + "[" + err.code + "]");
-	}
-	else
-	{
-		nerr = new Error(err.message);
-	}
-	return nerr;
-}
+	client:FileInterface|null = null;
 
-export async function init(task:work.Task):Promise<FileInterface>
-{
-	const coninfo = makeConnectionInfo();
-    if (client)
-	{
-		if (coninfo === connectionInfo)
-		{
-			client.update();
-			return Promise.resolve(client);
-		}
-		log.message('Disconnected');
-		client.destroy();
-		passwordInMemory = undefined;
-    }
-	connectionInfo = coninfo;
+	private connectionInfo:string = '';
+	private passwordInMemory:string|undefined = undefined;
 	
-	var newclient:FileInterface;
-	switch (config.protocol)
+	private readonly config:cfg.Config;
+	private readonly logger:log.Logger;
+
+	constructor(public readonly workspace:fs.Workspace)
 	{
-	case 'sftp': newclient = new Sftp; break;
-	case 'ftp': newclient = new Ftp; break;
-	case 'ftps': newclient = new Ftp; break;
-	default: throw Error(`Invalid protocol ${config.protocol}`);
+		this.config = workspace.query(cfg.Config);
+		this.logger = workspace.query(log.Logger);
 	}
 
-	var url = '';
-	url += config.protocol;
-	url += '://';
-	url += config.host;
-	if (config.port)
+	dispose():void
 	{
-		url += ':';
-		url += config.port;
-	}
-	url += config.remotePath;
-	url += '/';
-
-	const usepk = config.protocol === 'sftp' && !!config.privateKey;
-
-	async function tryToConnect(password:string|undefined):Promise<void>
-	{
-		log.message(`Try connect to ${url} with user ${config.username}`);
-		await task.with(newclient.connect(password));
 	}
 
-	async function tryToConnectOrErrorMessage(password:string|undefined):Promise<string|undefined>
+	private makeConnectionInfo():string
 	{
-		try
+		const config = this.config.options;
+		const usepk = config.protocol === 'sftp' && !!config.privateKey;
+		const datas = [
+			config.protocol,
+			config.username,
+			config.password,
+			config.host,
+			config.port,
+			config.remotePath,
+			usepk,
+			usepk ? config.privateKey : undefined,
+			usepk ? config.passphrase : undefined
+		];
+		return JSON.stringify(datas);
+	}
+	
+	public async init(task:work.Task):Promise<FileInterface>
+	{
+		const that = this;
+		const coninfo = this.makeConnectionInfo();
+		if (this.client)
 		{
-			await tryToConnect(password);
-			return undefined;
-		}
-		catch(err)
-		{
-			var error:string;
-			switch (err.message)
+			if (coninfo === this.connectionInfo)
 			{
-			case 'Login incorrect.':
-			case 'All configured authentication methods failed':
-				error = 'Authentication failed';
-				break;
-			default:
+				this.client.update();
+				return Promise.resolve(this.client);
+			}
+			this.logger.message('Disconnected');
+			this.client.destroy();
+			this.passwordInMemory = undefined;
+		}
+		this.connectionInfo = coninfo;
+		
+		const config = this.config.options;
+
+		var newclient:FileInterface;
+		switch (config.protocol)
+		{
+		case 'sftp': newclient = new Sftp(this.workspace); break;
+		case 'ftp': newclient = new Ftp(this.workspace); break;
+		case 'ftps': newclient = new Ftp(this.workspace); break;
+		default: throw Error(`Invalid protocol ${config.protocol}`);
+		}
+		this.client = newclient;
+	
+		var url = '';
+		url += config.protocol;
+		url += '://';
+		url += config.host;
+		if (config.port)
+		{
+			url += ':';
+			url += config.port;
+		}
+		url += '/';
+		url += config.remotePath;
+		url += '/';
+	
+		const usepk = config.protocol === 'sftp' && !!config.privateKey;
+	
+		async function tryToConnect(password:string|undefined):Promise<void>
+		{
+			that.logger.message(`Try connect to ${url} with user ${config.username}`);
+			await task.with(newclient.connect(password));
+		}
+	
+		async function tryToConnectOrErrorMessage(password:string|undefined):Promise<string|undefined>
+		{
+			try
+			{
+				await tryToConnect(password);
+				return undefined;
+			}
+			catch(err)
+			{
+				var error:string;
+				switch (err.code)
+				{
+				case 530:
+					error = 'Authentication failed';
+					break;
+				default:
+					switch (err.message)
+					{
+					case 'Login incorrect.':
+					case 'All configured authentication methods failed':
+						error = 'Authentication failed';
+						break;
+					default:
+						newclient.destroy();
+						throw _errorWrap(err);
+					}
+					break;
+				}
+				that.logger.message(error);
+				return error;
+			}
+		}
+	
+		_ok:if (!usepk && config.password === undefined)
+		{
+			var errorMessage:string|undefined;
+			if (this.passwordInMemory !== undefined)
+			{
+				errorMessage = await tryToConnectOrErrorMessage(this.passwordInMemory);
+				if (errorMessage === undefined) break _ok;
+			}
+			else for (;;)
+			{
+				const promptedPassword = await vscode.window.showInputBox({
+					prompt:'ftp-kr: '+config.protocol.toUpperCase()+" Password Request",
+					password: true,
+					ignoreFocusOut: true,
+					placeHolder: errorMessage
+				});
+				if (promptedPassword === undefined)
+				{
+					newclient.destroy();
+					throw 'PASSWORD_CANCEL';
+				}
+				errorMessage = await tryToConnectOrErrorMessage(promptedPassword);
+				if (errorMessage === undefined)
+				{
+					if (config.keepPasswordInMemory !== false)
+					{
+						this.passwordInMemory = promptedPassword;
+					}
+					break;
+				}
+			}
+		}
+		else
+		{
+			try
+			{
+				await tryToConnect(config.password);
+			}
+			catch (err) {
 				newclient.destroy();
 				throw _errorWrap(err);
 			}
-			log.message(error);
-			return error;
 		}
+			
+		this.logger.message('Connected');
+		return newclient;
 	}
-
-	_ok:if (!usepk && config.password === undefined)
+	
+	public rmdir(task:work.Task, workpath:string):Promise<void>
 	{
-		var errorMessage:string|undefined;
-		if (passwordInMemory !== undefined)
-		{
-			errorMessage = await tryToConnectOrErrorMessage(passwordInMemory);
-			if (errorMessage === undefined) break _ok;
-		}
-		else for (;;)
-		{
-			const promptedPassword = await vscode.window.showInputBox({
-				prompt:'ftp-kr: '+config.protocol.toUpperCase()+" Password Request",
-				password: true,
-				ignoreFocusOut: true,
-				placeHolder: errorMessage
-			});
-			if (promptedPassword === undefined)
-			{
-				newclient.destroy();
-				throw 'PASSWORD_CANCEL';
-			}
-			errorMessage = await tryToConnectOrErrorMessage(promptedPassword);
-			if (errorMessage === undefined)
-			{
-				if (config.keepPasswordInMemory !== false)
-				{
-					passwordInMemory = promptedPassword;
-				}
-				break;
-			}
-		}
+		return this.init(task).then(client => task.with(client.rmdir(workpath)));
 	}
-	else
+	
+	public remove(task:work.Task, workpath:string):Promise<void>
 	{
-		try
-		{
-			await tryToConnect(config.password);
-		}
-		catch (err) {
-			newclient.destroy();
-			throw _errorWrap(err);
-		}
+		return this.init(task).then(client => task.with(client.delete(workpath)));
 	}
-		
-	log.message('Connected');
-	return newclient;
-}
-
-export function rmdir(task:work.Task, workpath:string):Promise<void>
-{
-	return init(task).then(client => task.with(client.rmdir(workpath)));
-}
-
-export function remove(task:work.Task, workpath:string):Promise<void>
-{
-	return init(task).then(client => task.with(client.delete(workpath)));
-}
-
-export function mkdir(task:work.Task, workpath:string):Promise<void>
-{
-	return init(task).then(client => task.with(client.mkdir(workpath)));
-}
-
-export function upload(task:work.Task, workpath:string, localpath:string):Promise<void>
-{
-	return init(task).then(client => task.with(client.upload(workpath, localpath)));
-}
-
-export function download(task:work.Task, localpath:string, workpath:string):Promise<void>
-{
-	return init(task).then(client => task.with(client.download(localpath, workpath)));
-}
-
-export function list(task:work.Task, workpath:string):Promise<FileInfo[]>
-{
-	return init(task).then(client => task.with(client.list(workpath)));
-}
-
-export function cleanPasswordInMemory():void
-{
-	passwordInMemory = undefined;
+	
+	public mkdir(task:work.Task, workpath:string):Promise<void>
+	{
+		return this.init(task).then(client => task.with(client.mkdir(workpath)));
+	}
+	
+	public upload(task:work.Task, workpath:string, localpath:fs.Path):Promise<void>
+	{
+		return this.init(task).then(client => task.with(client.upload(workpath, localpath)));
+	}
+	
+	public download(task:work.Task, localpath:fs.Path, workpath:string):Promise<void>
+	{
+		return this.init(task).then(client => task.with(client.download(localpath, workpath)));
+	}
+	
+	public list(task:work.Task, workpath:string):Promise<FileInfo[]>
+	{
+		return this.init(task).then(client => task.with(client.list(workpath)));
+	}
+	
+	public cleanPasswordInMemory():void
+	{
+		this.passwordInMemory = undefined;
+	}
+	
 }

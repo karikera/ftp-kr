@@ -166,16 +166,30 @@ class TaskImpl implements Task
 	}
 }
 
-export class Scheduler
+export class Scheduler implements fs.WorkspaceItem
 {
 	public currentTask:TaskImpl|null = null;
 	private nextTask:TaskImpl|null = null;
 	private lastTask:TaskImpl|null = null;
+	public readonly logger:log.Logger;
 
 	private promise:Promise<void> = Promise.resolve();
 
-	constructor(readonly logger:log.Logger, private name:string)
+	constructor(arg:log.Logger|fs.Workspace)
 	{
+		if (arg instanceof fs.Workspace)
+		{
+			this.logger = arg.query(log.Logger);
+		}
+		else
+		{
+			this.logger = arg;
+		}
+	}
+
+	public dispose()
+	{
+		this.cancel();
 	}
 
 	public cancel():void
@@ -185,13 +199,13 @@ export class Scheduler
 
 		task.cancel();
 
-		this.logger.message(`[${this.name}/${task.name}]task is cancelled`);
+		this.logger.message(`[${task.name}]task is cancelled`);
 		this.currentTask = null;
 
 		var next = task.next;
 		while (next)
 		{
-			this.logger.message(`[${this.name}/${next.name}]task is cancelled`);
+			this.logger.message(`[${next.name}]task is cancelled`);
 			next = next.next;
 		}
 
@@ -214,7 +228,7 @@ export class Scheduler
 		}
 		if (!this.currentTask)
 		{
-			this.logger.verbose(`[SCHEDULAR:${this.name}] busy`);
+			this.logger.verbose(`[SCHEDULAR] busy`);
 			this.progress();
 		}
 		return task.promise;
@@ -236,7 +250,7 @@ export class Scheduler
 		}
 		if (!this.currentTask)
 		{
-			this.logger.verbose(`[SCHEDULAR:${this.name}] busy`);
+			this.logger.verbose(`[SCHEDULAR] busy`);
 			this.progress();
 		}
 		return task.promise;
@@ -247,7 +261,7 @@ export class Scheduler
 		const task = this.nextTask;
 		if (!task)
 		{
-			this.logger.verbose(`[SCHEDULAR:${this.name}] idle`);
+			this.logger.verbose(`[SCHEDULAR] idle`);
 			this.currentTask = null;
 			return;
 		}

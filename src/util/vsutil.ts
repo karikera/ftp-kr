@@ -5,7 +5,39 @@ import * as fs from './fs';
 const window = vscode.window;
 const workspace = vscode.workspace;
 
-var statebar:vscode.StatusBarItem|null = null;
+export class StateBar implements fs.WorkspaceItem
+{
+	private statebar:vscode.StatusBarItem|undefined;
+	private disposed:boolean = false;
+	
+	constructor(workspace:fs.Workspace)
+	{
+	}
+
+	public dispose()
+	{
+		if (this.disposed) return;
+		this.close();
+		this.disposed = true;
+	}
+
+	public close()
+	{
+		if (this.statebar)
+		{
+			this.statebar.dispose();
+			this.statebar = undefined;
+		}
+	}
+
+	public set(state:string):void
+	{
+		if (this.disposed) return;
+		if (!this.statebar) this.statebar = window.createStatusBarItem();
+		this.statebar.text = state;
+		this.statebar.show();
+	}
+}
 
 export var context:vscode.ExtensionContext;
 
@@ -14,9 +46,35 @@ export function setContext(ctx:vscode.ExtensionContext):void
 	context = ctx;
 }
 
-export function selectWorkspace():Promise<fs.Workspace|null>
+export function createWorkspace():Promise<fs.Workspace|undefined>
 {
-	return new Promise<fs.Workspace|null>((resolve, reject)=>{
+	return new Promise<fs.Workspace|undefined>((resolve, reject)=>{
+		const pick = new QuickPick;
+		if (!workspace.workspaceFolders)
+		{
+			reject(Error("Need workspace"));
+			return;
+		}
+		if (workspace.workspaceFolders.length === 1)
+		{
+			resolve(fs.Workspace.createInstance(workspace.workspaceFolders[0]));
+			return;
+		}
+		for(const ws of workspace.workspaceFolders)
+		{
+			const fsws = fs.Workspace.getInstance(ws);
+			var name = ws.name;
+			if (fsws) name += ' [inited]';
+			pick.item(name, ()=>resolve(fs.Workspace.createInstance(ws)));
+		}
+		pick.oncancel = ()=>resolve(undefined);
+		pick.open("Select Workspace");
+	});
+}
+
+export function selectWorkspace():Promise<fs.Workspace|undefined>
+{
+	return new Promise<fs.Workspace|undefined>((resolve, reject)=>{
 		const pick = new QuickPick;
 		for(const ws of fs.Workspace.all())
 		{
@@ -32,7 +90,7 @@ export function selectWorkspace():Promise<fs.Workspace|null>
 			pick.items[0].onselect();
 			return;
 		}
-		pick.oncancel = ()=>resolve(null);
+		pick.oncancel = ()=>resolve(undefined);
 		pick.open("Select Workspace");
 	});
 }
@@ -56,15 +114,6 @@ export function fileOrEditorFile(file: any): Promise<fs.Path> {
 	{
 		return Promise.reject(e);
 	}
-}
-
-export function setState(state:string):void
-{
-	var bar;
-	if (statebar) bar = statebar;
-	else bar = statebar = window.createStatusBarItem();
-	bar.text = state;
-	bar.show();
 }
 
 export function info(info:string, ...items:string[]):Thenable<string|undefined>
@@ -138,4 +187,11 @@ export async function open(path:fs.Path, line?:number, column?:number):Promise<v
 		editor.revealRange(new vscode.Range(pos, pos));		
 	}
 	return editor;
+}
+
+export async function openNew(content:string):Promise<vscode.TextDocument>
+{
+	const doc = await workspace.openTextDocument({content});
+	window.showTextDocument(doc);
+	return doc;
 }

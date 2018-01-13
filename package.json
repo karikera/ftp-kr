@@ -1,7 +1,7 @@
 {
   "name": "ftp-kr",
   "displayName": "ftp-kr",
-  "description": "FTP sync & Closure Compiler for ME!",
+  "description": "FTP sync extension",
   "license": "MIT",
   "version": "1.1.7",
   "publisher": "ruakr",
@@ -31,26 +31,6 @@
       {
         "command": "ftpkr.cancel",
         "title": "Cancel All",
-        "category": "ftp-kr"
-      },
-      {
-        "command": "ftpkr.makejson",
-        "title": "Generate make.json",
-        "category": "ftp-kr"
-      },
-      {
-        "command": "ftpkr.closureCompile",
-        "title": "Closure Compile",
-        "category": "ftp-kr"
-      },
-      {
-        "command": "ftpkr.closureCompileAll",
-        "title": "Closure Compile All",
-        "category": "ftp-kr"
-      },
-      {
-        "command": "ftpkr.generateExtern",
-        "title": "Closure Compiler Generate Extern",
         "category": "ftp-kr"
       },
       {

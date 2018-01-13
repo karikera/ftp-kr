@@ -2,7 +2,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as util from './util';
-import { workspace, Uri, WorkspaceFolder, ParameterInformation } from 'vscode';
+import * as event from './event';
+import { workspace, Uri, WorkspaceFolder, ParameterInformation, Disposable } from 'vscode';
 import glob from './pglob';
 
 
@@ -26,17 +27,15 @@ function mkdirParent(dirPath:string, callback:(err?:Error)=>void):void
 
 export type Stats = fs.Stats;
 
-export interface FileError extends Error
-{
-	path?:Path;
-	line?:number;
-	column?:number;
-}
-
 export class Path
 {
 	constructor(public readonly uri:Uri)
 	{
+	}
+
+	public toString():string
+	{
+		throw Error('Blocked to find bug');
 	}
 
 	public get fsPath():string
@@ -46,16 +45,37 @@ export class Path
 
 	workspace():Workspace
 	{
-		const ws = workspace.getWorkspaceFolder(this.uri);
-		if (ws === undefined) throw Error(this.fsPath+" is not in workspace");
-		return Workspace.getInstance(ws);
+		const workspaceFolder = workspace.getWorkspaceFolder(this.uri);
+		if (!workspaceFolder) throw Error(this.fsPath+" is not in workspace");
+		const fsworkspace = Workspace.getInstance(workspaceFolder);
+		if (!fsworkspace) throw Error(this.fsPath+" ftp-kr is not inited");
+		return fsworkspace;
 	}
 
+	/**
+	 * path from workspace
+	 */
 	workpath():string
 	{
-		const ws = this.workspace();
-		if (!this.fsPath.startsWith(ws.fsPath)) throw Error(this.fsPath+" is not in workspace");
-		return this.uri.fsPath.substr(ws.fsPath.length);
+		const workspacePath = this.workspace().fsPath;
+		const fsPath = this.fsPath;
+		if (fsPath.startsWith(workspacePath))
+		{
+			if (workspacePath.length === fsPath.length) return '';
+			const workpath = fsPath.substr(workspacePath.length);
+			if (workpath.startsWith(path.sep)) 
+			{
+				if (path.sep === '\\') return workpath.replace(/\\/g, '/').substr(1);
+				if (path.sep !== '/') return workpath.replace(new RegExp(path.sep, 'g'), '/').substr(1);
+				return workpath.substr(1);
+			}
+		}
+		throw Error(`${fsPath} is not in workspace`);
+	}
+
+	in(parent:Path):boolean
+	{
+		return this.fsPath.startsWith(parent.fsPath + path.sep);
 	}
 
 	initJson(defaultValue:Object):Promise<any>
@@ -94,22 +114,30 @@ export class Path
 	async children():Promise<Path[]>
 	{
 		const files = await util.callbackToPromise<string[]>((callback)=>fs.readdir(this.fsPath, callback));
-		return files.map(Path.parse);
+		return files.map(filename=>this.child(filename));
 	}
 
 	static parse(pathname:string)
 	{
-		return new Path(Uri.parse(pathname));
+		return new Path(Uri.file(pathname));
 	}
 
 	sibling(filename:string):Path
 	{
-		return Path.parse(path.resolve(path.dirname(this.uri.fsPath), filename));
+		return Path.parse(path.join(path.dirname(this.uri.fsPath), filename));
 	}
 
-	child(filename:string):Path
+	child(...filename:string[]):Path
 	{
-		return Path.parse(path.resolve(this.uri.fsPath, filename));
+		var i = filename.length;
+		while (i--)
+		{
+			if (path.isAbsolute(filename[i]))
+			{
+				return Path.parse(path.join(...filename.slice(i)));
+			}
+		}
+		return Path.parse(path.join(this.uri.fsPath, ...filename));
 	}
 
 	parent():Path
@@ -181,6 +209,11 @@ export class Path
 		return util.callbackToPromise((callback)=>fs.readFile(this.fsPath, "utf-8", callback));
 	}
 
+	createWriteStream():fs.WriteStream
+	{
+		return fs.createWriteStream(this.fsPath);
+	}
+
 	exists():Promise<boolean>
 	{
 		return new Promise((resolve) => fs.exists(this.fsPath, resolve));
@@ -195,7 +228,7 @@ export class Path
 		}
 		catch(err)
 		{
-			err.path = this;
+			err.fsPath = this;
 			throw err;
 		}
 	}
@@ -220,32 +253,46 @@ export class Path
 	{
 		return this.stat().then(stat=>stat.isDirectory());
 	}
-
-
 }
 
-export interface WorkspaceItem<T>
+export interface WorkspaceItem
+{
+	dispose():void;
+}
+
+interface WorkspaceItemConstructor<T extends WorkspaceItem>
 {
 	new(workspace:Workspace):T;
 }
 
 interface ItemMap
 {
-	get<T>(item:WorkspaceItem<T>):T|undefined;
-	set<T>(item:WorkspaceItem<T>, T):void;
+	values():Iterable<WorkspaceItem>;
+	get<T extends WorkspaceItem>(item:WorkspaceItemConstructor<T>):T|undefined;
+	set<T extends WorkspaceItem>(item:WorkspaceItemConstructor<T>, T):void;
+	clear():void;
+}
+
+export enum WorkspaceOpenState
+{
+	CREATED,
+	OPENED
 }
 
 export class Workspace extends Path
 {
-	private static wsmap = new WeakMap<WorkspaceFolder, Workspace>();
-	private items:ItemMap = new Map;
+	private static wsmap = new Map<string, Workspace>();
+	private static wsloading = new Map<string, Workspace>();
+	private readonly items:ItemMap = new Map;
+	public readonly name:string;
 
-	constructor(public readonly workspaceFolder:WorkspaceFolder)
+	constructor(public readonly workspaceFolder:WorkspaceFolder, public readonly openState:WorkspaceOpenState)
 	{
 		super(workspaceFolder.uri);
+		this.name = workspaceFolder.name;
 	}
 
-	public item<T>(type:WorkspaceItem<T>):T
+	public query<T extends WorkspaceItem>(type:WorkspaceItemConstructor<T>):T
 	{
 		var item = this.items.get(type);
 		if (item === undefined)
@@ -256,30 +303,111 @@ export class Workspace extends Path
 		return item;
 	}
 
-	get name():string
+	private dispose():void
 	{
-		return this.workspaceFolder.name;
+		for(const item of this.items.values())
+		{
+			item.dispose();
+		}
+		this.items.clear();
+		
 	}
 
-	static getInstance(workspace:WorkspaceFolder):Workspace
+	static getInstance(workspace:WorkspaceFolder):Workspace|undefined
 	{
-		var ws = Workspace.wsmap.get(workspace);
-		if (!ws)
-		{
-			ws = new Workspace(workspace);
-			Workspace.wsmap.set(workspace, ws);
-		}
-		return ws;
+		return Workspace.wsmap.get(workspace.uri.fsPath);
 	}
+
+	static createInstance(workspaceFolder:WorkspaceFolder):Workspace|undefined
+	{
+		const workspacePath = workspaceFolder.uri.fsPath;
+		var fsws = Workspace.wsmap.get(workspacePath);
+		if (fsws) return fsws;
+		Workspace.wsloading.delete(workspacePath);
+		fsws = new Workspace(workspaceFolder, WorkspaceOpenState.CREATED);
+		Workspace.wsmap.set(workspacePath, fsws);
+		onNewWorkspace.fire(fsws);
+		return fsws;
+	}
+
+	static async load(workspaceFolder:WorkspaceFolder):Promise<void>
+	{
+		const fsws = new Workspace(workspaceFolder, WorkspaceOpenState.OPENED);
+		const workspacePath = workspaceFolder.uri.fsPath;
+		if (Workspace.wsloading.has(workspacePath)) return;
+	
+		Workspace.wsloading.set(workspacePath, fsws);
+		const existed = await fsws.child('.vscode/ftp-kr.json').exists();
+		
+		if (!Workspace.wsloading.has(workspacePath)) return;
+		Workspace.wsloading.delete(workspacePath);
+
+		if (existed)
+		{
+			Workspace.wsmap.set(workspacePath, fsws);
+			onNewWorkspace.fire(fsws);
+		}
+	}
+
+	static unload(workspaceFolder:WorkspaceFolder):void
+	{
+		const workspacePath = workspaceFolder.uri.fsPath;
+		Workspace.wsloading.delete(workspacePath);
+
+		const ws = Workspace.wsmap.get(workspacePath);
+		if (ws)
+		{
+			ws.dispose();
+			Workspace.wsmap.delete(workspacePath);
+		}
+	}
+	
+	static loadAll():void
+	{
+		workspaceWatcher = workspace.onDidChangeWorkspaceFolders(e=>{
+			for (const ws of e.added)
+			{
+				Workspace.load(ws);
+			}
+			for (const ws of e.removed)
+			{
+				Workspace.unload(ws);
+			}
+		});
+		if (workspace.workspaceFolders)
+		{
+			for(const ws of workspace.workspaceFolders)
+			{
+				Workspace.load(ws);
+			}
+		}
+	}
+
+	static unloadAll():void
+	{
+		if (workspaceWatcher)
+		{
+			workspaceWatcher.dispose();
+			workspaceWatcher = undefined;
+		}
+		for(const ws of Workspace.wsmap.values())
+		{
+			ws.dispose();
+		}
+		Workspace.wsmap.clear();
+		Workspace.wsloading.clear();
+	}
+
 
 	static first():Workspace
 	{
 		if (workspace.workspaceFolders)
 		{
-			const ws = workspace.workspaceFolders[0];
-			if (ws)
+			for (const ws of workspace.workspaceFolders)
 			{
-				return Workspace.getInstance(ws);
+				const fsws = Workspace.wsmap.get(ws.uri.fsPath);
+				if (!fsws) continue;
+				return fsws;
 			}
 		}
 		throw Error("Need workspace");
@@ -291,8 +419,13 @@ export class Workspace extends Path
 		{
 			for(const ws of workspace.workspaceFolders)
 			{
-				yield Workspace.getInstance(ws);
+				const fsws = Workspace.wsmap.get(ws.uri.fsPath);
+				if (fsws) yield fsws;
 			}
 		}
 	}
 }
+
+var workspaceWatcher:Disposable|undefined;
+
+export const onNewWorkspace = event.make<Workspace>();

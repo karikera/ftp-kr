@@ -12,36 +12,26 @@ enum LogLevelEnum
 }
 
 
-export class Logger
+export class Logger implements fs.WorkspaceItem
 {
 	public logLevel:LogLevelEnum = LogLevelEnum.NORMAL;
 	private output:OutputChannel|null = null;
-	public readonly name:string;
 	public static all:Set<Logger> = new Set;
 
 	constructor(name:string|fs.Workspace)
 	{
 		if (name instanceof fs.Workspace)
 		{
-			this.name = name.name+".ftp-kr";
+			name = "ftp-kr/" + name.name;
 		}
-		else
-		{
-			this.name = name;
-		}
+		this.output = window.createOutputChannel(name);
 		Logger.all.add(this);
-	}	
-	
-	private getOutput():OutputChannel
-	{
-		if (this.output) return this.output;
-		else return this.output = window.createOutputChannel(this.name);
 	}
-
+	
 	private print(message:string):void
 	{
-		const channel = this.getOutput();
-		channel.appendLine(message);
+		if (!this.output) return;
+		this.output.appendLine(message);
 	}
 
 	private log(level:LogLevelEnum, ...message:string[]):void
@@ -61,7 +51,7 @@ export class Logger
 	public setLogLevel(level:Level):void
 	{
 		this.logLevel = LogLevelEnum[level];
-		this.verbose(`${this.name}.logLevel = ${level}`);
+		this.verbose(`logLevel = ${level}`);
 
 		if (this.logLevel === defaultLogger.logLevel)
 		{
@@ -74,7 +64,6 @@ export class Logger
 				}
 			}
 			defaultLogger.logLevel = minLevel;
-			defaultLogger.verbose(`${defaultLogger.name}.logLevel = ${LogLevelEnum[minLevel]}`);
 		}
 	}
 	
@@ -95,7 +84,7 @@ export class Logger
 		if (err instanceof Error)
 		{
 			window.showErrorMessage(err.message, 'Detail')
-			.then(function(res){
+			.then(res=>{
 				if (res !== 'Detail') return;
 				var output = '[';
 				output += err.constructor.name;
@@ -113,14 +102,7 @@ export class Logger
 				}
 				output += '\n[Stack Trace]\n';
 				output += err.stack;
-				
-				const logfile = this.workspace.child('.vscode/ftp-kr.error.log');
-				logfile.create(output)
-				.then(()=>logfile.open())
-				.catch(()=>{
-					this.show();
-					this.log(LogLevelEnum.ERROR, output);
-				});
+				vsutil.openNew(output);
 			});
 		}
 		else
@@ -148,7 +130,7 @@ export class Logger
 		return window.showErrorMessage(msg, ...items);
 	}
 
-	public wrap(workspace:fs.Workspace, func:()=>void):void
+	public wrap(func:()=>void):void
 	{
 		try
 		{
@@ -162,8 +144,8 @@ export class Logger
 
 	public show():void
 	{
-		const out = this.getOutput();
-		out.show();
+		if (!this.output) return;
+		this.output.show();
 	}
 
 	public clear():void 
@@ -173,7 +155,7 @@ export class Logger
 		out.clear();
 	}
 
-	public dispose()
+	public dispose():void
 	{
 		const out = this.output;
 		if (!out) return;

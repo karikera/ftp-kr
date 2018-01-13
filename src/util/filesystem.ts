@@ -152,11 +152,11 @@ export class Directory extends FileCommon
 export class SymLink extends FileCommon
 {
 	target:string = '';
-	type:string = 'l';
 
 	constructor(parent:Directory, name:string)
 	{
 		super(parent, name);
+		this.type = 'l';
 	}
 
 	serialize():SerializedState

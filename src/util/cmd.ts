@@ -17,6 +17,7 @@ export const commands:Command = {};
 export async function runCommand(name:string, ...args:any[]):Promise<void>
 {
 	var cmdargs:Args = {};
+	const logger = cmdargs.workspace ? cmdargs.workspace.query(log.Logger) : log.defaultLogger;
 
 	try
 	{
@@ -29,11 +30,11 @@ export async function runCommand(name:string, ...args:any[]):Promise<void>
 		{
 		}
 
+		logger.verbose(`[Command] ${name}`);
 		await commands[name](cmdargs);
 	}
 	catch(err)
 	{
-		const logger = cmdargs.workspace ? cmdargs.workspace.item(log.Logger) : log.defaultLogger;
 		switch (err)
 		{
 		case work.CANCELLED:

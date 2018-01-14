@@ -1,18 +1,21 @@
 
-import * as fs from "./util/fs";
-import * as work from "./util/work";
-import * as log from "./util/log";
-import * as util from "./util/util";
-import * as vsutil from "./util/vsutil";
-import * as event from "./util/event";
 
 import {Options as FtpOptions} from 'ftp';
 import {ConnectConfig as SftpOptions} from 'ssh2';
 import minimatch = require('minimatch');
 
+import * as util from "./util/util";
+import * as event from "./util/event";
+
+import * as file from "./vsutil/file";
+import * as work from "./vsutil/work";
+import * as log from "./vsutil/log";
+import * as vsutil from "./vsutil/vsutil";
+
 var initTimeForVSBug:number = 0;
 
-const CONFIG_BASE:ConfigOptions = {
+
+const SERVER_CONFIG_BASE:ServerConfig = {
 	host: "",
 	username: "",
 	remotePath: "",
@@ -20,11 +23,19 @@ const CONFIG_BASE:ConfigOptions = {
 	port: 0,
 	fileNameEncoding: "utf8", 
 	ignoreWrongFileEncoding: false,
-	createSyncCache: true, 
+};
+
+const CONFIG_BASE:ConfigProperties = {
+	host: "",
+	username: "",
+	remotePath: "",
+	protocol: "ftp",
+	port: 0,
+	fileNameEncoding: "utf8", 
+	ignoreWrongFileEncoding: false,
 	autoUpload: true,
 	autoDelete: false,
 	autoDownload: false,
-	disableFtp: false,
 	ignore:[
 		".git",
 		"/.vscode/chrome",
@@ -34,7 +45,7 @@ const CONFIG_BASE:ConfigOptions = {
 		"/.vscode/ftp-kr.sync.*.json"
 	],
 };
-const CONFIG_INIT:ConfigOptions = {
+const CONFIG_INIT:ConfigProperties = {
 	host: "",
 	username: "",
 	password: "",
@@ -43,11 +54,9 @@ const CONFIG_INIT:ConfigOptions = {
 	port: 0,
 	fileNameEncoding: "utf8", 
 	ignoreWrongFileEncoding: false,
-	createSyncCache: true, 
 	autoUpload: true,
 	autoDelete: false,
 	autoDownload: false,
-	disableFtp: false,
 	ignore:[
 		".git",
 		"/.vscode/chrome",
@@ -81,7 +90,7 @@ declare global
 	interface Error
 	{
 		suppress?:boolean;
-		fsPath?:fs.Path;
+		fsPath?:file.File;
 		line?:number;
 		column?:number;
 	}
@@ -116,31 +125,90 @@ function patternToRegExp(pattern:string):RegExp
 	return new RegExp(regexp);
 }
 
-export interface ConfigOptions
+function findUndupplicatedSet<T>(dupPriority:string[], obj:T, objs:T[]):string[]
 {
+	const dupmap:{[key:string]:Set<ServerConfig>} = {};
+	for (const prop of dupPriority)
+	{
+		const set = new Set;
+		const value = obj[prop];
+		for (const other of objs)
+		{
+			if (other === obj) continue;
+			if (other[prop] === value)
+			{
+				set.add(other);
+				break;
+			}
+		}
+		dupmap[prop] = set;
+	}
+
+	function testDup(keys:string[]):boolean
+	{
+		_notdup:for (const other of objs)
+		{
+			if (other === obj) continue;
+			for (const key of keys)
+			{
+				if (dupmap[key].has(other)) continue;
+				continue _notdup;
+			}
+			return false;
+		}
+		return true;
+	}
+
+	const all = 1 << dupPriority.length;
+	for (var i=1;i<all;i++)
+	{
+		var v = i;
+		const arr:string[] = [];
+		for (const prop of dupPriority)
+		{
+			if (v & 1) arr.push(prop);
+			v >>= 1;
+		}
+		if (testDup(arr)) return arr;
+	}
+	return [];
+}
+
+export interface ServerConfig
+{
+	name?:string;
+	remotePath?:string;
+	protocol?:string;
+	fileNameEncoding?:string;
+
 	host?:string;
 	username?:string;
 	password?:string;
 	keepPasswordInMemory?:boolean;
-	remotePath:string;
-	protocol:string;
 	port?:number;
-	fileNameEncoding:string;
 	ignoreWrongFileEncoding?:boolean;
 	createSyncCache?:boolean;
-	autoUpload?:boolean;
-	autoDelete?:boolean;
-	autoDownload?:boolean;
-	disableFtp?:boolean;
-	ignore:(string|RegExp)[];
-
+	
 	passphrase?:string;
 	connectionTimeout?:number;
 	autoDownloadRefreshTime?:number;
+	refreshTime?:number;
 	privateKey?:string;
-
+	showGreeting?:boolean;
+	
 	ftpOverride?:FtpOptions;
 	sftpOverride?:SftpOptions;
+	
+	passwordInMemory?:string;
+}
+
+interface ConfigProperties extends ServerConfig
+{
+	ignore?:(string|RegExp)[];
+	altServer?:ServerConfig[];
+	autoUpload?:boolean;
+	autoDelete?:boolean;
+	autoDownload?:boolean;
 	logLevel?:log.Level;
 }
 
@@ -158,56 +226,98 @@ export function testInitTimeBiasForVSBug():boolean
 	return false;
 }
 
-export class Config implements fs.WorkspaceItem
+class ConfigClass implements file.WorkspaceItem
 {
-	readonly path:fs.Path;
-	public readonly options:ConfigOptions = <any>{};
+	public readonly path:file.File;
 
 	public state:State = State.NOTFOUND;
 	public lastError:Error|string|null = null;
-	private readonly logger:log.Logger;
-	private readonly scheduler:work.Scheduler;
+	
+	private settedProperties:Set<string> = new Set;
 	
 	public readonly onLoad = event.make<work.Task>();
 	public readonly onInvalid = event.make<void>();
 	public readonly onNotFound = event.make<void>();
 	
-
-	constructor(private workspace:fs.Workspace)
+	private readonly logger:log.Logger;
+	private readonly scheduler:work.Scheduler;
+	
+	constructor(private workspace:file.Workspace)
 	{
 		this.path = workspace.child('./.vscode/ftp-kr.json');
 
-		this.setConfig(CONFIG_BASE);
+		this.appendConfig(CONFIG_BASE);
 		this.logger = workspace.query(log.Logger);
 		this.scheduler = workspace.query(work.Scheduler);
 
 		switch (workspace.openState)
 		{
-		case fs.WorkspaceOpenState.OPENED:
+		case file.WorkspaceOpenState.OPENED:
 			this.load();
 			break;
-		case fs.WorkspaceOpenState.CREATED:
+		case file.WorkspaceOpenState.CREATED:
 			break;
 		}
+	}
+
+	protected clearConfig()
+	{
+		for (const name of this.settedProperties)
+		{
+			delete this[name];
+		}
+		this.settedProperties.clear();
+	}
+	
+	protected appendConfig(config:Object):void
+	{
+		for (const p in config)
+		{
+			this.setProperty(p, config[p]);
+		}
+	}
+
+	protected setProperty(name:string, value:any):void
+	{
+		const options:Config = this;
+		options[name] = util.clone(value);
+		this.settedProperties.add(name);
+	}
+	
+	public checkIgnorePath(path:file.File):boolean
+	{
+		const config:Config = this;
+
+		const workpath = '/'+path.workpath();
+		const check = config.ignore;
+		if (check)
+		{
+			for (var i=0;i<check.length;i++)
+			{
+				var pattern = check[i];
+				if (typeof pattern === "string")
+				{
+					pattern = patternToRegExp(pattern);
+				}
+				if (pattern.test(workpath))
+				{
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	dispose()
 	{
 	}
 
-	private setConfig(...configs:Object[]):void
+	* getAltServers():Iterable<ServerConfig>
 	{
-		for (const p in this.options)
+		const options:Config&ConfigProperties = this;
+		if (options.altServer)
 		{
-			delete this.options[p];
-		}
-		for (const newconf of configs)
-		{
-			for (const p in newconf)
-			{
-				const v = newconf[p];
-				this.options[p] = (v instanceof Object) ? Object.create(v) : v;
-			}
+			yield * options.altServer;
 		}
 	}
 
@@ -245,68 +355,131 @@ export class Config implements fs.WorkspaceItem
 		});
 	}
 
-	public checkIgnorePath(path:fs.Path):boolean
-	{
-		const workpath = '/'+path.workpath();
-		const check = this.options.ignore;
-		for (var i=0;i<check.length;i++)
-		{
-			var pattern = check[i];
-			if (typeof pattern === "string")
-			{
-				pattern = patternToRegExp(pattern);
-			}
-			if (pattern.test(workpath))
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
 	public set(data:string):void
 	{
-		const obj:ConfigOptions = util.parseJson(data);
+		const obj:ConfigProperties = util.parseJson(data);
 		if (!(obj instanceof Object))
 		{
 			const error = new TypeError("Invalid json data type: "+ typeof obj);
 			error.suppress = true;
 			throw error;
 		}
-		if (!obj.disableFtp)
+		if ((typeof obj.host) !== 'string')
 		{
-			if ((typeof obj.host) !== 'string')
-			{
-				throwJsonError(data, /\"host\"[ \t\r\n]*\:[ \t\r\n]*/, 'host field must be string');
-			}
-			if (!obj.host)
-			{
-				throwJsonError(data, /\"host\"[ \t\r\n]*\:[ \t\r\n]*/, 'Need host');
-			}
-			if ((typeof obj.username) !== 'string')
-			{
-				throwJsonError(data, /\"username\"[ \t\r\n]*\:[ \t\r\n]*/, 'username field must be string');
-			}
-			if (!obj.username)
-			{
-				throwJsonError(data, /\"username\"[ \t\r\n]*\:/, 'username field must be string');
-			}
-			
-			if (!obj.remotePath) obj.remotePath = '';
-			else if (obj.remotePath.endsWith("/"))
-				obj.remotePath = obj.remotePath.substr(0, obj.remotePath.length-1);
-			switch (obj.protocol)
-			{
-			case 'ftps':
-			case 'sftp':
-			case 'ftp': break;
-			default:
-				throwJsonError(data, /\"username\"[ \t\r\n]*\:/, `Unsupported protocol "${obj.protocol}"`);
-			}
+			throwJsonError(data, /\"host\"[ \t\r\n]*\:[ \t\r\n]*/, 'host field must be string');
+		}
+		if (!obj.host)
+		{
+			throwJsonError(data, /\"host\"[ \t\r\n]*\:[ \t\r\n]*/, 'Need host');
+		}
+		if ((typeof obj.username) !== 'string')
+		{
+			throwJsonError(data, /\"username\"[ \t\r\n]*\:[ \t\r\n]*/, 'username field must be string');
+		}
+		if (!obj.username)
+		{
+			throwJsonError(data, /\"username\"[ \t\r\n]*\:/, 'username field must be string');
+		}
+		
+		if (!obj.remotePath) obj.remotePath = '';
+		else if (obj.remotePath.endsWith("/"))
+			obj.remotePath = obj.remotePath.substr(0, obj.remotePath.length-1);
+		switch (obj.protocol)
+		{
+		case 'ftps':
+		case 'sftp':
+		case 'ftp': break;
+		default:
+			throwJsonError(data, /\"username\"[ \t\r\n]*\:/, `Unsupported protocol "${obj.protocol}"`);
 		}
 		
 		this.logger.setLogLevel(obj.logLevel || 'NORMAL');
-		this.setConfig(CONFIG_BASE, obj);
+		this.clearConfig();
+		this.appendConfig(CONFIG_BASE);
+		this.appendConfig(obj);
+		const config:Config = this;
+
+
+		if (!config.altServer) return;
+
+		const dupPriority = ['name', 'host', 'protocol', 'port', 'remotePath', 'username'];
+		const servers = config.altServer;
+		function removeFullDupped():void
+		{
+			const fulldupped = new Set<string>();
+			_fullDupTest:for (const prop of dupPriority)
+			{
+				for (const server of servers)
+				{
+					if (!(prop in server)) continue;
+					if (config[prop] !== server[prop]) continue _fullDupTest;
+				}
+				fulldupped.add(prop);
+			}
+			for (var i=0; i<dupPriority.length;)
+			{
+				if (fulldupped.has(dupPriority[i]))
+				{
+					dupPriority.splice(i, 1);
+				}
+				else
+				{
+					i++;
+				}
+			}
+		}
+
+		removeFullDupped();
+
+		for (const server of servers)
+		{
+			// copy main config
+			for(const p of this.settedProperties)
+			{
+				if (!(p in server))
+				{
+					server[p] = util.clone(this[p]);
+				}
+			}
+
+			// make dupmap
+			var usedprop:string[] = findUndupplicatedSet(dupPriority, server, servers);
+			const nameidx = usedprop.indexOf('name');
+			if (nameidx !== -1) usedprop.splice(nameidx, 1);
+
+			var altname = '';
+			if (usedprop.length !== 0)
+			{
+				if (server.host) altname = server.host;
+				for (const prop of usedprop)
+				{
+					switch (prop)
+					{
+					case 'protocol':
+						altname = server.protocol + '://' + altname;
+						break;
+					case 'port':
+						altname += ':'+server.port;
+						break;
+					case 'remotePath':
+						altname += '/'+server.remotePath;
+						break;
+					case 'username':
+						altname += '@'+server.username;
+						break;
+					}
+				}
+			}
+			if (altname)
+			{
+				if (server.name) server.name += `(${altname})`;
+				else server.name = altname;
+			}
+			else
+			{
+				if (!server.name) server.name = server.host || '';
+			}
+		}
 	}
 
 	public setState(newState:State, newLastError:Error|string|null):void
@@ -403,6 +576,7 @@ export class Config implements fs.WorkspaceItem
 		}
 		
 	}
+
 	public loadTest():Promise<void>
 	{
 		if (this.state !== State.LOADED)
@@ -413,16 +587,6 @@ export class Config implements fs.WorkspaceItem
 			}
 			return this.onLoadError(this.lastError).then(()=>{throw work.CANCELLED;});
 		} 
-		return Promise.resolve();
-	}
-
-	public isFtpDisabled():Promise<void>
-	{
-		if (this.options.disableFtp)
-		{
-			vsutil.open(this.path);
-			return Promise.reject(new Error("FTP is disabled. Please set disableFtp to false"));
-		}
 		return Promise.resolve();
 	}
 
@@ -445,7 +609,8 @@ export class Config implements fs.WorkspaceItem
 			}
 		).then(()=>res);
 	}
+
 }
 
-
-fs.onNewWorkspace(workspace=>workspace.query(Config));
+export const Config:{new(workspace:file.Workspace):ConfigClass&ConfigProperties} = ConfigClass;
+export type Config = ConfigClass & ConfigProperties;

@@ -1,20 +1,19 @@
 
-import * as fs from './fs';
+import * as file from './file';
 import * as log from './log';
 import * as work from './work';
 import * as vsutil from './vsutil';
+import { commands, ExtensionContext } from 'vscode';
 
 export interface Args
 {
-	file?:fs.Path;
-	workspace?:fs.Workspace;
+	file?:file.File;
+	workspace?:file.Workspace;
 }
 
 export type Command = {[key:string]:(args:Args)=>any};
 
-export const commands:Command = {};
-
-export async function runCommand(name:string, ...args:any[]):Promise<void>
+async function runCommand(commands:Command, name:string, ...args:any[]):Promise<void>
 {
 	var cmdargs:Args = {};
 	const logger = cmdargs.workspace ? cmdargs.workspace.query(log.Logger) : log.defaultLogger;
@@ -46,6 +45,18 @@ export async function runCommand(name:string, ...args:any[]):Promise<void>
 		default:
 			logger.error(err);
 			break;
+		}
+	}
+}
+
+export function registerCommands(context:ExtensionContext, ...cmdlist:Command[])
+{
+	for(const cmds of cmdlist)
+	{
+		for (const name in cmds)
+		{
+			const disposable = commands.registerCommand(name, (...args) => runCommand(cmds, name, ...args));
+			context.subscriptions.push(disposable);
 		}
 	}
 }

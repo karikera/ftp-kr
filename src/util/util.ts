@@ -240,3 +240,39 @@ export function callbackToPromise<T>(call:(callback:(err:Error, value?:T)=>void)
         });
     });
 }
+
+export function clone<T>(value:T):T
+{
+	if (!(value instanceof Object)) return value;
+	if (value instanceof Array)
+	{
+		const arr = new Array(value.length);
+		for (var i=0;i<arr.length;i++)
+		{
+			arr[i] = clone(value[i]);
+		}
+		return <any>arr;
+	}
+	if (value instanceof Map)
+	{
+		const map = new Map(value.entries());
+		return <any>map;
+	}
+	if (value instanceof Set)
+	{
+		const set = new Set(value.values());
+		return <any>set;
+	}
+	if (value instanceof RegExp)
+	{
+		return value;
+	}
+	const nobj:{[key:string]:any} = new Object;
+	nobj.__proto__ = (<any>value).__proto__;
+
+	for (const p in value)
+	{
+		nobj[p] = value[p];
+	}
+	return <any>nobj;
+}

@@ -5,11 +5,13 @@ import * as ssh2 from 'ssh2';
 import * as iconv from 'iconv-lite';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import * as fs from './util/fs';
-import * as log from './util/log';
-import * as work from './util/work';
 import * as util from './util/util';
-import * as vsutil from './util/vsutil';
+
+import * as file from './vsutil/file';
+import * as log from './vsutil/log';
+import * as work from './vsutil/work';
+import * as vsutil from './vsutil/vsutil';
+
 import * as cfg from './config';
 import * as stream from 'stream';
 
@@ -160,17 +162,15 @@ function _errorWrap(err):Error
 	return nerr;
 }
 
-
 abstract class FileInterface
 {
 	protected destroyTimeout:NodeJS.Timer|null = null;
-	protected readonly config:cfg.Config;
 	protected readonly logger:log.Logger;
 	protected readonly state:vsutil.StateBar;
+	public ondestroy:()=>void;
 	
-	constructor(public readonly workspace:fs.Workspace)
+	constructor(public readonly workspace:file.Workspace, protected readonly config:cfg.ServerConfig)
 	{
-		this.config = workspace.query(cfg.Config);
 		this.logger = workspace.query(log.Logger);
 		this.state = workspace.query(vsutil.StateBar);
 	}
@@ -182,17 +182,31 @@ abstract class FileInterface
 	private bin2str(bin:string):string
 	{
 		var buf = iconv.encode(bin, 'binary');
-		return iconv.decode(buf, this.config.options.fileNameEncoding);
+		return iconv.decode(buf, this.config.fileNameEncoding || 'utf-8');
 	}
 	private str2bin(str:string):string
 	{
-		var buf = iconv.encode(str, this.config.options.fileNameEncoding);
+		var buf = iconv.encode(str, this.config.fileNameEncoding || 'utf-8');
 		return iconv.decode(buf, 'binary');
 	}
 	private toftpPath(workpath:string):string
 	{
-		return this.str2bin(this.config.options.remotePath+'/'+workpath);
+		return this.str2bin(this.config.remotePath+'/'+workpath);
 	}
+
+	private logWithState(command:string):void
+	{
+		const message = this.config.name ? this.config.name+"> "+command : command;
+		this.state.set(message);
+		this.logger.message(message);
+	}
+
+	public log(command:string):void
+	{
+		const message = this.config.name ? this.config.name+"> "+command : command;
+		this.logger.message(message);
+	}
+
 	
 	cancelDestroyTimeout():void
 	{
@@ -207,23 +221,21 @@ abstract class FileInterface
 	{
 		this.cancelDestroyTimeout();
 		this.destroyTimeout = setTimeout(()=>{
-			this.logger.message('Disconnected');
 			this.destroy();
-		}, this.config.options.connectionTimeout ? this.config.options.connectionTimeout : 60000);
+		}, this.config.connectionTimeout ? this.config.connectionTimeout : 60000);
 	}
 
 	destroy():void
 	{
+		this.log('Disconnected');
 		this.cancelDestroyTimeout();
-		const ftp = this.workspace.query(FtpManager);
-		ftp.client = null;
+		this.ondestroy();
 	}
 
 	_callWithName<T>(name:string, workpath:string, ignorecode:number, defVal:T, callback:(name:string)=>Promise<T>):Promise<T>
 	{
 		this.cancelDestroyTimeout();
-		this.state.set(name +" "+workpath);
-		this.logger.message(name +": "+workpath);
+		this.logWithState(name+' '+workpath);
 		const ftppath = this.toftpPath(workpath);
 		return callback(ftppath).then(v=>{
 			this.state.close();
@@ -234,16 +246,15 @@ abstract class FileInterface
 			this.state.close();
 			this.update();
 			if (err.ftpCode === ignorecode) return defVal;
-			this.logger.message(name+" fail: "+workpath);
+			this.log(name+" fail: "+workpath);
 			throw _errorWrap(err);
 		});
 	}
 
-	upload(workpath:string, localpath:fs.Path):Promise<void>
+	upload(workpath:string, localpath:file.File):Promise<void>
 	{
 		this.cancelDestroyTimeout();
-		this.state.set("upload "+workpath);
-		this.logger.message("upload: "+workpath);
+		this.logWithState('upload '+workpath);
 		const ftppath = this.toftpPath(workpath);
 
 		return this._put(localpath, ftppath)
@@ -261,16 +272,15 @@ abstract class FileInterface
 		.catch((err)=>{
 			this.state.close();
 			this.update();
-			this.logger.message("upload fail: "+workpath);
+			this.log("upload fail: "+workpath);
 			throw _errorWrap(err);
 		});
 	}
 
-	download(localpath:fs.Path, workpath:string):Promise<void>
+	download(localpath:file.File, workpath:string):Promise<void>
 	{
 		this.cancelDestroyTimeout();
-		this.state.set("download "+workpath);
-		this.logger.message("download: "+workpath);
+		this.logWithState('download '+workpath);
 		const ftppath = this.toftpPath(workpath);
 
 		return this._get(ftppath)
@@ -287,7 +297,7 @@ abstract class FileInterface
 		.catch(err=>{
 			this.state.close();
 			this.update();
-			this.logger.message("download fail: "+workpath);
+			this.log("download fail: "+workpath);
 			throw _errorWrap(err);
 		});
 	}
@@ -295,8 +305,7 @@ abstract class FileInterface
 	list(workpath:string):Promise<FileInfo[]>
 	{
 		this.cancelDestroyTimeout();
-		this.state.set("list "+workpath);
-		this.logger.message("list: "+workpath);
+		this.logWithState('list '+workpath);
 
 		var ftppath = this.toftpPath(workpath);
 		if (!ftppath) ftppath = ".";
@@ -310,7 +319,7 @@ abstract class FileInterface
 			{
 				const file = list[i];
 				const fn = file.name = this.bin2str(file.name);
-				if (!this.config.options.ignoreWrongFileEncoding)
+				if (!this.config.ignoreWrongFileEncoding)
 				{
 					if (fn.indexOf('�') !== -1 || fn.indexOf('?') !== -1)
 						errfiles.push(fn);
@@ -322,8 +331,8 @@ abstract class FileInterface
 				.then((res)=>{
 					switch(res)
 					{
-					case 'Open config': vsutil.open(this.config.path); break; 
-					case 'Ignore after': this.config.options.ignoreWrongFileEncoding = true; break;
+					case 'Open config': vsutil.open(this.workspace.query(cfg.Config).path); break; 
+					case 'Ignore after': this.config.ignoreWrongFileEncoding = true; break;
 					}
 				});
 			}
@@ -332,7 +341,7 @@ abstract class FileInterface
 		.catch(err=>{
 			this.state.close();
 			this.update();
-			this.logger.message("list fail: "+workpath);
+			this.log("list fail: "+workpath);
 			throw _errorWrap(err);
 		});
 	}
@@ -360,7 +369,7 @@ abstract class FileInterface
 	abstract _mkdir(path:string, recursive:boolean):Promise<void>;
 	abstract _rmdir(path:string, recursive:boolean):Promise<void>;
 	abstract _delete(workpath:string):Promise<void>;
-	abstract _put(localpath:fs.Path, ftppath:string):Promise<void>;
+	abstract _put(localpath:file.File, ftppath:string):Promise<void>;
 	abstract _get(ftppath:string):Promise<NodeJS.ReadableStream>;
 	abstract _list(ftppath:string):Promise<Array<FileInfo>>;
 	_lastmod(ftppath:string):Promise<number>
@@ -383,6 +392,10 @@ class Ftp extends FileInterface
 		return new Promise<void>((resolve, reject)=>{
 			if (!this.client) return Promise.reject(Error(ALREADY_DESTROYED));
 
+			if (this.config.showGreeting)
+			{
+				this.client.on('greeting', msg=>this.log(msg));
+			}
 			this.client.on("ready", ()=>{
 				if (!this.client) return Promise.reject(Error(ALREADY_DESTROYED));
 				
@@ -396,7 +409,7 @@ class Ftp extends FileInterface
 			this.client.on("error", reject);
 
 			var options:FtpClientO.Options;
-			const config = this.config.options;
+			const config = this.config;
 			if (config.protocol === 'ftps')
 			{
 				options = {
@@ -470,13 +483,14 @@ class Ftp extends FileInterface
 		});
 	}
 
-	_put(localpath:fs.Path, ftppath:string):Promise<void>
+	_put(localpath:file.File, ftppath:string):Promise<void>
 	{
 		const client = this.client;
 		if (!client) return Promise.reject(Error(ALREADY_DESTROYED));
 		return Ftp.wrapToPromise<void>(callback=>client.put(localpath.fsPath, ftppath, callback))
 		.catch(e=>{
 			if (e.code === 553) e.ftpCode = DIRECTORY_NOT_FOUND;
+			else if (e.code === 550) e.ftpCode = DIRECTORY_NOT_FOUND;
 			throw e;
 		});
 	}
@@ -533,7 +547,7 @@ class Sftp extends FileInterface
 			if (!this.client) throw Error(ALREADY_DESTROYED);
 
 			var options:ssh2.ConnectConfig = {};
-			const config = this.config.options;
+			const config = this.config;
 			if (config.privateKey)
 			{
 				var keyPath = config.privateKey;
@@ -597,7 +611,7 @@ class Sftp extends FileInterface
 		return this.client.mkdir(ftppath, true);
 	}
 
-	_put(localpath:fs.Path, ftppath:string):Promise<void>
+	_put(localpath:file.File, ftppath:string):Promise<void>
 	{
 		if (!this.client) return Promise.reject(Error(ALREADY_DESTROYED));
 		return this.client.put(localpath.fsPath, ftppath, false, null)
@@ -637,29 +651,30 @@ class Sftp extends FileInterface
 	}
 }
 
-export class FtpManager implements fs.WorkspaceItem
+export class FtpManager
 {
 	client:FileInterface|null = null;
 
 	private connectionInfo:string = '';
-	private passwordInMemory:string|undefined = undefined;
 	
-	private readonly config:cfg.Config;
 	private readonly logger:log.Logger;
 
-	constructor(public readonly workspace:fs.Workspace)
+	constructor(public readonly workspace:file.Workspace, public readonly config:cfg.ServerConfig)
 	{
-		this.config = workspace.query(cfg.Config);
 		this.logger = workspace.query(log.Logger);
 	}
 
-	dispose():void
+	public destroy():void
 	{
+		if (this.client)
+		{
+			this.client.destroy();
+		}
 	}
 
 	private makeConnectionInfo():string
 	{
-		const config = this.config.options;
+		const config = this.config;
 		const usepk = config.protocol === 'sftp' && !!config.privateKey;
 		const datas = [
 			config.protocol,
@@ -686,22 +701,23 @@ export class FtpManager implements fs.WorkspaceItem
 				this.client.update();
 				return Promise.resolve(this.client);
 			}
-			this.logger.message('Disconnected');
 			this.client.destroy();
-			this.passwordInMemory = undefined;
+			this.client = null;
+			this.config.passwordInMemory = undefined;
 		}
 		this.connectionInfo = coninfo;
 		
-		const config = this.config.options;
+		const config = this.config;
 
 		var newclient:FileInterface;
 		switch (config.protocol)
 		{
-		case 'sftp': newclient = new Sftp(this.workspace); break;
-		case 'ftp': newclient = new Ftp(this.workspace); break;
-		case 'ftps': newclient = new Ftp(this.workspace); break;
+		case 'sftp': newclient = new Sftp(this.workspace, this.config); break;
+		case 'ftp': newclient = new Ftp(this.workspace, this.config); break;
+		case 'ftps': newclient = new Ftp(this.workspace, this.config); break;
 		default: throw Error(`Invalid protocol ${config.protocol}`);
 		}
+		newclient.ondestroy = ()=>this.client = null;
 		this.client = newclient;
 	
 		var url = '';
@@ -761,9 +777,9 @@ export class FtpManager implements fs.WorkspaceItem
 		_ok:if (!usepk && config.password === undefined)
 		{
 			var errorMessage:string|undefined;
-			if (this.passwordInMemory !== undefined)
+			if (this.config.passwordInMemory !== undefined)
 			{
-				errorMessage = await tryToConnectOrErrorMessage(this.passwordInMemory);
+				errorMessage = await tryToConnectOrErrorMessage(this.config.passwordInMemory);
 				if (errorMessage === undefined) break _ok;
 			}
 			else for (;;)
@@ -784,7 +800,7 @@ export class FtpManager implements fs.WorkspaceItem
 				{
 					if (config.keepPasswordInMemory !== false)
 					{
-						this.passwordInMemory = promptedPassword;
+						this.config.passwordInMemory = promptedPassword;
 					}
 					break;
 				}
@@ -802,7 +818,7 @@ export class FtpManager implements fs.WorkspaceItem
 			}
 		}
 			
-		this.logger.message('Connected');
+		newclient.log('Connected');
 		return newclient;
 	}
 	
@@ -821,12 +837,12 @@ export class FtpManager implements fs.WorkspaceItem
 		return this.init(task).then(client => task.with(client.mkdir(workpath)));
 	}
 	
-	public upload(task:work.Task, workpath:string, localpath:fs.Path):Promise<void>
+	public upload(task:work.Task, workpath:string, localpath:file.File):Promise<void>
 	{
 		return this.init(task).then(client => task.with(client.upload(workpath, localpath)));
 	}
 	
-	public download(task:work.Task, localpath:fs.Path, workpath:string):Promise<void>
+	public download(task:work.Task, localpath:file.File, workpath:string):Promise<void>
 	{
 		return this.init(task).then(client => task.with(client.download(localpath, workpath)));
 	}
@@ -834,11 +850,5 @@ export class FtpManager implements fs.WorkspaceItem
 	public list(task:work.Task, workpath:string):Promise<FileInfo[]>
 	{
 		return this.init(task).then(client => task.with(client.list(workpath)));
-	}
-	
-	public cleanPasswordInMemory():void
-	{
-		this.passwordInMemory = undefined;
-	}
-	
+	}	
 }

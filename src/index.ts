@@ -1,32 +1,34 @@
 import * as vscode from 'vscode';
 const workspace = vscode.workspace;
 
-import * as log from './util/log';
-import * as fs from './util/fs';
-import * as work from './util/work';
-import * as vsutil from './util/vsutil';
-import * as cmd from './util/cmd';
+import * as log from './vsutil/log';
+import * as file from './vsutil/file';
+import * as work from './vsutil/work';
+import * as vsutil from './vsutil/vsutil';
+import * as cmd from './vsutil/cmd';
 
-const extensions = [
-	require('./ex/config'), 
-	require('./ex/ftpsync')
-];
+import * as cfg from './config';
+import * as watcher from './watcher';
+
+import {commands as cfgcmd} from './cmd/config';
+import {commands as ftpcmd} from './cmd/ftpsync';
+
+file.onNewWorkspace(workspace=>{
+	workspace.query(watcher.WorkspaceWatcher);
+	workspace.query(cfg.Config);
+});
 
 export function activate(context:vscode.ExtensionContext) {
 	console.log('[extension: ftp-kr] activate');
-	vsutil.setContext(context);
 
-	for(const name in cmd.commands)
-	{
-		const disposable = vscode.commands.registerCommand(name, (...args) => cmd.runCommand(name, ...args));
-		context.subscriptions.push(disposable);
-	}
-	fs.Workspace.loadAll();
+	cmd.registerCommands(context, cfgcmd, ftpcmd);
+	
+	file.Workspace.loadAll();
 }
 export function deactivate() {
     try
     {
-		fs.Workspace.unloadAll();
+		file.Workspace.unloadAll();
         console.log('[extension: ftp-kr] deactivate');
     }
     catch(err)

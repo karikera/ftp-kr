@@ -1,5 +1,5 @@
 
-import * as fs from './fs';
+import File from './file';
 import * as path from 'path';
 import {Tag,Reader} from './reader';
 
@@ -7,10 +7,10 @@ export class Includer
 {
 	included:Set<string> = new Set;
 	including:Set<string> = new Set;
-	list:fs.Path[] = [];
-	errors:Array<[fs.Path, number, string]> = [];
+	list:File[] = [];
+	errors:Array<[File, number, string]> = [];
 	
-	async include(src:fs.Path|fs.Path[]):Promise<void>
+	async include(src:File|File[]):Promise<void>
 	{
 		if (src instanceof Array)
 		{

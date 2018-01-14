@@ -34,7 +34,7 @@
 			"description": "Path to ssh-agent's UNIX socket for ssh-agent-based user authentication (or 'pageant' when using Pagent on Windows)."
 		},
 		"privateKey":{
-			"type": "Buffer | string",
+			"type": "string",
 			"description": "Buffer or string that contains a private key for either key-based or hostbased user authentication (OpenSSH format)."
 		},
 		"passphrase":{

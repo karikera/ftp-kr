@@ -1,212 +1,21 @@
 {
-    "type": "object",
+	"allOf": [{"$ref": "server.schema.json"}],
+	"type": "object",
     "properties": {
-        "protocol": {
-            "enum": ["ftp","sftp","ftps"],
-            "description": "Connection protocol"
-        },
-		"sslProtocol": {
-			"enum": ["SSLv23_method", "TLSv1_2_method", "TLSv1_1_method", "TLSv1_method", "SSLv3_method", "SSLv2_method"],
-			"default": "SSLv23_method",
-			"description": " Optional SSL method to use, default is \"SSLv23_method\". The possible values are listed as https://www.openssl.org/docs/man1.0.2/ssl/ssl.html#DEALING-WITH-PROTOCOL-METHODS , use the function names as strings. For example, \"SSLv3_method\" to force SSL version 3."
+		"altServer": {
+			"type": "array",
+			"description": "alternate servers. It has similar properties with root manifest",
+			"items": {
+				"type": "object",
+				"allOf": [{"$ref": "server.schema.json"}],
+				"properties": {
+					"name":{
+						"type":"string",
+						"description": "Display name for alternate server"
+					}
+				}
+			}
 		},
-        "host": {
-			"type": "string",
-            "minLength": 1,
-            "description": "Address of the FTP/SFTP server",
-			"format": "hostname"
-        },
-        "username": {
-            "type": "string",
-            "minLength": 1,
-            "description": "FTP/SFTP user name"
-        },
-        "password": {
-            "type": "string",
-            "description": "FTP/SFTP password"
-        },
-		"keepPasswordInMemory":{
-			"type": "boolean",
-			"description": "Keep password into internal variable for reconnection (default: false)"
-		},
-        "remotePath": {
-            "type": "string",
-            "description": "FTP/SFTP side directory"
-        },
-        "port": {
-            "type": "integer",
-            "description": "Port number of FTP/SFTP server. If it is zero, use the default port"
-        },
-        "privateKey": {
-            "type": "string",
-            "description": "Private key file for SFTP connection. Use OpenSSH format. If it is non empty, password will be ignored"
-        },
-		"passphrase": {
-			"type": "string",
-			"description": "Password for an encrypted private key."
-		},
-		"connectionTimeout": {
-			"type": "integer",
-			"description": "Disconnect from FTP/SFTP server after timeout(ms) (default: 60000)"
-		},
-        "fileNameEncoding": {
-            "enum": [
-                "utf8",
-                "usc2",
-                "utf16le",
-                "ascii",
-                "binary",
-                "base64",
-                "hex",
-                "UTF-16BE",
-                "UTF-16",
-                "cp874",
-                "cp1250",
-                "cp1251",
-                "cp1252",
-                "cp1253",
-                "cp1254",
-                "cp1255",
-                "cp1256",
-                "cp1257",
-                "cp1258",
-                "win874",
-                "win1250",
-                "win1251",
-                "win1252",
-                "win1253",
-                "win1254",
-                "win1255",
-                "win1256",
-                "win1257",
-                "win1258",
-                "windows874",
-                "windows1250",
-                "windows1251",
-                "windows1252",
-                "windows1253",
-                "windows1254",
-                "windows1255",
-                "windows1256",
-                "windows1257",
-                "windows1258",
-                "ISO-8859-1",
-                "ISO-8859-2",
-                "ISO-8859-3",
-                "ISO-8859-4",
-                "ISO-8859-5",
-                "ISO-8859-6",
-                "ISO-8859-7",
-                "ISO-8859-8",
-                "ISO-8859-9",
-                "ISO-8859-10",
-                "ISO-8859-11",
-                "ISO-8859-12",
-                "ISO-8859-13",
-                "ISO-8859-14",
-                "ISO-8859-15",
-                "ISO-8859-16",
-                "cp437",
-                "cp737",
-                "cp775",
-                "cp808",
-                "cp850",
-                "cp852",
-                "cp855",
-                "cp856",
-                "cp857",
-                "cp858",
-                "cp860",
-                "cp861",
-                "cp862",
-                "cp863",
-                "cp864",
-                "cp865",
-                "cp866",
-                "cp869",
-                "cp922",
-                "cp1046",
-                "cp1124",
-                "cp1125",
-                "cp1129",
-                "cp1133",
-                "cp1161",
-                "cp1162",
-                "cp1163",
-                "ibm437",
-                "ibm737",
-                "ibm775",
-                "ibm808",
-                "ibm850",
-                "ibm852",
-                "ibm855",
-                "ibm856",
-                "ibm857",
-                "ibm858",
-                "ibm860",
-                "ibm861",
-                "ibm862",
-                "ibm863",
-                "ibm864",
-                "ibm865",
-                "ibm866",
-                "ibm869",
-                "ibm922",
-                "ibm1046",
-                "ibm1124",
-                "ibm1125",
-                "ibm1129",
-                "ibm1133",
-                "ibm1161",
-                "ibm1162",
-                "ibm1163",
-                "maccroatian",
-                "maccyrillic",
-                "macgreek",
-                "maciceland",
-                "macroman",
-                "macromania",
-                "macthai",
-                "macturkish",
-                "macukraine",
-                "maccenteuro",
-                "macintosh",
-                "koi8-r",
-                "koi8-u",
-                "koi8-ru",
-                "koi8-t",
-                "armscii8",
-                "rk1048",
-                "tcvn",
-                "georgianacademy",
-                "georgianps",
-                "pt154",
-                "viscii",
-                "iso646cn",
-                "iso646jp",
-                "hproman8",
-                "tis620",
-                "Shift_JIS",
-                "Windows-31j",
-                "Windows932",
-                "EUC-JP",
-                "GB2312",
-                "GBK",
-                "GB18030",
-                "Windows936",
-                "EUC-CN",
-                "KS_C_5601",
-                "Windows949",
-                "EUC-KR",
-                "Big5",
-                "Big5-HKSCS",
-                "Windows950"
-            ]
-        },
-        "ignoreWrongFileEncoding": {
-            "type": "boolean",
-            "description": "Suppress of the file encoding error assumption"
-        },
         "autoUpload": {
             "type": "boolean",
             "description": "Upload file when save"
@@ -219,26 +28,6 @@
 			"type": "boolean",
 			"description": "It will check modification of every opening and download if it modified"
 		},
-		"autoDownloadRefreshTime": {
-			"type": "integer",
-			"description": "Milliseconds. Auto refresh after this value when set 'autoDownload' as true. default is 1000"
-		},
-        "createSyncCache": {
-            "type": "boolean",
-            "description": "Create sync.json file for next FTP access(Not effective ' -';)"
-        },
-        "disableFtp": {
-            "type": "boolean",
-            "description": "Disable FTP feature(Can still use closure compiler)"
-        },
-        "ignore": {
-            "type": "array",
-            "description": "Ignore file or directory list. Is NOT glob pattern",
-            "items": {
-                "type": "string",
-                "description": "Ignore file or directory"
-            }
-		},
 		"logLevel": {
 			"enum": [
 				"VERBOSE",
@@ -246,7 +35,13 @@
 			],
             "description": "Log level setting for debug"
 		},
-		"ftpOverride": { "$ref": "ftp.schema.json" },
-		"sftpOverride": { "$ref": "sftp.schema.json" }
+		"ignore": {
+			"type": "array",
+			"description": "Ignore file or directory list. Is NOT glob pattern",
+			"items": {
+				"type": "string",
+				"description": "Ignore file or directory"
+			}
+		}
     }
 }

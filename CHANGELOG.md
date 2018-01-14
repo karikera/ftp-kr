@@ -1,4 +1,11 @@
 # 1.1.8
+* Remove closure compiler
+* Multi workspace support
+* Download/Upload Directory (in `ftp-kr.list` command)
+* Multi Server Support
+* Add Icon!
+
+## header.header
 
 # 1.1.7
 * Fix `Init` command

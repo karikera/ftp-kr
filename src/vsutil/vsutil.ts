@@ -1,16 +1,16 @@
 
 import * as vscode from 'vscode';
-import * as fs from './fs';
+import * as file from './file';
 
 const window = vscode.window;
 const workspace = vscode.workspace;
 
-export class StateBar implements fs.WorkspaceItem
+export class StateBar implements file.WorkspaceItem
 {
 	private statebar:vscode.StatusBarItem|undefined;
 	private disposed:boolean = false;
 	
-	constructor(workspace:fs.Workspace)
+	constructor(workspace:file.Workspace)
 	{
 	}
 
@@ -39,16 +39,9 @@ export class StateBar implements fs.WorkspaceItem
 	}
 }
 
-export var context:vscode.ExtensionContext;
-
-export function setContext(ctx:vscode.ExtensionContext):void
+export function createWorkspace():Promise<file.Workspace|undefined>
 {
-	context = ctx;
-}
-
-export function createWorkspace():Promise<fs.Workspace|undefined>
-{
-	return new Promise<fs.Workspace|undefined>((resolve, reject)=>{
+	return new Promise<file.Workspace|undefined>((resolve, reject)=>{
 		const pick = new QuickPick;
 		if (!workspace.workspaceFolders)
 		{
@@ -57,26 +50,26 @@ export function createWorkspace():Promise<fs.Workspace|undefined>
 		}
 		if (workspace.workspaceFolders.length === 1)
 		{
-			resolve(fs.Workspace.createInstance(workspace.workspaceFolders[0]));
+			resolve(file.Workspace.createInstance(workspace.workspaceFolders[0]));
 			return;
 		}
 		for(const ws of workspace.workspaceFolders)
 		{
-			const fsws = fs.Workspace.getInstance(ws);
+			const fsws = file.Workspace.getInstance(ws);
 			var name = ws.name;
 			if (fsws) name += ' [inited]';
-			pick.item(name, ()=>resolve(fs.Workspace.createInstance(ws)));
+			pick.item(name, ()=>resolve(file.Workspace.createInstance(ws)));
 		}
 		pick.oncancel = ()=>resolve(undefined);
 		pick.open("Select Workspace");
 	});
 }
 
-export function selectWorkspace():Promise<fs.Workspace|undefined>
+export function selectWorkspace():Promise<file.Workspace|undefined>
 {
-	return new Promise<fs.Workspace|undefined>((resolve, reject)=>{
+	return new Promise<file.Workspace|undefined>((resolve, reject)=>{
 		const pick = new QuickPick;
-		for(const ws of fs.Workspace.all())
+		for(const ws of file.Workspace.all())
 		{
 			pick.item(ws.name, ()=>resolve(ws));
 		}
@@ -95,18 +88,18 @@ export function selectWorkspace():Promise<fs.Workspace|undefined>
 	});
 }
 
-export function fileOrEditorFile(file: any): Promise<fs.Path> {
+export function fileOrEditorFile(uri: any): Promise<file.File> {
 	try
 	{
-		if (file instanceof vscode.Uri && file.fsPath) { // file.fsPath is undefined when activated by hotkey
-			const path = new fs.Path(file);
+		if (uri instanceof vscode.Uri && uri.fsPath) { // file.fsPath is undefined when activated by hotkey
+			const path = new file.File(uri);
 			return Promise.resolve(path);
 		}
 		else {
 			const editor = window.activeTextEditor;
 			if (!editor) throw Error('No file selected');
 			const doc = editor.document;
-			const path = new fs.Path(doc.uri);
+			const path = new file.File(doc.uri);
 			return Promise.resolve().then(()=>doc.save()).then(()=>path);
 		}
 	}
@@ -121,7 +114,7 @@ export function info(info:string, ...items:string[]):Thenable<string|undefined>
 	return window.showInformationMessage(info, ...items);
 }
 
-export function openWithError(path:fs.Path, message:string, line?:number, column?:number):Promise<vscode.TextEditor>
+export function openWithError(path:file.File, message:string, line?:number, column?:number):Promise<vscode.TextEditor>
 {
 	window.showErrorMessage(path + ": " + message);
 	return open(path, line, column);
@@ -149,7 +142,7 @@ export class QuickPick
 		this.items.length = 0;
 	}
 	
-	public item(label:string, onselect:()=>any=()=>{}):QuickPickItem
+	public item(label:string, onselect:()=>any):QuickPickItem
 	{
 		const item = new QuickPickItem();
 		item.label = label;
@@ -173,7 +166,7 @@ export class QuickPick
 
 }
 
-export async function open(path:fs.Path, line?:number, column?:number):Promise<vscode.TextEditor>
+export async function open(path:file.File, line?:number, column?:number):Promise<vscode.TextEditor>
 {
 	const doc = await workspace.openTextDocument(path.uri);
 	const editor = await window.showTextDocument(doc);

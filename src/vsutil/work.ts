@@ -1,5 +1,5 @@
 
-import * as fs from './fs';
+import * as file from './file';
 import * as log from './log';
 
 const resolvedPromise:Promise<void> = Promise.resolve();
@@ -118,7 +118,7 @@ class TaskImpl implements Task
 
 		if (this.cancelled) return Promise.reject(CANCELLED);
 		return new Promise((resolve, reject)=>{
-			this.oncancel(reject);
+			this.oncancel(()=>reject(CANCELLED));
 			waitWith.then(v=>{
 				if (this.cancelled) return;
 				this.removeCancelListener(reject);
@@ -166,7 +166,7 @@ class TaskImpl implements Task
 	}
 }
 
-export class Scheduler implements fs.WorkspaceItem
+export class Scheduler implements file.WorkspaceItem
 {
 	public currentTask:TaskImpl|null = null;
 	private nextTask:TaskImpl|null = null;
@@ -175,9 +175,9 @@ export class Scheduler implements fs.WorkspaceItem
 
 	private promise:Promise<void> = Promise.resolve();
 
-	constructor(arg:log.Logger|fs.Workspace)
+	constructor(arg:log.Logger|file.Workspace)
 	{
-		if (arg instanceof fs.Workspace)
+		if (arg instanceof file.Workspace)
 		{
 			this.logger = arg.query(log.Logger);
 		}

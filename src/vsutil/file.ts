@@ -1,46 +1,24 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as util from './util';
-import * as event from './event';
-import { workspace, Uri, WorkspaceFolder, ParameterInformation, Disposable } from 'vscode';
-import glob from './pglob';
-
-
-function mkdirParent(dirPath:string, callback:(err?:Error)=>void):void
-{
-    return fs.mkdir(dirPath, error=>{
-        if (error)
-        {
-            switch(error.code)
-            {
-			case 'EEXIST':
-				callback();
-				return;
-            case 'ENOENT':
-                return mkdirParent(path.dirname(dirPath), () => fs.mkdir(dirPath, callback));
-            }
-        }
-        callback && callback(error);
-    });
-}
+import UtilFile from '../util/file';
+import * as util from '../util/util';
+import * as event from '../util/event';
+import glob from '../util/pglob';
+import { workspace, Uri, WorkspaceFolder, ParameterInformation, Disposable, ExtensionContext } from 'vscode';
 
 export type Stats = fs.Stats;
 
-export class Path
+export class File extends UtilFile
 {
 	constructor(public readonly uri:Uri)
 	{
+		super(uri.fsPath);
 	}
 
 	public toString():string
 	{
 		throw Error('Blocked to find bug');
-	}
-
-	public get fsPath():string
-	{
-		return this.uri.fsPath;
 	}
 
 	workspace():Workspace
@@ -73,45 +51,7 @@ export class Path
 		throw Error(`${fsPath} is not in workspace`);
 	}
 
-	in(parent:Path):boolean
-	{
-		return this.fsPath.startsWith(parent.fsPath + path.sep);
-	}
-
-	initJson(defaultValue:Object):Promise<any>
-	{
-		return this.json().then((data)=>{
-			var changed = false;
-			for (var p in defaultValue)
-			{
-				if (p in data) continue;
-				data[p] = defaultValue[p];
-				changed = true;
-			}
-			if (!changed) return data;
-			return this.create(JSON.stringify(data, null, 4))
-			.then(()=> data);
-		})
-		.catch(()=>{
-			return this.create(JSON.stringify(defaultValue, null, 4))
-			.then(() => Object.create(defaultValue));
-		});
-	}
-
-	basename():string
-	{
-		return path.basename(this.fsPath);
-	}
-
-	ext():string
-	{
-		const name = this.basename();
-		const idx = name.indexOf('.');
-		if (idx === -1) return '';
-		return name.substr(idx+1);
-	}
-	
-	async children():Promise<Path[]>
+	async children():Promise<File[]>
 	{
 		const files = await util.callbackToPromise<string[]>((callback)=>fs.readdir(this.fsPath, callback));
 		return files.map(filename=>this.child(filename));
@@ -119,41 +59,41 @@ export class Path
 
 	static parse(pathname:string)
 	{
-		return new Path(Uri.file(pathname));
+		return new File(Uri.file(pathname));
 	}
 
-	sibling(filename:string):Path
+	sibling(filename:string):File
 	{
-		return Path.parse(path.join(path.dirname(this.uri.fsPath), filename));
+		return File.parse(path.join(path.dirname(this.uri.fsPath), filename));
 	}
 
-	child(...filename:string[]):Path
+	child(...filename:string[]):File
 	{
 		var i = filename.length;
 		while (i--)
 		{
 			if (path.isAbsolute(filename[i]))
 			{
-				return Path.parse(path.join(...filename.slice(i)));
+				return File.parse(path.join(...filename.slice(i)));
 			}
 		}
-		return Path.parse(path.join(this.uri.fsPath, ...filename));
+		return File.parse(path.join(this.uri.fsPath, ...filename));
 	}
 
-	parent():Path
+	parent():File
 	{
-		return Path.parse(path.dirname(this.uri.fsPath));
+		return File.parse(path.dirname(this.uri.fsPath));
 	}
 
-	async glob():Promise<Path[]>
+	async glob():Promise<File[]>
 	{
 		const files = await glob(this.fsPath);
-		return files.map(path=>Path.parse(path));
+		return files.map(path=>File.parse(path));
 	}
 
-	static async glob(path:Path[]):Promise<Path[]>
+	static async glob(path:File[]):Promise<File[]>
 	{
-		const narr:Path[] = [];
+		const narr:File[] = [];
 		narr.length = path.length;
 		for (var i=0;i<path.length;i++)
 		{
@@ -163,96 +103,6 @@ export class Path
 		return narr;
 	}
 	
-
-	stat():Promise<fs.Stats>
-	{
-		return util.callbackToPromise((callback)=>fs.stat(this.fsPath, callback));
-	}
-
-	mtime():Promise<number>
-	{
-		return this.stat().then(stat=>+stat.mtime).catch(e=>{
-			if (e.code === 'ENOENT') return -1;
-			throw e;
-		});
-	}
-
-	mkdir():Promise<void>
-	{
-		return new Promise<void>((resolve, reject)=>{
-			fs.mkdir(this.fsPath, (err)=>{
-				if (err)
-				{
-					switch (err.code)
-					{
-					case 'EEXIST': resolve(); return;
-					default: reject(err); return;
-					}
-				}
-				else resolve();
-			});
-		});
-	}
-
-	mkdirp():Promise<void>
-	{
-		return util.callbackToPromise<void>(callback=>mkdirParent(this.fsPath, callback));
-	}
-
-	lstat():Promise<fs.Stats>
-	{
-		return util.callbackToPromise((callback)=>fs.lstat(this.fsPath, callback));
-	}
-
-	open():Promise<string>
-	{
-		return util.callbackToPromise((callback)=>fs.readFile(this.fsPath, "utf-8", callback));
-	}
-
-	createWriteStream():fs.WriteStream
-	{
-		return fs.createWriteStream(this.fsPath);
-	}
-
-	exists():Promise<boolean>
-	{
-		return new Promise((resolve) => fs.exists(this.fsPath, resolve));
-	}
-
-	async json():Promise<any>
-	{
-		const data = await this.open();
-		try
-		{
-			return util.parseJson(data);
-		}
-		catch(err)
-		{
-			err.fsPath = this;
-			throw err;
-		}
-	}
-
-	create(data:string):Promise<void>
-	{
-		return this.parent().mkdirp()
-		.then(() => util.callbackToPromise<void>((callback)=>fs.writeFile(this.fsPath, data, "utf-8", callback)));
-	}
-
-	createSync(data:string)
-	{
-		return fs.writeFileSync(this.fsPath, data, "utf-8");
-	}
-
-	unlink():Promise<void>
-	{
-		return util.callbackToPromise<void>((callback)=>fs.unlink(this.fsPath, callback));
-	}
-
-	isDirectory():Promise<boolean>
-	{
-		return this.stat().then(stat=>stat.isDirectory());
-	}
 }
 
 export interface WorkspaceItem
@@ -279,7 +129,7 @@ export enum WorkspaceOpenState
 	OPENED
 }
 
-export class Workspace extends Path
+export class Workspace extends File
 {
 	private static wsmap = new Map<string, Workspace>();
 	private static wsloading = new Map<string, Workspace>();

@@ -140,8 +140,8 @@ class FtpCacher
 
 		async function deleteTest(file:f.State):Promise<void>
 		{
-			if (file instanceof f.Directory) await this.ftp.rmdir(task, path);
-			else await this.ftp.remove(task, path);
+			if (file instanceof f.Directory) await that.ftp.rmdir(task, workpath);
+			else await that.ftp.remove(task, workpath);
 			that.delete(workpath);
 		}
 
@@ -659,8 +659,14 @@ class FtpCacher
 		const pick = new vsutil.QuickPick;
 		if (path.fsPath !== this.workspace.fsPath)
 		{
-			pick.item('Download Current Directory', ()=>this.downloadAll(task, path));
-			pick.item('Upload Current Directory', ()=>this.uploadAll(task, path));
+			pick.item('Current Directory Action', ()=>{
+				const pick = new vsutil.QuickPick;
+				pick.item('Download Current Directory', ()=>this.downloadAll(task, path));
+				pick.item('Upload Current Directory', ()=>this.uploadAll(task, path));
+				pick.item('Delete Current Directory', ()=>this.ftpDelete(task, path));
+				pick.oncancel = ()=>this.list(task, path);
+				return pick.open();
+			});
 		}
 		
 		var files:string[] = [];

@@ -1,5 +1,4 @@
 
-import * as path from 'path';
 import File from '../util/file';
 import * as event from '../util/event';
 import { workspace, Uri, WorkspaceFolder, ParameterInformation, Disposable, ExtensionContext } from 'vscode';
@@ -188,27 +187,6 @@ export function getFromFile(file:File)
 	const fsworkspace = Workspace.getInstance(workspaceFolder);
 	if (!fsworkspace) throw Error(file.fsPath+" ftp-kr is not inited");
 	return fsworkspace;
-}
-
-/**
- * path from workspace
- */
-export function workpath(file:File):string
-{
-	const workspacePath = getFromFile(file).fsPath;
-	const fsPath = file.fsPath;
-	if (fsPath.startsWith(workspacePath))
-	{
-		if (workspacePath.length === fsPath.length) return '';
-		const workpath = fsPath.substr(workspacePath.length);
-		if (workpath.startsWith(path.sep)) 
-		{
-			if (path.sep === '\\') return workpath.replace(/\\/g, '/').substr(1);
-			if (path.sep !== '/') return workpath.replace(new RegExp(path.sep, 'g'), '/').substr(1);
-			return workpath.substr(1);
-		}
-	}
-	throw Error(`${fsPath} is not in workspace`);
 }
 
 var workspaceWatcher:Disposable|undefined;

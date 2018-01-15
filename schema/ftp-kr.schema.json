@@ -19,6 +19,10 @@
 				}
 			}
 		},
+		"localBasePath":{
+			"type": "string",
+			"desciption": "Set local directory to sync (default: workspace root)"
+		},
         "autoUpload": {
             "type": "boolean",
             "description": "Upload file when save"

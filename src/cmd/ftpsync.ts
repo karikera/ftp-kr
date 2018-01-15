@@ -45,7 +45,7 @@ export const commands:cmd.Command = {
 				await taskTimer('Upload', ftp.upload(task, path, {doNotMakeDirectory:true}).then(res => {
 					if (res.latestIgnored)
 					{
-						logger.message(`latest: ${ws.workpath(path)}`);
+						logger.message(`latest: ${config.workpath(path)}`);
 					}
 				}));
 			}
@@ -93,7 +93,7 @@ export const commands:cmd.Command = {
 
 		await config.loadTest();
 		await vscode.workspace.saveAll();
-		scheduler.taskWithTimeout('ftpkr.uploadAll', 1000, task => ftp.uploadAll(task, workspace));
+		scheduler.taskWithTimeout('ftpkr.uploadAll', 1000, task => ftp.uploadAll(task, config.basePath));
 	},
 	async 'ftpkr.downloadAll' (args: cmd.Args)
 	{
@@ -110,7 +110,7 @@ export const commands:cmd.Command = {
 
 		await config.loadTest();
 		await vscode.workspace.saveAll();
-		scheduler.taskWithTimeout('ftpkr.downloadAll', 1000, task => ftp.downloadAll(task, workspace));
+		scheduler.taskWithTimeout('ftpkr.downloadAll', 1000, task => ftp.downloadAll(task, config.basePath));
 	},
 	async 'ftpkr.cleanAll' (args: cmd.Args)
 	{
@@ -160,7 +160,7 @@ export const commands:cmd.Command = {
 		const ftp = workspace.query(ftpsync.FtpSyncManager);
 
 		await config.loadTest();
-		scheduler.taskWithTimeout('ftpkr.list', 1000, task => ftp.list(task, workspace));
+		scheduler.taskWithTimeout('ftpkr.list', 1000, task => ftp.list(task, config.basePath));
 	},
 	
 	async 'ftpkr.reconnect' (args: cmd.Args)

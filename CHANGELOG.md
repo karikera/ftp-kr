@@ -1,3 +1,7 @@
+# 1.2.1
+* Add reconnect command & block detecting
+* Add `localBasePath` option
+
 # 1.2.0
 * Remove closure compiler
 * Multi workspace support

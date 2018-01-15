@@ -27,6 +27,7 @@
 		},
 		"keepPasswordInMemory":{
 			"type": "boolean",
+			"default": false,
 			"description": "Keep password into internal variable for reconnection (default: false)"
 		},
 		"remotePath": {
@@ -35,6 +36,7 @@
 		},
 		"port": {
 			"type": "integer",
+			"default": 0,
 			"description": "Port number of FTP/SFTP server. If it is zero, use the default port"
 		},
 		"privateKey": {
@@ -47,6 +49,7 @@
 		},
 		"connectionTimeout": {
 			"type": "integer",
+			"default": 6000,
 			"description": "Disconnect from FTP/SFTP server after timeout(ms) (default: 60000)"
 		},
 		"fileNameEncoding": {
@@ -215,15 +218,18 @@
 		},
 		"autoDownloadRefreshTime": {
 			"type": "integer",
+			"default": 1000,
 			"description": "Milliseconds. Auto refresh after this value when set 'autoDownload' as true. default is 1000",
 			"deprecationMessage": "Use refreshTime instead"
 		},
 		"blockDetectingDuration": {
 			"type": "integer",
-			"description": "Milliseconds. If FTP connection is blocked for this value reconnect and retry action. default is 5000"
+			"default": 8000,
+			"description": "Milliseconds. If FTP connection is blocked for this value reconnect and retry action. default is 8000"
 		},
 		"refreshTime": {
 			"type": "integer",
+			"default": 1000,
 			"description": "Milliseconds. re-list remote files After this duration. 'autoDownload' is affected by this property. default is 1000"
 		},
 		"showGreeting": {

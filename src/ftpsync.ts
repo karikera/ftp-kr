@@ -104,7 +104,7 @@ class FtpCacher
 			const st = await path.lstat();
 			if (st.isDirectory()) await this._getUpdatedFileInDir(cmp instanceof f.Directory ? cmp : null, path, list);
 			if (testLatest(cmp, st)) return;
-			list[ws.workpath(path)] = st;
+			list[this.mainConfig.workpath(path)] = st;
 		}
 		catch(err)
 		{
@@ -137,7 +137,7 @@ class FtpCacher
 	async ftpDelete(task:work.Task, path:File, options?:BatchOptions):Promise<void>
 	{
 		const that = this;
-		const workpath = ws.workpath(path);
+		const workpath = this.mainConfig.workpath(path);
 
 		async function deleteTest(file:f.State):Promise<void>
 		{
@@ -164,7 +164,7 @@ class FtpCacher
 
 	async ftpUpload(task:work.Task, path:File, options?:BatchOptions):Promise<UploadReport>
 	{
-		const workpath = ws.workpath(path);
+		const workpath = this.mainConfig.workpath(path);
 		const report = new UploadReport;
 	
 		const that = this;
@@ -218,7 +218,7 @@ class FtpCacher
 			else
 			{
 				that.refreshed.delete(workpath);
-				that.refreshed.delete(ws.workpath(path.parent()));
+				that.refreshed.delete(that.mainConfig.workpath(path.parent()));
 				try
 				{
 					await that.ftp.upload(task, workpath, path);
@@ -241,7 +241,7 @@ class FtpCacher
 			}
 		}
 
-		const filedir = this.fs.get(ws.workpath(path.parent()));
+		const filedir = this.fs.get(this.mainConfig.workpath(path.parent()));
 		if (!filedir) return await next();
 		oldfile = filedir.files[path.basename()];
 		if (!oldfile) return await next();
@@ -282,7 +282,7 @@ class FtpCacher
 
 	async ftpDownload(task:work.Task, path:File, options?:BatchOptions):Promise<void>
 	{
-		const workpath = ws.workpath(path);
+		const workpath = this.mainConfig.workpath(path);
 		var file:f.State|null = this.fs.get(workpath);
 		if (!file)
 		{
@@ -294,7 +294,7 @@ class FtpCacher
 			}
 		}
 
-		if (file instanceof f.Directory) await path.mkdir();
+		if (file instanceof f.Directory) await path.mkdirp();
 		else await this.ftp.download(task, path, workpath);
 		const stats = await path.stat();
 		file.lmtime = +stats.mtime;
@@ -324,7 +324,7 @@ class FtpCacher
 
 		if (file instanceof f.File && stats.size === file.size) return;
 		if (file instanceof f.Directory) await path.mkdir();
-		else await this.ftp.download(task, path, ws.workpath(path));
+		else await this.ftp.download(task, path, this.mainConfig.workpath(path));
 		stats = await path.stat();
 		file.lmtime = +stats.mtime;
 		file.lmtimeWithThreshold = file.lmtime + 1000;
@@ -340,7 +340,7 @@ class FtpCacher
 	{
 		try
 		{
-			await this.ftpList(task, this.workspace);
+			await this.ftpList(task, this.mainConfig.basePath);
 		}
 		catch(e)
 		{
@@ -360,13 +360,13 @@ class FtpCacher
 			await this.ftp.mkdir(task, '');
 			task.checkCanceled();
 
-			await this.ftpList(task, this.workspace);
+			await this.ftpList(task, this.mainConfig.basePath);
 		}
 	}
 
 	ftpList(task:work.Task, path:File, options?:BatchOptions):Promise<f.Directory>
 	{
-		const workpath = ws.workpath(path);
+		const workpath = this.mainConfig.workpath(path);
 		const latest = this.refreshed.get(workpath);
 		if (latest)
 		{
@@ -416,7 +416,7 @@ class FtpCacher
 			let promise = Promise.resolve();
 			for(const workpath in list)
 			{
-				const path = this.workspace.child(workpath);
+				const path = this.mainConfig.basePath.child(workpath);
 				const st = list[workpath];
 				promise = promise
 				.then(() => this.ftpStat(task, path))
@@ -476,7 +476,7 @@ class FtpCacher
 			{
 				for (const p of willDel)
 				{
-					list[ws.workpath(path.child(p))] = command;
+					list[that.mainConfig.workpath(path.child(p))] = command;
 				}
 			}
 			async function processChild():Promise<void>
@@ -524,7 +524,7 @@ class FtpCacher
 	ftpRefreshForce(task:work.Task):Promise<void>
 	{
 		this.refreshed.clear();
-		return this._refeshForce(task, this.workspace);
+		return this._refeshForce(task, this.mainConfig.basePath);
 	}
 
 	
@@ -536,7 +536,7 @@ class FtpCacher
 		for (const file in tasklist)
 		{
 			const exec = tasklist[file];
-			const path = this.workspace.child(file);
+			const path = this.mainConfig.basePath.child(file);
 			try
 			{
 				switch (exec)
@@ -651,14 +651,14 @@ class FtpCacher
 
 	private syncTestClean(task:work.Task):Promise<TaskList>
 	{
-		return this.syncTestNotExists(task, this.workspace, false);
+		return this.syncTestNotExists(task, this.mainConfig.basePath, false);
 	}
 
 	public async list(task:work.Task, path:File):Promise<void>
 	{
 		const dir = await this.ftpList(task, path);
 		const pick = new vsutil.QuickPick;
-		if (path.fsPath !== this.workspace.fsPath)
+		if (path.fsPath !== this.mainConfig.basePath.fsPath)
 		{
 			pick.item('Current Directory Action', ()=>{
 				const pick = new vsutil.QuickPick;
@@ -679,7 +679,7 @@ class FtpCacher
 			{
 			case '': case '.': continue;
 			case '..':
-				if(ws.workpath(path) === '') continue;
+				if(this.mainConfig.basePath.fsPath === path.fsPath) continue;
 				pick.item('[DIR]\t..', ()=>this.list(task, path.parent()));
 				continue;
 			}

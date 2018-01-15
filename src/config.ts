@@ -198,6 +198,7 @@ interface ConfigProperties extends ServerConfig
 {
 	ignore?:(string|RegExp)[];
 	altServer?:ServerConfig[];
+	localBasePath?:string;
 	autoUpload?:boolean;
 	autoDelete?:boolean;
 	autoDownload?:boolean;
@@ -224,6 +225,8 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 
 	public state:State = State.NOTFOUND;
 	public lastError:Error|string|null = null;
+
+	public basePath:File;
 	
 	public readonly onLoad = event.make<work.Task>();
 	public readonly onInvalid = event.make<void>();
@@ -260,7 +263,7 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 	{
 		const config:Config = this;
 
-		const workpath = '/'+ws.workpath(path);
+		const pathFromWorkspace = '/'+path.relativeFrom(this.workspace);
 		const check = config.ignore;
 		if (check)
 		{
@@ -271,7 +274,7 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 				{
 					pattern = patternToRegExp(pattern);
 				}
-				if (pattern.test(workpath))
+				if (pattern.test(pathFromWorkspace))
 				{
 					return true;
 				}
@@ -367,6 +370,8 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 		this.appendConfig(obj);
 		const config:Config = this;
 
+		if (config.localBasePath) this.basePath = this.workspace.child(config.localBasePath);
+		else this.basePath = this.workspace;
 
 		if (!config.altServer) return;
 
@@ -538,6 +543,26 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 			return this.onLoadError(this.lastError);
 		} 
 		return Promise.resolve();
+	}
+
+	/**
+	 * path from localBasePath
+	 */
+	public workpath(file:File):string
+	{
+		const workpath = file.relativeFrom(this.basePath);
+		if (workpath === undefined)
+		{
+			if (this.basePath !== this.workspace)
+			{
+				throw Error(`${file.fsPath} is not in localBasePath`);
+			}
+			else
+			{
+				throw Error(`${file.fsPath} is not in workspace`);
+			}
+		}
+		return workpath;
 	}
 
 	private loadWrap(name:string, onwork:(task:work.Task)=>Promise<void>):Thenable<boolean>

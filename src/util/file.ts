@@ -116,6 +116,22 @@ export default class File
 		return new File(path.dirname(this.fsPath));
 	}
 
+	relativeFrom(parent:File):string|undefined
+	{
+		const parentPath = parent.fsPath;
+		const fsPath = this.fsPath;
+		if (fsPath.startsWith(parentPath))
+		{
+			if (parentPath.length === fsPath.length) return '.';
+			const rpath = fsPath.substr(parentPath.length).replace(/\\/g, '/');
+			if (rpath.startsWith('/'))
+			{
+				return rpath.substr(1);
+			}
+		}
+		return undefined;
+	}
+
 	async glob(pattern:string):Promise<File[]>
 	{
 		const files = await glob(this.child(pattern).fsPath);

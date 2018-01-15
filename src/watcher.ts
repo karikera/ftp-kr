@@ -83,7 +83,8 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 			}
 			if (!autoSync) return;
 			if (this.config.checkIgnorePath(path)) return;
-			await this.scheduler.task(workName+' '+ws.workpath(path), task => workFunc.call(this.ftp, task, path));
+			if (!path.in(this.config.basePath)) return;
+			await this.scheduler.task(workName+' '+this.config.workpath(path), task => workFunc.call(this.ftp, task, path));
 		}
 		catch (err) {
 			this.logger.error(err);
@@ -104,7 +105,8 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 				try {
 					if (!config.autoDownload) return;
 					if (config.checkIgnorePath(path)) return;
-					scheduler.task('download '+path, task => this.ftp.downloadWithCheck(task, path));
+					if (!path.in(this.config.basePath)) return;
+					scheduler.task('download '+config.workpath(path), task => this.ftp.downloadWithCheck(task, path));
 				}
 				catch (err) {
 					logger.error(err);

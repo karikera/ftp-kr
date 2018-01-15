@@ -684,7 +684,7 @@ export class FtpManager
 	{
 		return new Promise<T>((resolve, reject)=>{
 			if (this.cancelBlockedCommand) throw Error('Multiple order at same time');
-			var blockTimeout = setTimeout(()=>reject('BLOCKED'), this.config.blockDetectingDuration || 5000);
+			var blockTimeout = setTimeout(()=>reject('BLOCKED'), this.config.blockDetectingDuration || 8000);
 			this.cancelBlockedCommand = ()=>{
 				this.cancelBlockedCommand = null;
 				clearTimeout(blockTimeout);

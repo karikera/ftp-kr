@@ -767,6 +767,12 @@ export class FtpSyncManager implements ws.WorkspaceItem
 		this.ftp.destroy();
 	}
 
+	public reconnect(task:work.Task):Promise<void>
+	{
+		this.ftp.destroy();
+		return this.ftp.init(task);
+	}
+
 	public upload(task:work.Task, path:File, options?:BatchOptions):Promise<UploadReport>
 	{
 		return this.ftp.ftpUpload(task, path, options);

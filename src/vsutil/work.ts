@@ -5,8 +5,6 @@ import * as error from './error';
 
 const resolvedPromise:Promise<void> = Promise.resolve();
 
-export const CANCELLED = Symbol('TASK_CANCELLED');
-
 enum TaskState
 {
 	WAIT,
@@ -50,7 +48,7 @@ class TaskImpl implements Task
 	public promise:Promise<void>;
 	public readonly logger:log.Logger;
 
-	constructor(private scheduler:Scheduler,public name:string, public task:(task:Task)=>any)
+	constructor(public readonly scheduler:Scheduler,public name:string, public task:(task:Task)=>any)
 	{
 		this.logger = scheduler.logger;
 		this.promise = new Promise<void>(resolve=>this.resolve = resolve);
@@ -91,7 +89,7 @@ class TaskImpl implements Task
 		}
 		catch(err)
 		{
-			if (err === CANCELLED)
+			if (err === 'CANCELLED')
 			{
 				this.logger.verbose(`[TASK:${this.name}] cancelled`);
 				return;
@@ -117,9 +115,9 @@ class TaskImpl implements Task
 			return Promise.reject(Error('Task.with must call in task'));
 		}
 
-		if (this.cancelled) return Promise.reject(CANCELLED);
+		if (this.cancelled) return Promise.reject('CANCELLED');
 		return new Promise((resolve, reject)=>{
-			this.oncancel(()=>reject(CANCELLED));
+			this.oncancel(()=>reject('CANCELLED'));
 			waitWith.then(v=>{
 				if (this.cancelled) return;
 				this.removeCancelListener(reject);
@@ -154,7 +152,7 @@ class TaskImpl implements Task
 
 	public checkCanceled():void
 	{
-		if (this.cancelled) throw CANCELLED;
+		if (this.cancelled) throw 'CANCELLED';
 	}
 
 	private fireCancel():void

@@ -147,7 +147,7 @@ class FileInfo
 export const DIRECTORY_NOT_FOUND = 1;
 export const FILE_NOT_FOUND = 2;
 
-const ALREADY_DESTROYED = 'destroyed connection access';
+const NOT_CREATED = 'not created connection access';
 
 function _errorWrap(err):Error
 {
@@ -165,12 +165,8 @@ function _errorWrap(err):Error
 
 abstract class FileInterface
 {
-	protected destroyTimeout:NodeJS.Timer|null = null;
 	protected readonly logger:log.Logger;
 	protected readonly state:vsutil.StateBar;
-	protected connected:boolean = false;
-
-	public ondestroy:()=>void;
 	
 	constructor(public readonly workspace:ws.Workspace, protected readonly config:cfg.ServerConfig)
 	{
@@ -179,8 +175,8 @@ abstract class FileInterface
 	}
 
 	abstract connect(password?:string):Promise<void>;
-
-	abstract destroyed():boolean;
+	abstract disconnect():void;
+	abstract connected():boolean;
 
 	private bin2str(bin:string):string
 	{
@@ -210,48 +206,16 @@ abstract class FileInterface
 		this.logger.message(message);
 	}
 
-	
-	cancelDestroyTimeout():void
-	{
-		if (!this.destroyTimeout)
-			return;
-
-		clearTimeout(this.destroyTimeout);
-		this.destroyTimeout = null;
-	}
-
-	update():void
-	{
-		this.cancelDestroyTimeout();
-		this.destroyTimeout = setTimeout(()=>{
-			this.destroy();
-		}, this.config.connectionTimeout ? this.config.connectionTimeout : 60000);
-	}
-
-	destroy():void
-	{
-		if (this.connected)
-		{
-			this.connected = false;
-			this.log('Disconnected');
-		}
-		this.cancelDestroyTimeout();
-		this.ondestroy();
-	}
-
 	_callWithName<T>(name:string, workpath:string, ignorecode:number, defVal:T, callback:(name:string)=>Promise<T>):Promise<T>
 	{
-		this.cancelDestroyTimeout();
 		this.logWithState(name+' '+workpath);
 		const ftppath = this.toftpPath(workpath);
 		return callback(ftppath).then(v=>{
 			this.state.close();
-			this.update();
 			return v;
 		})
 		.catch((err):T=>{
 			this.state.close();
-			this.update();
 			if (err.ftpCode === ignorecode) return defVal;
 			this.log(name+" fail: "+workpath);
 			throw _errorWrap(err);
@@ -260,7 +224,6 @@ abstract class FileInterface
 
 	upload(workpath:string, localpath:File):Promise<void>
 	{
-		this.cancelDestroyTimeout();
 		this.logWithState('upload '+workpath);
 		const ftppath = this.toftpPath(workpath);
 
@@ -274,11 +237,9 @@ abstract class FileInterface
 		})
 		.then(()=>{
 			this.state.close();
-			this.update();
 		})
 		.catch((err)=>{
 			this.state.close();
-			this.update();
 			this.log("upload fail: "+workpath);
 			throw _errorWrap(err);
 		});
@@ -286,7 +247,6 @@ abstract class FileInterface
 
 	download(localpath:File, workpath:string):Promise<void>
 	{
-		this.cancelDestroyTimeout();
 		this.logWithState('download '+workpath);
 		const ftppath = this.toftpPath(workpath);
 
@@ -295,7 +255,6 @@ abstract class FileInterface
 			return new Promise<void>(resolve=>{
 				stream.once('close', ()=>{
 					this.state.close();
-					this.update();
 					resolve();
 				});
 				stream.pipe(localpath.createWriteStream());
@@ -303,7 +262,6 @@ abstract class FileInterface
 		})
 		.catch(err=>{
 			this.state.close();
-			this.update();
 			this.log("download fail: "+workpath);
 			throw _errorWrap(err);
 		});
@@ -311,7 +269,6 @@ abstract class FileInterface
 
 	list(workpath:string):Promise<FileInfo[]>
 	{
-		this.cancelDestroyTimeout();
 		this.logWithState('list '+workpath);
 
 		var ftppath = this.toftpPath(workpath);
@@ -319,7 +276,6 @@ abstract class FileInterface
 
 		return this._list(ftppath).then((list)=>{
 			this.state.close();
-			this.update();
 
 			const errfiles:string[] = [];
 			for (var i = 0; i<list.length; i++)
@@ -347,7 +303,6 @@ abstract class FileInterface
 		})
 		.catch(err=>{
 			this.state.close();
-			this.update();
 			this.log("list fail: "+workpath);
 			throw _errorWrap(err);
 		});
@@ -387,31 +342,30 @@ abstract class FileInterface
 
 class Ftp extends FileInterface
 {
-	client:FtpClient|null = new FtpClient();
+	client:FtpClient|null = null;
 
-	destroyed():boolean
+	connected():boolean
 	{
-		return this.client === null;
+		return this.client !== null;
 	}
 
 	connect(password?:string):Promise<void>
 	{
 		return new Promise<void>((resolve, reject)=>{
-			if (!this.client) return reject(Error(ALREADY_DESTROYED));
+			if (this.client) return reject(Error('Already created'));
+			this.client = new FtpClient;
 
 			if (this.config.showGreeting)
 			{
 				this.client.on('greeting', msg=>this.log(msg));
 			}
 			this.client.on("ready", ()=>{
-				if (!this.client) return reject(Error(ALREADY_DESTROYED));
+				if (!this.client) return reject(Error(NOT_CREATED));
 				
-				this.connected = true;
 				const socket:stream.Duplex = this.client['_socket'];
 				const oldwrite = socket.write;
 				socket.write = str=>oldwrite.call(socket, str, 'binary');
 				socket.setEncoding('binary');
-				this.update();
 				resolve();
 			});
 			this.client.on("error", reject);
@@ -443,9 +397,8 @@ class Ftp extends FileInterface
 		});
 	}
 
-	destroy()
+	disconnect()
 	{
-		super.destroy();
 		if (this.client)
 		{
 			this.client.end();
@@ -464,7 +417,7 @@ class Ftp extends FileInterface
 	_rmdir(ftppath:string, recursive:boolean):Promise<void>
 	{
 		const client = this.client;
-		if (!client) return Promise.reject(Error(ALREADY_DESTROYED));
+		if (!client) return Promise.reject(Error(NOT_CREATED));
 
 		return Ftp.wrapToPromise<void>(callback=>client.rmdir(ftppath, recursive, callback))
 		.catch(e=>{
@@ -476,14 +429,14 @@ class Ftp extends FileInterface
 	_mkdir(ftppath:string, recursive:boolean):Promise<void>
 	{
 		const client = this.client;
-		if (!client) return Promise.reject(Error(ALREADY_DESTROYED));
+		if (!client) return Promise.reject(Error(NOT_CREATED));
 		return Ftp.wrapToPromise<void>(callback=>client.mkdir(ftppath, recursive, callback));
 	}
 
 	_delete(ftppath:string):Promise<void>
 	{
 		const client = this.client;
-		if (!client) return Promise.reject(Error(ALREADY_DESTROYED));
+		if (!client) return Promise.reject(Error(NOT_CREATED));
 		return Ftp.wrapToPromise<void>(callback=>client.delete(ftppath, callback))
 		.catch(e=>{
 			if (e.code === 550) e.ftpCode = FILE_NOT_FOUND;
@@ -494,7 +447,7 @@ class Ftp extends FileInterface
 	_put(localpath:File, ftppath:string):Promise<void>
 	{
 		const client = this.client;
-		if (!client) return Promise.reject(Error(ALREADY_DESTROYED));
+		if (!client) return Promise.reject(Error(NOT_CREATED));
 		return Ftp.wrapToPromise<void>(callback=>client.put(localpath.fsPath, ftppath, callback))
 		.catch(e=>{
 			if (e.code === 553) e.ftpCode = DIRECTORY_NOT_FOUND;
@@ -506,14 +459,14 @@ class Ftp extends FileInterface
 	_get(ftppath:string):Promise<NodeJS.ReadableStream>
 	{
 		const client = this.client;
-		if (!client) return Promise.reject(Error(ALREADY_DESTROYED));
+		if (!client) return Promise.reject(Error(NOT_CREATED));
 		return Ftp.wrapToPromise(callback=>client.get(ftppath, callback));
 	}
 
 	_list(ftppath:string):Promise<FileInfo[]>
 	{
 		const client = this.client;
-		if (!client) return Promise.reject(Error(ALREADY_DESTROYED));
+		if (!client) return Promise.reject(Error(NOT_CREATED));
 		return Ftp.wrapToPromise<FtpClientO.ListingElement[]>(callback=>client.list(ftppath, false, callback))
 		.then(list=>list.map(from=>{
 			const to = new FileInfo;
@@ -532,7 +485,7 @@ class Ftp extends FileInterface
 	_lastmod(ftppath:string):Promise<number>
 	{
 		const client = this.client;
-		if (!client) return Promise.reject(Error(ALREADY_DESTROYED));
+		if (!client) return Promise.reject(Error(NOT_CREATED));
 		return Ftp.wrapToPromise(callback=>client.lastMod(ftppath, callback))
 		.then(date=>+date);
 	}
@@ -541,18 +494,19 @@ class Ftp extends FileInterface
 
 class Sftp extends FileInterface
 {
-	client:SftpClientO|null = new SftpClient;
+	client:SftpClientO|null = null;
 
-	destroyed():boolean
+	connected():boolean
 	{
-		return this.client === null;
+		return this.client !== null;
 	}
 
 	async connect(password?:string):Promise<void>
 	{
 		try
 		{
-			if (!this.client) throw Error(ALREADY_DESTROYED);
+			if (this.client) throw Error(NOT_CREATED);
+			this.client = new SftpClient;
 
 			var options:ssh2.ConnectConfig = {};
 			const config = this.config;
@@ -575,8 +529,6 @@ class Sftp extends FileInterface
 			
 			options = util.merge(options, config.sftpOverride);
 			await this.client.connect(options);
-			this.connected = true;
-			this.update();
 		}
 		catch(err)
 		{
@@ -584,9 +536,8 @@ class Sftp extends FileInterface
 		}
 	}
 	
-	destroy():void
+	disconnect():void
 	{
-		super.destroy();
 		if (this.client)
 		{
 			this.client.end().catch(()=>{});
@@ -596,7 +547,7 @@ class Sftp extends FileInterface
 
 	_rmdir(ftppath:string):Promise<void>
 	{
-		if (!this.client) return Promise.reject(Error(ALREADY_DESTROYED));
+		if (!this.client) return Promise.reject(Error(NOT_CREATED));
 		return this.client["rmdir"](ftppath, true)
 		.catch(e=>{
 			if (e.code === 2) e.ftpCode = FILE_NOT_FOUND;
@@ -606,7 +557,7 @@ class Sftp extends FileInterface
 
 	_delete(ftppath:string):Promise<void>
 	{
-		if (!this.client) return Promise.reject(Error(ALREADY_DESTROYED));
+		if (!this.client) return Promise.reject(Error(NOT_CREATED));
 		return this.client.delete(ftppath)
 		.catch(e=>{
 			if (e.code === 2) e.ftpCode = FILE_NOT_FOUND;
@@ -616,13 +567,13 @@ class Sftp extends FileInterface
 
 	_mkdir(ftppath:string):Promise<void>
 	{
-		if (!this.client) return Promise.reject(Error(ALREADY_DESTROYED));
+		if (!this.client) return Promise.reject(Error(NOT_CREATED));
 		return this.client.mkdir(ftppath, true);
 	}
 
 	_put(localpath:File, ftppath:string):Promise<void>
 	{
-		if (!this.client) return Promise.reject(Error(ALREADY_DESTROYED));
+		if (!this.client) return Promise.reject(Error(NOT_CREATED));
 		return this.client.put(localpath.fsPath, ftppath, false, null)
 		.catch(e=>{
 			if (e.code === 2) e.ftpCode = DIRECTORY_NOT_FOUND;
@@ -632,13 +583,13 @@ class Sftp extends FileInterface
 
 	_get(ftppath:string):Promise<NodeJS.ReadableStream>
 	{
-		if (!this.client) return Promise.reject(Error(ALREADY_DESTROYED));
+		if (!this.client) return Promise.reject(Error(NOT_CREATED));
 		return this.client.get(ftppath, false, null);
 	}
 
 	_list(ftppath:string):Promise<FileInfo[]>
 	{
-		if (!this.client) return Promise.reject(Error(ALREADY_DESTROYED));
+		if (!this.client) return Promise.reject(Error(NOT_CREATED));
 		return this.client.list(ftppath)
 		.then(list=>list.map(from=>{
 			const to = new FileInfo;
@@ -665,6 +616,9 @@ export class FtpManager
 	client:FileInterface|null = null;
 
 	private connectionInfo:string = '';
+	private destroyTimeout:NodeJS.Timer|null = null;
+	private cancelBlockedCommand:(()=>void)|null = null;
+	private connected:boolean = false;
 	
 	private readonly logger:log.Logger;
 
@@ -673,11 +627,38 @@ export class FtpManager
 		this.logger = workspace.query(log.Logger);
 	}
 
+	private cancelDestroyTimeout():void
+	{
+		if (!this.destroyTimeout)
+			return;
+
+		clearTimeout(this.destroyTimeout);
+		this.destroyTimeout = null;
+	}
+
+	private updateDestroyTimeout():void
+	{
+		this.cancelDestroyTimeout();
+		this.destroyTimeout = setTimeout(()=>this.destroy(), this.config.connectionTimeout || 60000);
+	}
+
 	public destroy():void
 	{
+		this.cancelDestroyTimeout();
+		if (this.cancelBlockedCommand)
+		{
+			this.cancelBlockedCommand();
+			this.cancelBlockedCommand = null;
+		}
 		if (this.client)
 		{
-			this.client.destroy();
+			if (this.connected)
+			{
+				this.client.log('Disconnected');
+				this.connected = false;
+			}
+			this.client.disconnect();
+			this.client = null;
 		}
 	}
 
@@ -698,7 +679,52 @@ export class FtpManager
 		];
 		return JSON.stringify(datas);
 	}
+
+	private blockTestWith<T>(task:Promise<T>):Promise<T>
+	{
+		return new Promise<T>((resolve, reject)=>{
+			if (this.cancelBlockedCommand) throw Error('Multiple order at same time');
+			var blockTimeout = setTimeout(()=>reject('BLOCKED'), this.config.blockDetectingDuration || 5000);
+			this.cancelBlockedCommand = ()=>{
+				this.cancelBlockedCommand = null;
+				clearTimeout(blockTimeout);
+				reject('CANCELLED');
+			};
+			task.then(t=>{
+				this.cancelBlockedCommand = null;
+				clearTimeout(blockTimeout);
+				resolve(t);
+			}).catch(err=>{
+				this.cancelBlockedCommand = null;
+				clearTimeout(blockTimeout);
+				reject(err);
+			});
+		});
+	}
 	
+	private task<T>(task:work.Task, callback:(client:FileInterface)=>Promise<T>)
+	{
+		return this.init(task).then(async(client)=>{
+			for (;;)
+			{
+				this.cancelDestroyTimeout();
+				try
+				{
+					const t = await task.with(this.blockTestWith(callback(client)));
+					this.updateDestroyTimeout();
+					return t;
+				}
+				catch(err)
+				{
+					this.updateDestroyTimeout();
+					if (err !== 'BLOCKED') throw err;
+					this.destroy();
+					client = await this.init(task);
+				}
+			}
+		});
+	}
+
 	public async init(task:work.Task):Promise<FileInterface>
 	{
 		const that = this;
@@ -707,27 +733,28 @@ export class FtpManager
 		{
 			if (coninfo === this.connectionInfo)
 			{
-				this.client.update();
+				this.updateDestroyTimeout();
 				return Promise.resolve(this.client);
 			}
-			this.client.destroy();
-			this.client = null;
+			this.destroy();
 			this.config.passwordInMemory = undefined;
 		}
 		this.connectionInfo = coninfo;
 		
 		const config = this.config;
 
-		var newclient:FileInterface;
-		switch (config.protocol)
+		function createClient():FileInterface
 		{
-		case 'sftp': newclient = new Sftp(this.workspace, this.config); break;
-		case 'ftp': newclient = new Ftp(this.workspace, this.config); break;
-		case 'ftps': newclient = new Ftp(this.workspace, this.config); break;
-		default: throw Error(`Invalid protocol ${config.protocol}`);
+			var newclient:FileInterface;
+			switch (config.protocol)
+			{
+			case 'sftp': newclient = new Sftp(that.workspace, that.config); break;
+			case 'ftp': newclient = new Ftp(that.workspace, that.config); break;
+			case 'ftps': newclient = new Ftp(that.workspace, that.config); break;
+			default: throw Error(`Invalid protocol ${config.protocol}`);
+			}
+			return newclient;
 		}
-		newclient.ondestroy = ()=>this.client = null;
-		this.client = newclient;
 	
 		var url = '';
 		url += config.protocol;
@@ -746,8 +773,23 @@ export class FtpManager
 	
 		async function tryToConnect(password:string|undefined):Promise<void>
 		{
-			that.logger.message(`Try connect to ${url} with user ${config.username}`);
-			await task.with(newclient.connect(password));
+			for (;;)
+			{
+				const client = createClient();
+				try
+				{
+					that.logger.message(`Try connect to ${url} with user ${config.username}`);
+					await task.with(that.blockTestWith(client.connect(password)));
+					client.log('Connected');
+					that.client = client;
+					return;
+				}
+				catch (err)
+				{
+					if (err !== 'BLOCKED') throw err;
+					client.disconnect();
+				}
+			}
 		}
 	
 		async function tryToConnectOrErrorMessage(password:string|undefined):Promise<string|undefined>
@@ -773,7 +815,7 @@ export class FtpManager
 						error = 'Authentication failed';
 						break;
 					default:
-						newclient.destroy();
+						that.destroy();
 						throw _errorWrap(err);
 					}
 					break;
@@ -794,14 +836,14 @@ export class FtpManager
 			else for (;;)
 			{
 				const promptedPassword = await vscode.window.showInputBox({
-					prompt:'ftp-kr: '+config.protocol.toUpperCase()+" Password Request",
+					prompt:'ftp-kr: '+(config.protocol||'').toUpperCase()+" Password Request",
 					password: true,
 					ignoreFocusOut: true,
 					placeHolder: errorMessage
 				});
 				if (promptedPassword === undefined)
 				{
-					newclient.destroy();
+					this.destroy();
 					throw 'PASSWORD_CANCEL';
 				}
 				errorMessage = await tryToConnectOrErrorMessage(promptedPassword);
@@ -822,42 +864,43 @@ export class FtpManager
 				await tryToConnect(config.password);
 			}
 			catch (err) {
-				newclient.destroy();
+				this.destroy();
 				throw _errorWrap(err);
 			}
 		}
 			
-		newclient.log('Connected');
-		return newclient;
+		if (!this.client) throw Error('Client is not created');
+		this.updateDestroyTimeout();
+		return this.client;
 	}
 	
 	public rmdir(task:work.Task, workpath:string):Promise<void>
 	{
-		return this.init(task).then(client => task.with(client.rmdir(workpath)));
+		return this.task(task, client=>client.rmdir(workpath));
 	}
 	
 	public remove(task:work.Task, workpath:string):Promise<void>
 	{
-		return this.init(task).then(client => task.with(client.delete(workpath)));
+		return this.task(task, client=>client.delete(workpath));
 	}
 	
 	public mkdir(task:work.Task, workpath:string):Promise<void>
 	{
-		return this.init(task).then(client => task.with(client.mkdir(workpath)));
+		return this.task(task, client=>client.mkdir(workpath));
 	}
 	
 	public upload(task:work.Task, workpath:string, localpath:File):Promise<void>
 	{
-		return this.init(task).then(client => task.with(client.upload(workpath, localpath)));
+		return this.task(task, client=>client.upload(workpath, localpath));
 	}
 	
 	public download(task:work.Task, localpath:File, workpath:string):Promise<void>
 	{
-		return this.init(task).then(client => task.with(client.download(localpath, workpath)));
+		return this.task(task, client=>client.download(localpath, workpath));
 	}
 	
 	public list(task:work.Task, workpath:string):Promise<FileInfo[]>
 	{
-		return this.init(task).then(client => task.with(client.list(workpath)));
+		return this.task(task, client=>client.list(workpath));
 	}	
 }

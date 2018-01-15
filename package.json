@@ -68,6 +68,11 @@
         "command": "ftpkr.list",
         "title": "List",
         "category": "ftp-kr"
+      },
+      {
+        "command": "ftpkr.reconnect",
+        "title": "Reconnect",
+        "category": "ftp-kr"
       }
     ],
     "jsonValidation": [

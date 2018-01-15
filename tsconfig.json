@@ -8,7 +8,8 @@
 		"target": "es2015",
 		"outDir": "out",
 		"sourceMap": true,
-		"strictNullChecks": true
+		"strictNullChecks": true,
+		"noImplicitThis": true
 	},
 	"include": ["src/**/*"]
 }

@@ -162,4 +162,22 @@ export const commands:cmd.Command = {
 		await config.loadTest();
 		scheduler.taskWithTimeout('ftpkr.list', 1000, task => ftp.list(task, workspace));
 	},
+	
+	async 'ftpkr.reconnect' (args: cmd.Args)
+	{
+		if (!args.workspace)
+		{
+			args.workspace = await vsutil.selectWorkspace();
+			if (!args.workspace) return;
+		}
+		
+		const workspace = args.workspace;
+		const config = workspace.query(cfg.Config);
+		const scheduler = workspace.query(work.Scheduler);
+		const ftp = workspace.query(ftpsync.FtpSyncManager);
+
+		await config.loadTest();
+		scheduler.cancel();
+		scheduler.task('ftpkr.reconnect', task => ftp.reconnect(task));
+	},
 };

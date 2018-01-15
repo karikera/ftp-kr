@@ -183,6 +183,7 @@ export interface ServerConfig
 	passphrase?:string;
 	connectionTimeout?:number;
 	autoDownloadRefreshTime?:number;
+	blockDetectingDuration?:number;
 	refreshTime?:number;
 	privateKey?:string;
 	showGreeting?:boolean;

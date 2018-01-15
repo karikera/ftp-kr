@@ -218,6 +218,10 @@
 			"description": "Milliseconds. Auto refresh after this value when set 'autoDownload' as true. default is 1000",
 			"deprecationMessage": "Use refreshTime instead"
 		},
+		"blockDetectingDuration": {
+			"type": "integer",
+			"description": "Milliseconds. If FTP connection is blocked for this value reconnect and retry action. default is 5000"
+		},
 		"refreshTime": {
 			"type": "integer",
 			"description": "Milliseconds. re-list remote files After this duration. 'autoDownload' is affected by this property. default is 1000"

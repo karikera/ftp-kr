@@ -1,6 +1,8 @@
+
 # 1.2.1
 * Add reconnect command & block detecting
 * Add `localBasePath` option
+* Fix remote modification detection
 
 # 1.2.0
 * Remove closure compiler

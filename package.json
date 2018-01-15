@@ -105,9 +105,7 @@
     "mdgen": "node ./out/tool/schema_to_md.js ./schema/ftp-kr.schema.json"
   },
   "dependencies": {
-    "esprima": "^3.1.3",
     "ftp": "^0.3.10",
-    "get-parameter-names": "^0.3.0",
     "glob": "7.1.0",
     "iconv-lite": "0.4.13",
     "ssh2-sftp-client": "^1.1.0",

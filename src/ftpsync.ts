@@ -265,7 +265,7 @@ class FtpCacher
 	
 			if (ftpstats.type == oldtype && oldsize === ftpstats.size) return await next();
 	
-			const selected = await this.logger.errorConfirm(`${path}: Remote file modified detected.`, "Upload anyway", "Download");
+			const selected = await this.logger.errorConfirm(`${path.fsPath}: Remote file modified detected.`, "Upload anyway", "Download");
 			if (selected)
 			{
 				if (selected !== "Download") return await next();

@@ -1,6 +1,7 @@
 
-import * as file from './file';
+import * as ws from './ws';
 import * as log from './log';
+import * as error from './error';
 
 const resolvedPromise:Promise<void> = Promise.resolve();
 
@@ -88,14 +89,14 @@ class TaskImpl implements Task
 		{
 			await this.task(this);
 		}
-		catch(e)
+		catch(err)
 		{
-			if (e === CANCELLED)
+			if (err === CANCELLED)
 			{
 				this.logger.verbose(`[TASK:${this.name}] cancelled`);
 				return;
 			}
-			this.logger.error(e);
+			error.processError(this.logger, err);
 		}
 		this.logger.verbose(`[TASK:${this.name}] done`);
 		this.resolve();
@@ -166,7 +167,7 @@ class TaskImpl implements Task
 	}
 }
 
-export class Scheduler implements file.WorkspaceItem
+export class Scheduler implements ws.WorkspaceItem
 {
 	public currentTask:TaskImpl|null = null;
 	private nextTask:TaskImpl|null = null;
@@ -175,9 +176,9 @@ export class Scheduler implements file.WorkspaceItem
 
 	private promise:Promise<void> = Promise.resolve();
 
-	constructor(arg:log.Logger|file.Workspace)
+	constructor(arg:log.Logger|ws.Workspace)
 	{
-		if (arg instanceof file.Workspace)
+		if (arg instanceof ws.Workspace)
 		{
 			this.logger = arg.query(log.Logger);
 		}

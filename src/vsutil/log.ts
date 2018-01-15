@@ -1,5 +1,5 @@
 
-import * as file from './file';
+import * as ws from './ws';
 import { OutputChannel, window } from 'vscode';
 import * as vsutil from './vsutil';
 
@@ -12,15 +12,15 @@ enum LogLevelEnum
 }
 
 
-export class Logger implements file.WorkspaceItem
+export class Logger implements ws.WorkspaceItem
 {
 	public logLevel:LogLevelEnum = LogLevelEnum.NORMAL;
 	private output:OutputChannel|null = null;
 	public static all:Set<Logger> = new Set;
 
-	constructor(name:string|file.Workspace)
+	constructor(name:string|ws.Workspace)
 	{
-		if (name instanceof file.Workspace)
+		if (name instanceof ws.Workspace)
 		{
 			name = "ftp-kr/" + name.name;
 		}

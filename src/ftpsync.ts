@@ -1,9 +1,10 @@
 
 import * as f from './util/filesystem';
 import * as util from './util/util';
+import {default as File, Stats} from './util/file';
 
 import * as log from './vsutil/log';
-import * as file from './vsutil/file';
+import * as ws from './vsutil/ws';
 import * as work from './vsutil/work';
 import * as vsutil from './vsutil/vsutil';
 
@@ -17,9 +18,9 @@ export interface BatchOptions
 	ignoreNotExistFile?:boolean;
 }
 
-const TASK_FILE_PATH = file.File.parse("/.vscode/ftp-kr.task.json");
+const TASK_FILE_PATH = File.parse("/.vscode/ftp-kr.task.json");
 
-function testLatest(file:f.State|null, localStat:file.Stats):boolean
+function testLatest(file:f.State|null, localStat:Stats):boolean
 {
     if (!file) return false;
     switch(file.type)
@@ -73,14 +74,14 @@ class FtpCacher
 	private readonly logger:log.Logger;
 	private readonly ftp:ftp.FtpManager;
 	
-	constructor(public readonly workspace:file.Workspace, private readonly config:cfg.ServerConfig)
+	constructor(public readonly workspace:ws.Workspace, private readonly config:cfg.ServerConfig)
 	{
 		this.ftp = new ftp.FtpManager(workspace, config);
 		this.logger = workspace.query(log.Logger);
 		this.mainConfig = workspace.query(cfg.Config);
 	}
 
-	private async _getUpdatedFileInDir(cmp:f.Directory|null, path:file.File, list:{[key:string]:file.Stats}):Promise<void>
+	private async _getUpdatedFileInDir(cmp:f.Directory|null, path:File, list:{[key:string]:Stats}):Promise<void>
 	{
 		const files = await path.children();
 		for (const child of files)
@@ -95,7 +96,7 @@ class FtpCacher
 		}
 	}
 	
-	private async _getUpdatedFile(cmp:f.State|null, path:file.File, list:{[key:string]:file.Stats}):Promise<void>
+	private async _getUpdatedFile(cmp:f.State|null, path:File, list:{[key:string]:Stats}):Promise<void>
 	{
 		if (this.mainConfig.checkIgnorePath(path)) return;
 		try
@@ -103,7 +104,7 @@ class FtpCacher
 			const st = await path.lstat();
 			if (st.isDirectory()) await this._getUpdatedFileInDir(cmp instanceof f.Directory ? cmp : null, path, list);
 			if (testLatest(cmp, st)) return;
-			list[path.workpath()] = st;
+			list[ws.workpath(path)] = st;
 		}
 		catch(err)
 		{
@@ -133,10 +134,10 @@ class FtpCacher
 		this.fs.delete(path);
 	}
 	
-	async ftpDelete(task:work.Task, path:file.File, options?:BatchOptions):Promise<void>
+	async ftpDelete(task:work.Task, path:File, options?:BatchOptions):Promise<void>
 	{
 		const that = this;
-		const workpath = path.workpath();
+		const workpath = ws.workpath(path);
 
 		async function deleteTest(file:f.State):Promise<void>
 		{
@@ -161,13 +162,13 @@ class FtpCacher
 		await deleteTest(file);
 	}
 
-	async ftpUpload(task:work.Task, path:file.File, options?:BatchOptions):Promise<UploadReport>
+	async ftpUpload(task:work.Task, path:File, options?:BatchOptions):Promise<UploadReport>
 	{
-		const workpath = path.workpath();
+		const workpath = ws.workpath(path);
 		const report = new UploadReport;
 	
 		const that = this;
-		var stats:file.Stats;
+		var stats:Stats;
 		var oldfile:f.State|undefined = undefined;
 		
 		try
@@ -217,7 +218,7 @@ class FtpCacher
 			else
 			{
 				that.refreshed.delete(workpath);
-				that.refreshed.delete(path.parent().workpath());
+				that.refreshed.delete(ws.workpath(path.parent()));
 				try
 				{
 					await that.ftp.upload(task, workpath, path);
@@ -240,7 +241,7 @@ class FtpCacher
 			}
 		}
 
-		const filedir = this.fs.get(path.parent().workpath());
+		const filedir = this.fs.get(ws.workpath(path.parent()));
 		if (!filedir) return await next();
 		oldfile = filedir.files[path.basename()];
 		if (!oldfile) return await next();
@@ -256,13 +257,13 @@ class FtpCacher
 			report.file = oldfile;
 			return report;
 		}
-		if (this.mainConfig === this.config && this.mainConfig.autoDownload)
+		if (this.mainConfig === this.config && !this.mainConfig.autoDownload)
 		{
 			const oldtype = oldfile.type;
 			const oldsize = oldfile.size;
 			const ftpstats = await this.ftpStat(task, path, options);
 	
-			if (ftpstats.type == oldtype &&  oldsize === ftpstats.size) return await next();
+			if (ftpstats.type == oldtype && oldsize === ftpstats.size) return await next();
 	
 			const selected = await this.logger.errorConfirm(`${path}: Remote file modified detected.`, "Upload anyway", "Download");
 			if (selected)
@@ -279,9 +280,9 @@ class FtpCacher
 		}
 	}
 
-	async ftpDownload(task:work.Task, path:file.File, options?:BatchOptions):Promise<void>
+	async ftpDownload(task:work.Task, path:File, options?:BatchOptions):Promise<void>
 	{
-		const workpath = path.workpath();
+		const workpath = ws.workpath(path);
 		var file:f.State|null = this.fs.get(workpath);
 		if (!file)
 		{
@@ -300,7 +301,7 @@ class FtpCacher
 		file.lmtimeWithThreshold = file.lmtime + 1000;
 	}
 
-	async ftpDownloadWithCheck(task:work.Task, path:file.File):Promise<void>
+	async ftpDownloadWithCheck(task:work.Task, path:File):Promise<void>
 	{
 		try
 		{
@@ -323,13 +324,13 @@ class FtpCacher
 
 		if (file instanceof f.File && stats.size === file.size) return;
 		if (file instanceof f.Directory) await path.mkdir();
-		else await this.ftp.download(task, path, path.workpath());
+		else await this.ftp.download(task, path, ws.workpath(path));
 		stats = await path.stat();
 		file.lmtime = +stats.mtime;
 		file.lmtimeWithThreshold = file.lmtime + 1000;
 	}
 
-	async ftpStat(task:work.Task, path:file.File, options?:BatchOptions):Promise<f.State>
+	async ftpStat(task:work.Task, path:File, options?:BatchOptions):Promise<f.State>
 	{
 		const dir = await this.ftpList(task, path.parent(), options);
 		return dir.files[path.basename()];
@@ -363,9 +364,9 @@ class FtpCacher
 		}
 	}
 
-	ftpList(task:work.Task, path:file.File, options?:BatchOptions):Promise<f.Directory>
+	ftpList(task:work.Task, path:File, options?:BatchOptions):Promise<f.Directory>
 	{
-		const workpath = path.workpath();
+		const workpath = ws.workpath(path);
 		const latest = this.refreshed.get(workpath);
 		if (latest)
 		{
@@ -406,7 +407,7 @@ class FtpCacher
 		})();
 	}
 
-	syncTestUpload(task:work.Task, path:file.File):Promise<TaskList>
+	syncTestUpload(task:work.Task, path:File):Promise<TaskList>
 	{
 		const output = {};
 		const list = {};
@@ -427,13 +428,13 @@ class FtpCacher
 		.then(() => output);
 	}
 		
-	async _listNotExists(task:work.Task, path:file.File, list:TaskList, download:boolean):Promise<void>
+	async _listNotExists(task:work.Task, path:File, list:TaskList, download:boolean):Promise<void>
 	{
 		if (this.mainConfig.checkIgnorePath(path)) return;
 		const that = this;
 		const command = download ? "download" : "delete"; 
 		
-		var fslist:file.File[];
+		var fslist:File[];
 		try
 		{
 			fslist = await path.children();
@@ -449,7 +450,7 @@ class FtpCacher
 			const dir = await that.ftpList(task, path);
 			const willDel = new Set<string>();
 
-			const dirlist:file.File[] = [];
+			const dirlist:File[] = [];
 			for(const p in dir.files)
 			{
 				switch(p)
@@ -475,7 +476,7 @@ class FtpCacher
 			{
 				for (const p of willDel)
 				{
-					list[path.child(p).workpath()] = command;
+					list[ws.workpath(path.child(p))] = command;
 				}
 			}
 			async function processChild():Promise<void>
@@ -502,7 +503,7 @@ class FtpCacher
 		}
 	}
 
-	async _refeshForce(task:work.Task, path:file.File):Promise<void>
+	async _refeshForce(task:work.Task, path:File):Promise<void>
 	{
 		const dir = await this.ftpList(task, path);
 		for(const p in dir.files)
@@ -558,13 +559,13 @@ class FtpCacher
 		else return null;
 	}
 
-	public async uploadAll(task:work.Task, path: file.File): Promise<void>
+	public async uploadAll(task:work.Task, path: File): Promise<void>
 	{
 		const tasks = await this.syncTestUpload(task, path);
 		await this.reserveSyncTask(task, tasks, 'Upload All', {doNotRefresh:true});
 	}
 
-	public async downloadAll(task:work.Task, path: file.File): Promise<void>
+	public async downloadAll(task:work.Task, path: File): Promise<void>
 	{
 		const tasks = await this.syncTestDownload(task, path)
 		await this.reserveSyncTask(task, tasks, 'Download All', {doNotRefresh:true});
@@ -576,7 +577,7 @@ class FtpCacher
 		return this.reserveSyncTask(task, tasks, 'ftpkr.Clean All', {doNotRefresh:true});
 	}
 	
-	private syncTestDownload(task:work.Task, path:file.File):Promise<TaskList>
+	private syncTestDownload(task:work.Task, path:File):Promise<TaskList>
 	{
 		return this.syncTestNotExists(task, path, true);
 	}
@@ -641,7 +642,7 @@ class FtpCacher
 		}
 	}
 
-	private syncTestNotExists(task:work.Task, path:file.File, download:boolean):Promise<TaskList>
+	private syncTestNotExists(task:work.Task, path:File, download:boolean):Promise<TaskList>
 	{
 		const list:TaskList = {};
 		return this._listNotExists(task, path, list, download)
@@ -653,7 +654,7 @@ class FtpCacher
 		return this.syncTestNotExists(task, this.workspace, false);
 	}
 
-	public async list(task:work.Task, path:file.File):Promise<void>
+	public async list(task:work.Task, path:File):Promise<void>
 	{
 		const dir = await this.ftpList(task, path);
 		const pick = new vsutil.QuickPick;
@@ -678,7 +679,7 @@ class FtpCacher
 			{
 			case '': case '.': continue;
 			case '..':
-				if(path.workpath() === '') continue;
+				if(ws.workpath(path) === '') continue;
 				pick.item('[DIR]\t..', ()=>this.list(task, path.parent()));
 				continue;
 			}
@@ -720,15 +721,13 @@ class FtpCacher
 }
 
 
-export class FtpSyncManager implements file.WorkspaceItem
+export class FtpSyncManager implements ws.WorkspaceItem
 {
 	private readonly logger:log.Logger;
 	private readonly config:cfg.Config;
 	private readonly ftp:FtpCacher;
-
-	// private syncDataPath:file.File|undefined;
 	
-	constructor(public readonly workspace:file.Workspace)
+	constructor(public readonly workspace:ws.Workspace)
 	{
 		this.logger = workspace.query(log.Logger);
 		this.config = workspace.query(cfg.Config);
@@ -766,62 +765,21 @@ export class FtpSyncManager implements file.WorkspaceItem
 	dispose():void
 	{
 		this.ftp.destroy();
-		// this.saveSync();
 	}
 
-	public upload(task:work.Task, path:file.File, options?:BatchOptions):Promise<UploadReport>
+	public upload(task:work.Task, path:File, options?:BatchOptions):Promise<UploadReport>
 	{
 		return this.ftp.ftpUpload(task, path, options);
 	}
 
-	public download(task:work.Task, path:file.File, doNotRefresh?:boolean):Promise<void>
+	public download(task:work.Task, path:File, doNotRefresh?:boolean):Promise<void>
 	{
 		return this.ftp.ftpDownload(task, path, {doNotRefresh});
 	}
 
-	public downloadWithCheck(task:work.Task, path:file.File):Promise<void>
+	public downloadWithCheck(task:work.Task, path:File):Promise<void>
 	{
 		return this.ftp.ftpDownloadWithCheck(task, path);
-	}
-
-	public saveSync():void
-	{
-		// if (!this.syncDataPath) return;
-		// if (this.config.state !== cfg.State.LOADED) return;
-		// if (!this.config.createSyncCache) return;
-		// this.workspace.child('.vscode').mkdir();
-		// this.syncDataPath.createSync(JSON.stringify(this.ftp.serialize(), null, 4));
-	}
-
-	public async load():Promise<void>
-	{
-		// try
-		// {
-		// 	const config = this.config;
-		// 	this.syncDataPath = this.workspace.child(`.vscode/ftp-kr.sync.${config.protocol}.${config.host}.${config.remotePath.replace(/\//g, ".")}.json`);
-		// 
-		// 	try
-		// 	{
-		// 		const data = await this.syncDataPath.open();
-		// 		const obj = util.parseJson(data);
-		// 		if (obj.version === 1)
-		// 		{
-		// 			this.ftp.deserialize(obj);
-		// 		}
-		// 		this.ftp.refreshed.clear();
-		// 	}
-		// 	catch(err)
-		// 	{
-		// 		this.ftp.reset();
-		// 		this.ftp.refreshed.clear();
-		// 		if (err === work.CANCELLED) throw err;
-		// 	}
-		// }
-		// catch(nerr)
-		// {
-		// 	if (nerr === work.CANCELLED) throw nerr;
-		// 	this.logger.error(nerr);
-		// }
 	}
 
 	public refreshForce(task:work.Task):Promise<void>
@@ -834,12 +792,12 @@ export class FtpSyncManager implements file.WorkspaceItem
 		return this.ftp.init(task);
 	}
 
-	public remove(task:work.Task, path:file.File):Promise<void>
+	public remove(task:work.Task, path:File):Promise<void>
 	{
 		return this.ftp.ftpDelete(task, path);
 	}
 
-	public async uploadAll(task:work.Task, path:file.File): Promise<void>
+	public async uploadAll(task:work.Task, path:File): Promise<void>
 	{
 		const ftp = await this.selectServer();
 		if (ftp === undefined) return;
@@ -847,7 +805,7 @@ export class FtpSyncManager implements file.WorkspaceItem
 		if (ftp !== this.ftp) ftp.destroy();
 	}
 
-	public async downloadAll(task:work.Task, path:file.File): Promise<void>
+	public async downloadAll(task:work.Task, path:File): Promise<void>
 	{
 		const ftp = await this.selectServer();
 		if (ftp === undefined) return;
@@ -863,7 +821,7 @@ export class FtpSyncManager implements file.WorkspaceItem
 		if (ftp !== this.ftp) ftp.destroy();
 	}
 	
-	public async list(task:work.Task, path:file.File):Promise<void>
+	public async list(task:work.Task, path:File):Promise<void>
 	{
 		const ftp = await this.selectServer();
 		if (ftp === undefined) return;

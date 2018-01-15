@@ -199,16 +199,16 @@ export class FileSystem
 
 	putByStat(path:string, st:FSStats):void
 	{
-		var file;
+		var file:FileCommon;
 		var fn = splitFileName(path);
 		var dir = <Directory>this.get(fn.dir, true);
 
 		if (st.isSymbolicLink()) file = new SymLink(dir, fn.name);
 		else if(st.isDirectory()) file = new Directory(dir, fn.name);
 		else if(st.isFile()) file = new File(dir, fn.name);
+		else throw Error('invalid file');
 		file.setByStat(st);
 		dir.files[fn.name] = file;
-		return file;
 	}
 
 	get(path:string, make?:boolean):Directory|null

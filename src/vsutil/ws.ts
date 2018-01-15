@@ -1,109 +1,8 @@
 
-import * as fs from 'fs';
 import * as path from 'path';
-import UtilFile from '../util/file';
-import * as util from '../util/util';
+import File from '../util/file';
 import * as event from '../util/event';
-import glob from '../util/pglob';
 import { workspace, Uri, WorkspaceFolder, ParameterInformation, Disposable, ExtensionContext } from 'vscode';
-
-export type Stats = fs.Stats;
-
-export class File extends UtilFile
-{
-	constructor(public readonly uri:Uri)
-	{
-		super(uri.fsPath);
-	}
-
-	public toString():string
-	{
-		throw Error('Blocked to find bug');
-	}
-
-	workspace():Workspace
-	{
-		const workspaceFolder = workspace.getWorkspaceFolder(this.uri);
-		if (!workspaceFolder) throw Error(this.fsPath+" is not in workspace");
-		const fsworkspace = Workspace.getInstance(workspaceFolder);
-		if (!fsworkspace) throw Error(this.fsPath+" ftp-kr is not inited");
-		return fsworkspace;
-	}
-
-	/**
-	 * path from workspace
-	 */
-	workpath():string
-	{
-		const workspacePath = this.workspace().fsPath;
-		const fsPath = this.fsPath;
-		if (fsPath.startsWith(workspacePath))
-		{
-			if (workspacePath.length === fsPath.length) return '';
-			const workpath = fsPath.substr(workspacePath.length);
-			if (workpath.startsWith(path.sep)) 
-			{
-				if (path.sep === '\\') return workpath.replace(/\\/g, '/').substr(1);
-				if (path.sep !== '/') return workpath.replace(new RegExp(path.sep, 'g'), '/').substr(1);
-				return workpath.substr(1);
-			}
-		}
-		throw Error(`${fsPath} is not in workspace`);
-	}
-
-	async children():Promise<File[]>
-	{
-		const files = await util.callbackToPromise<string[]>((callback)=>fs.readdir(this.fsPath, callback));
-		return files.map(filename=>this.child(filename));
-	}
-
-	static parse(pathname:string)
-	{
-		return new File(Uri.file(pathname));
-	}
-
-	sibling(filename:string):File
-	{
-		return File.parse(path.join(path.dirname(this.uri.fsPath), filename));
-	}
-
-	child(...filename:string[]):File
-	{
-		var i = filename.length;
-		while (i--)
-		{
-			if (path.isAbsolute(filename[i]))
-			{
-				return File.parse(path.join(...filename.slice(i)));
-			}
-		}
-		return File.parse(path.join(this.uri.fsPath, ...filename));
-	}
-
-	parent():File
-	{
-		return File.parse(path.dirname(this.uri.fsPath));
-	}
-
-	async glob():Promise<File[]>
-	{
-		const files = await glob(this.fsPath);
-		return files.map(path=>File.parse(path));
-	}
-
-	static async glob(path:File[]):Promise<File[]>
-	{
-		const narr:File[] = [];
-		narr.length = path.length;
-		for (var i=0;i<path.length;i++)
-		{
-			const list = await path[i].glob();
-			narr.push(... list);
-		}
-		return narr;
-	}
-	
-}
 
 export interface WorkspaceItem
 {
@@ -138,7 +37,7 @@ export class Workspace extends File
 
 	constructor(public readonly workspaceFolder:WorkspaceFolder, public readonly openState:WorkspaceOpenState)
 	{
-		super(workspaceFolder.uri);
+		super(workspaceFolder.uri.fsPath);
 		this.name = workspaceFolder.name;
 	}
 
@@ -274,6 +173,42 @@ export class Workspace extends File
 			}
 		}
 	}
+	
+	static one():Workspace|undefined
+	{
+		if (Workspace.wsmap.size === 1) return Workspace.wsmap.values().next().value;
+		return undefined;
+	}
+}
+
+export function getFromFile(file:File)
+{
+	const workspaceFolder = workspace.getWorkspaceFolder(Uri.file(file.fsPath));
+	if (!workspaceFolder) throw Error(file.fsPath+" is not in workspace");
+	const fsworkspace = Workspace.getInstance(workspaceFolder);
+	if (!fsworkspace) throw Error(file.fsPath+" ftp-kr is not inited");
+	return fsworkspace;
+}
+
+/**
+ * path from workspace
+ */
+export function workpath(file:File):string
+{
+	const workspacePath = getFromFile(file).fsPath;
+	const fsPath = file.fsPath;
+	if (fsPath.startsWith(workspacePath))
+	{
+		if (workspacePath.length === fsPath.length) return '';
+		const workpath = fsPath.substr(workspacePath.length);
+		if (workpath.startsWith(path.sep)) 
+		{
+			if (path.sep === '\\') return workpath.replace(/\\/g, '/').substr(1);
+			if (path.sep !== '/') return workpath.replace(new RegExp(path.sep, 'g'), '/').substr(1);
+			return workpath.substr(1);
+		}
+	}
+	throw Error(`${fsPath} is not in workspace`);
 }
 
 var workspaceWatcher:Disposable|undefined;

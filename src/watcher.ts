@@ -1,10 +1,11 @@
 
 import * as vscode from 'vscode';
 
+import File from './util/File';
 import * as util from './util/util';
 
 import * as log from './vsutil/log';
-import * as file from './vsutil/file';
+import * as ws from './vsutil/ws';
 import * as work from './vsutil/work';
 import * as cmd from './vsutil/cmd';
 
@@ -18,7 +19,7 @@ enum WatcherMode
 	FULL,
 }
 
-export class WorkspaceWatcher implements file.WorkspaceItem
+export class WorkspaceWatcher implements ws.WorkspaceItem
 {
 	private watcherQueue : Promise<void> = Promise.resolve();
 	private watcher: vscode.FileSystemWatcher | null = null;
@@ -32,7 +33,7 @@ export class WorkspaceWatcher implements file.WorkspaceItem
 	private readonly scheduler:work.Scheduler;
 	private readonly ftp:ftpsync.FtpSyncManager;
 
-	constructor(public readonly workspace:file.Workspace)
+	constructor(public readonly workspace:ws.Workspace)
 	{
 		this.logger = this.workspace.query(log.Logger);
 		this.config = this.workspace.query(cfg.Config);
@@ -61,8 +62,8 @@ export class WorkspaceWatcher implements file.WorkspaceItem
 	}
 
 	async processWatcher(
-		path: file.File, 
-		workFunc: (this:ftpsync.FtpSyncManager, task:work.Task, path: file.File) => Promise<any>, 
+		path: File, 
+		workFunc: (this:ftpsync.FtpSyncManager, task:work.Task, path: File) => Promise<any>, 
 		workName: string,
 		autoSync: boolean): Promise<void>
 	{
@@ -82,7 +83,7 @@ export class WorkspaceWatcher implements file.WorkspaceItem
 			}
 			if (!autoSync) return;
 			if (this.config.checkIgnorePath(path)) return;
-			await this.scheduler.task(workName+' '+path.workpath(), task => workFunc.call(this.ftp, task, path));
+			await this.scheduler.task(workName+' '+ws.workpath(path), task => workFunc.call(this.ftp, task, path));
 		}
 		catch (err) {
 			this.logger.error(err);
@@ -94,8 +95,8 @@ export class WorkspaceWatcher implements file.WorkspaceItem
 		this.openWatcherMode = mode;
 		if (mode) {
 			this.openWatcher = vscode.workspace.onDidOpenTextDocument(e => {
-				const path = new file.File(e.uri);
-				const workspace = path.workspace();
+				const path = new File(e.uri.fsPath);
+				const workspace = ws.getFromFile(path);
 				const config = workspace.query(cfg.Config);
 				const scheduler = workspace.query(work.Scheduler);
 				const logger = workspace.query(log.Logger);
@@ -118,9 +119,9 @@ export class WorkspaceWatcher implements file.WorkspaceItem
 		}
 	}
 
-	async uploadCascade(path: file.File):Promise<void>
+	async uploadCascade(path: File):Promise<void>
 	{
-		const workspace = path.workspace();
+		const workspace = ws.getFromFile(path);
 		const config = workspace.query(cfg.Config);
 
 		this.processWatcher(path, this.ftp.upload, 'upload', !!config.autoUpload);
@@ -164,39 +165,33 @@ export class WorkspaceWatcher implements file.WorkspaceItem
 
 		this.watcher = vscode.workspace.createFileSystemWatcher(watcherPath);
 
-		// #1. 부모 디렉토리가 삭제된 다음 자식 디렉토리가 갱신되는 상황을 우회
-		var deleteParent:file.File|null = null; // #1
-
 		this.watcher.onDidChange(uri => {
 			this.logger.verbose('watcher.onDidChange: '+uri.fsPath);
 			this.watcherQueue = this.watcherQueue.then(()=>{
-				const path = new file.File(uri);
-				if (deleteParent && path.in(deleteParent)) return; // #1
-				this.processWatcher(path, 
-					(task, path) => this.ftp.upload(task, path, {doNotMakeDirectory: true}), 
+				const path = new File(uri.fsPath);
+				return this.processWatcher(path, 
+					(task, path) => this.ftp.upload(task, path, {doNotMakeDirectory: true, ignoreNotExistFile: true}), 
 					'upload',
 					!!this.config.autoUpload);
 			}).catch(err=>this.logger.error(err));
 		});
 		this.watcher.onDidCreate(uri => {
-			const path = new file.File(uri);
-			const workspace = path.workspace();
+			const path = new File(uri.fsPath);
+			const workspace = ws.getFromFile(path);
 			const logger = workspace.query(log.Logger);
 			logger.verbose('watcher.onDidCreate: '+uri.fsPath);
 			this.watcherQueue = this.watcherQueue.then(()=>{
-				if (deleteParent && deleteParent.fsPath === path.fsPath) deleteParent = null; // #1
 				return this.uploadCascade(path);
 			}).catch(err=>logger.error(err));
 		});
 		this.watcher.onDidDelete(uri => {
-			const path = new file.File(uri);
-			const workspace = path.workspace();
+			const path = new File(uri.fsPath);
+			const workspace = ws.getFromFile(path);
 			const logger = workspace.query(log.Logger);
 			const config = workspace.query(cfg.Config);
 			logger.verbose('watcher.onDidDelete: '+uri.fsPath);
 			this.watcherQueue = this.watcherQueue.then(()=>{
-				deleteParent = path; // #1
-				this.processWatcher(path, 
+				return this.processWatcher(path, 
 					this.ftp.remove, 
 					'remove',
 					!!config.autoDelete);

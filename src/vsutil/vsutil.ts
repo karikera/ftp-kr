@@ -1,16 +1,17 @@
 
 import * as vscode from 'vscode';
-import * as file from './file';
+import File from '../util/file';
+import * as ws from './ws';
 
 const window = vscode.window;
 const workspace = vscode.workspace;
 
-export class StateBar implements file.WorkspaceItem
+export class StateBar implements ws.WorkspaceItem
 {
 	private statebar:vscode.StatusBarItem|undefined;
 	private disposed:boolean = false;
 	
-	constructor(workspace:file.Workspace)
+	constructor(workspace:ws.Workspace)
 	{
 	}
 
@@ -39,9 +40,9 @@ export class StateBar implements file.WorkspaceItem
 	}
 }
 
-export function createWorkspace():Promise<file.Workspace|undefined>
+export function createWorkspace():Promise<ws.Workspace|undefined>
 {
-	return new Promise<file.Workspace|undefined>((resolve, reject)=>{
+	return new Promise<ws.Workspace|undefined>((resolve, reject)=>{
 		const pick = new QuickPick;
 		if (!workspace.workspaceFolders)
 		{
@@ -50,28 +51,28 @@ export function createWorkspace():Promise<file.Workspace|undefined>
 		}
 		if (workspace.workspaceFolders.length === 1)
 		{
-			resolve(file.Workspace.createInstance(workspace.workspaceFolders[0]));
+			resolve(ws.Workspace.createInstance(workspace.workspaceFolders[0]));
 			return;
 		}
-		for(const ws of workspace.workspaceFolders)
+		for(const workspaceFolder of workspace.workspaceFolders)
 		{
-			const fsws = file.Workspace.getInstance(ws);
-			var name = ws.name;
+			const fsws = ws.Workspace.getInstance(workspaceFolder);
+			var name = workspaceFolder.name;
 			if (fsws) name += ' [inited]';
-			pick.item(name, ()=>resolve(file.Workspace.createInstance(ws)));
+			pick.item(name, ()=>resolve(ws.Workspace.createInstance(workspaceFolder)));
 		}
 		pick.oncancel = ()=>resolve(undefined);
 		pick.open("Select Workspace");
 	});
 }
 
-export function selectWorkspace():Promise<file.Workspace|undefined>
+export function selectWorkspace():Promise<ws.Workspace|undefined>
 {
-	return new Promise<file.Workspace|undefined>((resolve, reject)=>{
+	return new Promise<ws.Workspace|undefined>((resolve, reject)=>{
 		const pick = new QuickPick;
-		for(const ws of file.Workspace.all())
+		for(const workspaceFolder of ws.Workspace.all())
 		{
-			pick.item(ws.name, ()=>resolve(ws));
+			pick.item(workspaceFolder.name, ()=>resolve(workspaceFolder));
 		}
 		if (pick.items.length === 0)
 		{
@@ -88,18 +89,18 @@ export function selectWorkspace():Promise<file.Workspace|undefined>
 	});
 }
 
-export function fileOrEditorFile(uri: any): Promise<file.File> {
+export function fileOrEditorFile(uri: any): Promise<File> {
 	try
 	{
 		if (uri instanceof vscode.Uri && uri.fsPath) { // file.fsPath is undefined when activated by hotkey
-			const path = new file.File(uri);
+			const path = new File(uri.fsPath);
 			return Promise.resolve(path);
 		}
 		else {
 			const editor = window.activeTextEditor;
 			if (!editor) throw Error('No file selected');
 			const doc = editor.document;
-			const path = new file.File(doc.uri);
+			const path = new File(doc.uri.fsPath);
 			return Promise.resolve().then(()=>doc.save()).then(()=>path);
 		}
 	}
@@ -114,7 +115,7 @@ export function info(info:string, ...items:string[]):Thenable<string|undefined>
 	return window.showInformationMessage(info, ...items);
 }
 
-export function openWithError(path:file.File, message:string, line?:number, column?:number):Promise<vscode.TextEditor>
+export function openWithError(path:File, message:string, line?:number, column?:number):Promise<vscode.TextEditor>
 {
 	window.showErrorMessage(path + ": " + message);
 	return open(path, line, column);
@@ -166,9 +167,9 @@ export class QuickPick
 
 }
 
-export async function open(path:file.File, line?:number, column?:number):Promise<vscode.TextEditor>
+export async function open(path:File, line?:number, column?:number):Promise<vscode.TextEditor>
 {
-	const doc = await workspace.openTextDocument(path.uri);
+	const doc = await workspace.openTextDocument(path.fsPath);
 	const editor = await window.showTextDocument(doc);
 	if (line !== undefined)
 	{

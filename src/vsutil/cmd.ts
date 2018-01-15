@@ -1,14 +1,16 @@
 
-import * as file from './file';
+import File from '../util/file';
+import * as ws from './ws';
 import * as log from './log';
 import * as work from './work';
 import * as vsutil from './vsutil';
+import * as error from './error';
 import { commands, ExtensionContext } from 'vscode';
 
 export interface Args
 {
-	file?:file.File;
-	workspace?:file.Workspace;
+	file?:File;
+	workspace?:ws.Workspace;
 }
 
 export type Command = {[key:string]:(args:Args)=>any};
@@ -16,34 +18,33 @@ export type Command = {[key:string]:(args:Args)=>any};
 async function runCommand(commands:Command, name:string, ...args:any[]):Promise<void>
 {
 	var cmdargs:Args = {};
-	const logger = cmdargs.workspace ? cmdargs.workspace.query(log.Logger) : log.defaultLogger;
 
 	try
 	{
 		try
 		{
 			cmdargs.file = await vsutil.fileOrEditorFile(args[0]);
-			cmdargs.workspace = cmdargs.file.workspace();
+			cmdargs.workspace = ws.getFromFile(cmdargs.file);
 		}
 		catch(e)
 		{
+			if (!cmdargs.workspace) cmdargs.workspace = ws.Workspace.one();
 		}
 
+		const logger = cmdargs.workspace ? cmdargs.workspace.query(log.Logger) : log.defaultLogger;
 		logger.verbose(`[Command] ${name}`);
 		await commands[name](cmdargs);
 	}
 	catch(err)
 	{
+		const logger = cmdargs.workspace ? cmdargs.workspace.query(log.Logger) : log.defaultLogger;
 		switch (err)
 		{
-		case work.CANCELLED:
-			logger.verbose(`[Command:${name}]: cancelled`);
-			break;
 		case 'PASSWORD_CANCEL':
 			logger.verbose(`[Command:${name}]: cancelled by password input`);
 			break;
 		default:
-			logger.error(err);
+			error.processError(logger, err);
 			break;
 		}
 	}

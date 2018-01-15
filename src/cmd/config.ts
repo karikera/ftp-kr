@@ -1,7 +1,7 @@
 
 import * as vscode from 'vscode';
 
-import * as file from '../vsutil/file';
+import * as ws from '../vsutil/ws';
 import * as log from '../vsutil/log';
 import * as work from '../vsutil/work';
 import * as vsutil from '../vsutil/vsutil';
@@ -20,7 +20,7 @@ export const commands:cmd.Command = {
 
 	async 'ftpkr.cancel'(args:cmd.Args)
 	{
-		for(const workspace of file.Workspace.all())
+		for(const workspace of ws.Workspace.all())
 		{
 			workspace.query(work.Scheduler).cancel();
 		}

@@ -6,8 +6,9 @@ import * as iconv from 'iconv-lite';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import * as util from './util/util';
+import File from './util/file';
 
-import * as file from './vsutil/file';
+import * as ws from './vsutil/ws';
 import * as log from './vsutil/log';
 import * as work from './vsutil/work';
 import * as vsutil from './vsutil/vsutil';
@@ -167,9 +168,11 @@ abstract class FileInterface
 	protected destroyTimeout:NodeJS.Timer|null = null;
 	protected readonly logger:log.Logger;
 	protected readonly state:vsutil.StateBar;
+	protected connected:boolean = false;
+
 	public ondestroy:()=>void;
 	
-	constructor(public readonly workspace:file.Workspace, protected readonly config:cfg.ServerConfig)
+	constructor(public readonly workspace:ws.Workspace, protected readonly config:cfg.ServerConfig)
 	{
 		this.logger = workspace.query(log.Logger);
 		this.state = workspace.query(vsutil.StateBar);
@@ -227,7 +230,11 @@ abstract class FileInterface
 
 	destroy():void
 	{
-		this.log('Disconnected');
+		if (this.connected)
+		{
+			this.connected = false;
+			this.log('Disconnected');
+		}
 		this.cancelDestroyTimeout();
 		this.ondestroy();
 	}
@@ -251,7 +258,7 @@ abstract class FileInterface
 		});
 	}
 
-	upload(workpath:string, localpath:file.File):Promise<void>
+	upload(workpath:string, localpath:File):Promise<void>
 	{
 		this.cancelDestroyTimeout();
 		this.logWithState('upload '+workpath);
@@ -277,7 +284,7 @@ abstract class FileInterface
 		});
 	}
 
-	download(localpath:file.File, workpath:string):Promise<void>
+	download(localpath:File, workpath:string):Promise<void>
 	{
 		this.cancelDestroyTimeout();
 		this.logWithState('download '+workpath);
@@ -369,7 +376,7 @@ abstract class FileInterface
 	abstract _mkdir(path:string, recursive:boolean):Promise<void>;
 	abstract _rmdir(path:string, recursive:boolean):Promise<void>;
 	abstract _delete(workpath:string):Promise<void>;
-	abstract _put(localpath:file.File, ftppath:string):Promise<void>;
+	abstract _put(localpath:File, ftppath:string):Promise<void>;
 	abstract _get(ftppath:string):Promise<NodeJS.ReadableStream>;
 	abstract _list(ftppath:string):Promise<Array<FileInfo>>;
 	_lastmod(ftppath:string):Promise<number>
@@ -390,15 +397,16 @@ class Ftp extends FileInterface
 	connect(password?:string):Promise<void>
 	{
 		return new Promise<void>((resolve, reject)=>{
-			if (!this.client) return Promise.reject(Error(ALREADY_DESTROYED));
+			if (!this.client) return reject(Error(ALREADY_DESTROYED));
 
 			if (this.config.showGreeting)
 			{
 				this.client.on('greeting', msg=>this.log(msg));
 			}
 			this.client.on("ready", ()=>{
-				if (!this.client) return Promise.reject(Error(ALREADY_DESTROYED));
+				if (!this.client) return reject(Error(ALREADY_DESTROYED));
 				
+				this.connected = true;
 				const socket:stream.Duplex = this.client['_socket'];
 				const oldwrite = socket.write;
 				socket.write = str=>oldwrite.call(socket, str, 'binary');
@@ -483,7 +491,7 @@ class Ftp extends FileInterface
 		});
 	}
 
-	_put(localpath:file.File, ftppath:string):Promise<void>
+	_put(localpath:File, ftppath:string):Promise<void>
 	{
 		const client = this.client;
 		if (!client) return Promise.reject(Error(ALREADY_DESTROYED));
@@ -567,6 +575,7 @@ class Sftp extends FileInterface
 			
 			options = util.merge(options, config.sftpOverride);
 			await this.client.connect(options);
+			this.connected = true;
 			this.update();
 		}
 		catch(err)
@@ -611,7 +620,7 @@ class Sftp extends FileInterface
 		return this.client.mkdir(ftppath, true);
 	}
 
-	_put(localpath:file.File, ftppath:string):Promise<void>
+	_put(localpath:File, ftppath:string):Promise<void>
 	{
 		if (!this.client) return Promise.reject(Error(ALREADY_DESTROYED));
 		return this.client.put(localpath.fsPath, ftppath, false, null)
@@ -659,7 +668,7 @@ export class FtpManager
 	
 	private readonly logger:log.Logger;
 
-	constructor(public readonly workspace:file.Workspace, public readonly config:cfg.ServerConfig)
+	constructor(public readonly workspace:ws.Workspace, public readonly config:cfg.ServerConfig)
 	{
 		this.logger = workspace.query(log.Logger);
 	}
@@ -837,12 +846,12 @@ export class FtpManager
 		return this.init(task).then(client => task.with(client.mkdir(workpath)));
 	}
 	
-	public upload(task:work.Task, workpath:string, localpath:file.File):Promise<void>
+	public upload(task:work.Task, workpath:string, localpath:File):Promise<void>
 	{
 		return this.init(task).then(client => task.with(client.upload(workpath, localpath)));
 	}
 	
-	public download(task:work.Task, localpath:file.File, workpath:string):Promise<void>
+	public download(task:work.Task, localpath:File, workpath:string):Promise<void>
 	{
 		return this.init(task).then(client => task.with(client.download(localpath, workpath)));
 	}

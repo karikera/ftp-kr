@@ -1,4 +1,4 @@
-# 1.1.8
+# 1.2.0
 * Remove closure compiler
 * Multi workspace support
 * Download/Upload Directory (in `ftp-kr.list` command)

@@ -4,6 +4,7 @@ import * as cmd from '../vsutil/cmd';
 import * as vsutil from '../vsutil/vsutil';
 import * as log from '../vsutil/log';
 import * as work from '../vsutil/work';
+import * as ws from '../vsutil/ws';
 
 import * as ftpsync from '../ftpsync';
 import * as cfg from '../config';
@@ -44,7 +45,7 @@ export const commands:cmd.Command = {
 				await taskTimer('Upload', ftp.upload(task, path, {doNotMakeDirectory:true}).then(res => {
 					if (res.latestIgnored)
 					{
-						logger.message(`latest: ${path.workpath()}`);
+						logger.message(`latest: ${ws.workpath(path)}`);
 					}
 				}));
 			}

@@ -6,8 +6,10 @@ import minimatch = require('minimatch');
 
 import * as util from "./util/util";
 import * as event from "./util/event";
+import File from "./util/file";
+import {ConfigContainer} from './util/config';
 
-import * as file from "./vsutil/file";
+import * as ws from "./vsutil/ws";
 import * as work from "./vsutil/work";
 import * as log from "./vsutil/log";
 import * as vsutil from "./vsutil/vsutil";
@@ -83,17 +85,6 @@ export enum State
 	NOTFOUND,
 	INVALID,
 	LOADED
-}
-
-declare global
-{
-	interface Error
-	{
-		suppress?:boolean;
-		fsPath?:file.File;
-		line?:number;
-		column?:number;
-	}
 }
 
 function throwJsonError(data:string, match:RegExp, message:string):never
@@ -226,14 +217,12 @@ export function testInitTimeBiasForVSBug():boolean
 	return false;
 }
 
-class ConfigClass implements file.WorkspaceItem
+class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 {
-	public readonly path:file.File;
+	public readonly path:File;
 
 	public state:State = State.NOTFOUND;
 	public lastError:Error|string|null = null;
-	
-	private settedProperties:Set<string> = new Set;
 	
 	public readonly onLoad = event.make<work.Task>();
 	public readonly onInvalid = event.make<void>();
@@ -242,8 +231,10 @@ class ConfigClass implements file.WorkspaceItem
 	private readonly logger:log.Logger;
 	private readonly scheduler:work.Scheduler;
 	
-	constructor(private workspace:file.Workspace)
+	constructor(private workspace:ws.Workspace)
 	{
+		super();
+
 		this.path = workspace.child('./.vscode/ftp-kr.json');
 
 		this.appendConfig(CONFIG_BASE);
@@ -252,43 +243,23 @@ class ConfigClass implements file.WorkspaceItem
 
 		switch (workspace.openState)
 		{
-		case file.WorkspaceOpenState.OPENED:
+		case ws.WorkspaceOpenState.OPENED:
 			this.load();
 			break;
-		case file.WorkspaceOpenState.CREATED:
+		case ws.WorkspaceOpenState.CREATED:
 			break;
 		}
 	}
 
-	protected clearConfig()
+	dispose()
 	{
-		for (const name of this.settedProperties)
-		{
-			delete this[name];
-		}
-		this.settedProperties.clear();
-	}
-	
-	protected appendConfig(config:Object):void
-	{
-		for (const p in config)
-		{
-			this.setProperty(p, config[p]);
-		}
 	}
 
-	protected setProperty(name:string, value:any):void
-	{
-		const options:Config = this;
-		options[name] = util.clone(value);
-		this.settedProperties.add(name);
-	}
-	
-	public checkIgnorePath(path:file.File):boolean
+	public checkIgnorePath(path:File):boolean
 	{
 		const config:Config = this;
 
-		const workpath = '/'+path.workpath();
+		const workpath = '/'+ws.workpath(path);
 		const check = config.ignore;
 		if (check)
 		{
@@ -306,10 +277,6 @@ class ConfigClass implements file.WorkspaceItem
 			}
 		}
 		return false;
-	}
-
-	dispose()
-	{
 	}
 
 	* getAltServers():Iterable<ServerConfig>
@@ -535,13 +502,14 @@ class ConfigClass implements file.WorkspaceItem
 		});
 	}
 
-	private onLoadError(err):Promise<void>
+	private async onLoadError(err):Promise<void>
 	{
 		switch (err)
 		{
 		case 'NOTFOUND':
 			this.logger.message("ftp-kr.json: not found");
-			return this.fireNotFound();
+			await this.fireNotFound();
+			throw 'IGNORE';
 		case 'PASSWORD_CANCEL':
 			vsutil.info('ftp-kr Login Request', 'Login').then(confirm=>{
 				if (confirm === 'Login')
@@ -549,32 +517,13 @@ class ConfigClass implements file.WorkspaceItem
 					this.loadWrap('login', task=>Promise.resolve());
 				}
 			});
-			return this.fireInvalid(err);
+			await this.fireInvalid(err);
+			throw 'IGNORE';
 		default:
-			if (!err.suppress)
-			{
-				this.logger.message("ftp-kr.json: error");
-				this.logger.error(err);
-			}
-			else
-			{
-				this.logger.show();
-				this.logger.message("ftp-kr.json: "+err.message);
-			}
-			if (err instanceof Error)
-			{
-				if (err.line)
-				{
-					vsutil.open(this.path, err.line, err.column);
-				}
-				else
-				{
-					vsutil.open(this.path);
-				}
-			}	
-			return this.fireInvalid(err);
+			err.path = this.path;
+			await this.fireInvalid(err);
+			throw err;
 		}
-		
 	}
 
 	public loadTest():Promise<void>
@@ -585,7 +534,7 @@ class ConfigClass implements file.WorkspaceItem
 			{
 				return Promise.reject('Config is not loaded. Retry it after load');
 			}
-			return this.onLoadError(this.lastError).then(()=>{throw work.CANCELLED;});
+			return this.onLoadError(this.lastError);
 		} 
 		return Promise.resolve();
 	}
@@ -612,5 +561,5 @@ class ConfigClass implements file.WorkspaceItem
 
 }
 
-export const Config:{new(workspace:file.Workspace):ConfigClass&ConfigProperties} = ConfigClass;
+export const Config:{new(workspace:ws.Workspace):ConfigClass&ConfigProperties} = ConfigClass;
 export type Config = ConfigClass & ConfigProperties;

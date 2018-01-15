@@ -31,6 +31,11 @@ export default class File
 	{
 	}
 
+	public toString():string
+	{
+		throw Error('Blocked to find bug');
+	}
+
 	in(parent:File):boolean
 	{
 		return this.fsPath.startsWith(parent.fsPath + path.sep);
@@ -111,24 +116,11 @@ export default class File
 		return new File(path.dirname(this.fsPath));
 	}
 
-	async glob():Promise<File[]>
+	async glob(pattern:string):Promise<File[]>
 	{
-		const files = await glob(this.fsPath);
+		const files = await glob(this.child(pattern).fsPath);
 		return files.map(path=>File.parse(path));
 	}
-
-	static async glob(path:File[]):Promise<File[]>
-	{
-		const narr:File[] = [];
-		narr.length = path.length;
-		for (var i=0;i<path.length;i++)
-		{
-			const list = await path[i].glob();
-			narr.push(... list);
-		}
-		return narr;
-	}
-	
 
 	stat():Promise<fs.Stats>
 	{

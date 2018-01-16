@@ -1,3 +1,6 @@
+# 1.2.2
+* Fix that localBasePath is not activated if it is ends with slash
+* Fix that ftp-kr.task.json is generated at root
 
 # 1.2.1
 * Add reconnect command & block detecting

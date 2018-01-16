@@ -1,5 +1,7 @@
 ## ftp-kr.json
+* **closure**  (**DEPRECATED: Closure Compiler feature is splitted. If you want to use, Please download Closure Compiler extension.**)
 * **altServer** (object[]) - alternate servers. It has similar properties with root manifest
+* **localBasePath** (string)
 * **autoUpload** (boolean) - Upload file when save
 * **autoDelete** (boolean) - Delete FTP file when delete in workspace
 * **autoDownload** (boolean) - It will check modification of every opening and download if it modified
@@ -21,6 +23,7 @@
 * **ignoreWrongFileEncoding** (boolean) - Suppress of the file encoding error assumption
 * **createSyncCache** (boolean) (**DEPRECATED: sync cache feature is removed**) - Create sync.json file for next FTP access(Not effective ' -';)
 * **autoDownloadRefreshTime** (integer) (**DEPRECATED: Use refreshTime instead**) - Milliseconds. Auto refresh after this value when set 'autoDownload' as true. default is 1000
+* **blockDetectingDuration** (integer) - Milliseconds. If FTP connection is blocked for this value reconnect and retry action. default is 8000
 * **refreshTime** (integer) - Milliseconds. re-list remote files After this duration. 'autoDownload' is affected by this property. default is 1000
 * **showGreeting** (boolean) - Show FTP Greeting message. SFTP is not supported
 * **ftpOverride** 

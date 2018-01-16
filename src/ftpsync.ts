@@ -18,8 +18,6 @@ export interface BatchOptions
 	ignoreNotExistFile?:boolean;
 }
 
-const TASK_FILE_PATH = File.parse("/.vscode/ftp-kr.task.json");
-
 function testLatest(file:f.State|null, localStat:Stats):boolean
 {
     if (!file) return false;
@@ -589,6 +587,8 @@ class FtpCacher
 
 	public async reserveSyncTaskWith(task:work.Task, tasks: TaskList, taskname: string, options:BatchOptions, infocallback: () => Thenable<string|undefined>): Promise<void>
 	{
+		const taskFile = this.workspace.child(".vscode/ftp-kr.task.json");
+		
 		try
 		{
 			for (;;)
@@ -600,19 +600,19 @@ class FtpCacher
 				}
 				this.logger.show();
 				this.logger.message(taskname + ' started');
-				await TASK_FILE_PATH.create(JSON.stringify(tasks, null, 1));
-				await vsutil.open(TASK_FILE_PATH);
+				await taskFile.create(JSON.stringify(tasks, null, 1));
+				await vsutil.open(taskFile);
 				const res = await infocallback();
 				if (res !== "OK" && res !== "Retry") 
 				{
-					TASK_FILE_PATH.unlink();
+					taskFile.unlink();
 					return;
 				}
-				const editor = await vsutil.open(TASK_FILE_PATH);
+				const editor = await vsutil.open(taskFile);
 				if (editor) await editor.document.save();
 				const startTime = Date.now();
-				const data = await TASK_FILE_PATH.json();
-				await TASK_FILE_PATH.unlink();
+				const data = await taskFile.json();
+				await taskFile.unlink();
 				const failed = await this.exec(task, data, options);
 				if (!failed) 
 				{
@@ -633,7 +633,7 @@ class FtpCacher
 		{
 			try
 			{
-				await TASK_FILE_PATH.unlink();
+				await taskFile.unlink();
 			}
 			catch(e)
 			{

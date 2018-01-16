@@ -23,6 +23,16 @@ function mkdirParent(dirPath:string, callback:(err?:Error)=>void):void
     });
 }
 
+function join_rms(...pathes:string[]):string
+{
+	const fsPath = path.join(...pathes);
+	if (fsPath.endsWith(path.sep))
+	{
+		return fsPath.substr(0,fsPath.length-1);
+	}
+	return fsPath;
+}
+
 export type Stats = fs.Stats;
 
 export default class File
@@ -95,7 +105,7 @@ export default class File
 
 	sibling(filename:string):File
 	{
-		return new File(path.join(path.dirname(this.fsPath), filename));
+		return new File(join_rms(path.dirname(this.fsPath), filename));
 	}
 
 	child(...filename:string[]):File
@@ -105,10 +115,10 @@ export default class File
 		{
 			if (path.isAbsolute(filename[i]))
 			{
-				return File.parse(path.join(...filename.slice(i)));
+				return new File(join_rms(...filename.slice(i)));
 			}
 		}
-		return new File(path.join(this.fsPath, ...filename));
+		return new File(join_rms(this.fsPath, ...filename));
 	}
 
 	parent():File

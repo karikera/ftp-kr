@@ -12,6 +12,7 @@ It will try to connect when you save it!
 ![download all](images/downloadall.png)
 
 ## Details
+
 * Disable Auto Upload  
 By default, the auto-sync feature is enabled  
 If you want to disable auto-sync, please set autoUpload/autoDelete to false  
@@ -24,6 +25,10 @@ You can use password input instead of password field
 * Browse FTP Server  
 You can browse remote directory with `ftp-kr List` command!  
 ![list](images/list.png)
+
+* You can find extra options in ftp-kr.json with auto complete(`Ctrl+Space`)!  
+[See schema of ftp-kr.json](./schema/ftp-kr.md)  
+![autocom](images/autocomplete.png)
 
 * Use Multiple Servers  
 ![multiserver](images/multiserver.png)  

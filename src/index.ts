@@ -9,6 +9,7 @@ import * as cmd from './vsutil/cmd';
 
 import * as cfg from './config';
 import * as watcher from './watcher';
+import * as ftpdown from './ftpdown';
 
 import {commands as cfgcmd} from './cmd/config';
 import {commands as ftpcmd} from './cmd/ftpsync';
@@ -16,6 +17,7 @@ import {commands as ftpcmd} from './cmd/ftpsync';
 ws.onNewWorkspace(workspace=>{
 	workspace.query(watcher.WorkspaceWatcher);
 	workspace.query(cfg.Config);
+	workspace.query(ftpdown.FtpDownloader);
 });
 
 export function activate(context:vscode.ExtensionContext) {

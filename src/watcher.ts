@@ -8,6 +8,7 @@ import * as log from './vsutil/log';
 import * as ws from './vsutil/ws';
 import * as work from './vsutil/work';
 import * as cmd from './vsutil/cmd';
+import * as error from './vsutil/error';
 
 import * as cfg from './config';
 import * as ftpsync from './ftpsync';
@@ -84,10 +85,12 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 			if (!autoSync) return;
 			if (this.config.checkIgnorePath(path)) return;
 			if (!path.in(this.config.basePath)) return;
-			await this.scheduler.task(workName+' '+this.config.workpath(path), task => workFunc.call(this.ftp, task, path));
+			await this.scheduler.task(workName+' '+this.config.workpath(path), 
+				work.NORMAL,
+				task => workFunc.call(this.ftp, task, path));
 		}
 		catch (err) {
-			this.logger.error(err);
+			error.processError(this.logger, err);
 		}
 	}
 
@@ -106,10 +109,12 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 					if (!config.autoDownload) return;
 					if (config.checkIgnorePath(path)) return;
 					if (!path.in(this.config.basePath)) return;
-					scheduler.task('download '+config.workpath(path), task => this.ftp.downloadWithCheck(task, path));
+					scheduler.task('download '+config.workpath(path),
+						work.NORMAL,
+						task => this.ftp.downloadWithCheck(task, path));
 				}
 				catch (err) {
-					logger.error(err);
+					error.processError(this.logger, err);
 				}
 			});
 		}

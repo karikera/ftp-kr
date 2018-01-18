@@ -14,7 +14,7 @@ enum TaskState
 
 export class OnCancel
 {
-	constructor(private task:TaskImpl, private target?:()=>any)
+	constructor(private task:TaskImpl<any>, private target?:()=>any)
 	{
 	}
 
@@ -36,22 +36,49 @@ export interface Task
 	with<T>(waitWith:Promise<T>):Promise<T>;
 }
 
-class TaskImpl implements Task
+class TaskImpl<T> implements Task
 {
-	public next:TaskImpl|null = null;
+	public next:TaskImpl<any>|null = null;
+	public previous:TaskImpl<any>|null = null;
 	public cancelled:boolean = false;
 
 	private resolve:()=>void;
 	private state:TaskState = TaskState.WAIT;
 	private cancelListeners:Array<()=>any> = [];
 	private timeout:NodeJS.Timer;
-	public promise:Promise<void>;
+	public promise:Promise<T>;
 	public readonly logger:log.Logger;
+	private run:()=>void;
 
-	constructor(public readonly scheduler:Scheduler,public name:string, public task:(task:Task)=>any)
+	constructor(
+		public readonly scheduler:Scheduler,
+		public readonly name:string, 
+		public readonly priority:number, 
+		public readonly task:(task:Task)=>Promise<T>)
 	{
 		this.logger = scheduler.logger;
-		this.promise = new Promise<void>(resolve=>this.resolve = resolve);
+		this.promise = new Promise<T>((resolve, reject)=>{
+			this.run = ()=>{
+				this.logger.verbose(`[TASK:${this.name}] started`);
+				const prom = this.task(this);
+				prom.then(v=>{	
+					this.logger.verbose(`[TASK:${this.name}] done`);
+					resolve(v);
+				});
+				prom.catch(err=>{
+					if (err === 'CANCELLED')
+					{
+						this.logger.verbose(`[TASK:${this.name}] cancelled`);
+						reject('IGNORE');
+					}
+					else
+					{
+						this.logger.verbose(`[TASK:${this.name}] errored`);
+						reject(err);
+					}
+				});
+			};
+		});
 	}
 
 	public setTimeLimit(timeout:number):void
@@ -68,7 +95,7 @@ class TaskImpl implements Task
 		}, timeout);
 	}
 
-	public async play():Promise<void>
+	public async play():Promise<T>
 	{
 		if (this.state >= TaskState.STARTED)
 		{
@@ -80,25 +107,9 @@ class TaskImpl implements Task
 			clearTimeout(this.timeout);
 		}
 		
-		if (this.cancelled) return;
-
-		this.logger.verbose(`[TASK:${this.name}] started`);
-		try
-		{
-			await this.task(this);
-		}
-		catch(err)
-		{
-			if (err === 'CANCELLED')
-			{
-				this.logger.verbose(`[TASK:${this.name}] cancelled`);
-				return;
-			}
-			error.processError(this.logger, err);
-		}
-		this.logger.verbose(`[TASK:${this.name}] done`);
-		this.resolve();
-		return this.promise;
+		if (this.cancelled) throw 'CANCELLED';
+		this.run();
+		return await this.promise;
 	}
 
 	public cancel():void
@@ -167,9 +178,9 @@ class TaskImpl implements Task
 
 export class Scheduler implements ws.WorkspaceItem
 {
-	public currentTask:TaskImpl|null = null;
-	private nextTask:TaskImpl|null = null;
-	private lastTask:TaskImpl|null = null;
+	public currentTask:TaskImpl<any>|null = null;
+	private nextTask:TaskImpl<any>|null = null;
+	private lastTask:TaskImpl<any>|null = null;
 	public readonly logger:log.Logger;
 
 	private promise:Promise<void> = Promise.resolve();
@@ -186,7 +197,50 @@ export class Scheduler implements ws.WorkspaceItem
 		}
 	}
 
-	public dispose()
+	private _addTask(task:TaskImpl<any>):void
+	{
+		var node = this.lastTask;
+		if (node)
+		{
+			if (task.priority <= node.priority)
+			{
+				node.next = task;
+				task.previous = node;
+				this.lastTask = task;
+			}
+			else
+			{
+				for (;;)
+				{
+					const nodenext = node;
+					node = node.previous;
+					if (!node)
+					{
+						const next = this.nextTask;
+						if (!next) throw Error('Impossible');
+						task.next = next;
+						next.previous = task;
+						this.nextTask = task;
+						break;
+					}
+					if (task.priority <= node.priority)
+					{
+						nodenext.previous = task;
+						task.next = nodenext.next;
+						task.previous = node;
+						node.next = task;
+						break;
+					}
+				}
+			}
+		}
+		else
+		{
+			this.nextTask = this.lastTask = task;
+		}
+	}
+
+	public dispose():void
 	{
 		this.cancel();
 	}
@@ -212,19 +266,10 @@ export class Scheduler implements ws.WorkspaceItem
 		this.lastTask = null;
 	}
 
-	public task(name:string, taskfunc:(task:Task)=>any):Thenable<void>
+	public task<T>(name:string, priority:number, taskfunc:(task:Task)=>Promise<T>):Promise<T>
 	{
-		const task = new TaskImpl(this, name, taskfunc);
-		const last = this.lastTask;
-		if (last)
-		{
-			last.next = task;
-			this.lastTask = task;
-		}
-		else
-		{
-			this.nextTask = this.lastTask = task;
-		}
+		const task = new TaskImpl(this, name, priority, taskfunc);
+		this._addTask(task);
 		if (!this.currentTask)
 		{
 			this.logger.verbose(`[SCHEDULAR] busy`);
@@ -233,20 +278,11 @@ export class Scheduler implements ws.WorkspaceItem
 		return task.promise;
 	}
 	
-	public taskWithTimeout(name:string, timeout:number, taskfunc:(task:Task)=>any):Thenable<void>
+	public taskWithTimeout<T>(name:string, priority:number, timeout:number, taskfunc:(task:Task)=>Promise<T>):Promise<T>
 	{
-		const task = new TaskImpl(this, name, taskfunc);
+		const task = new TaskImpl(this, name, priority, taskfunc);
 		task.setTimeLimit(timeout);
-		const last = this.lastTask;
-		if (last)
-		{
-			last.next = task;
-			this.lastTask = task;
-		}
-		else
-		{
-			this.nextTask = this.lastTask = task;
-		}
+		this._addTask(task);
 		if (!this.currentTask)
 		{
 			this.logger.verbose(`[SCHEDULAR] busy`);
@@ -275,6 +311,13 @@ export class Scheduler implements ws.WorkspaceItem
 		{
 			this.nextTask = next;
 		}
-		task.play().then(()=>this.progress());
+		const prom = task.play();
+		prom.then(()=>this.progress());
+		prom.catch(()=>this.progress());
 	}
 }
+
+
+export const HIGH = 2000;
+export const NORMAL = 1000;
+export const IDLE = 0;

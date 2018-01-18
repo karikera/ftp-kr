@@ -1,7 +1,5 @@
 
 
-import {Options as FtpOptions} from 'ftp';
-import {ConnectConfig as SftpOptions} from 'ssh2';
 import minimatch = require('minimatch');
 
 import * as util from "./util/util";
@@ -13,6 +11,7 @@ import * as ws from "./vsutil/ws";
 import * as work from "./vsutil/work";
 import * as log from "./vsutil/log";
 import * as vsutil from "./vsutil/vsutil";
+import { ServerConfig } from './vsutil/fileinterface';
 
 var initTimeForVSBug:number = 0;
 
@@ -165,35 +164,6 @@ function findUndupplicatedSet<T>(dupPriority:string[], obj:T, objs:T[]):string[]
 	return [];
 }
 
-export interface ServerConfig
-{
-	name?:string;
-	remotePath?:string;
-	protocol?:string;
-	fileNameEncoding?:string;
-
-	host?:string;
-	username?:string;
-	password?:string;
-	keepPasswordInMemory?:boolean;
-	port?:number;
-	ignoreWrongFileEncoding?:boolean;
-	createSyncCache?:boolean;
-	
-	passphrase?:string;
-	connectionTimeout?:number;
-	autoDownloadRefreshTime?:number;
-	blockDetectingDuration?:number;
-	refreshTime?:number;
-	privateKey?:string;
-	showGreeting?:boolean;
-	
-	ftpOverride?:FtpOptions;
-	sftpOverride?:SftpOptions;
-	
-	passwordInMemory?:string;
-}
-
 interface ConfigProperties extends ServerConfig
 {
 	ignore?:(string|RegExp)[];
@@ -202,6 +172,7 @@ interface ConfigProperties extends ServerConfig
 	autoUpload?:boolean;
 	autoDelete?:boolean;
 	autoDownload?:boolean;
+	autoDownloadAlways?:number;
 	logLevel?:log.Level;
 }
 
@@ -328,7 +299,16 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 
 	public set(data:string):void
 	{
-		const obj:ConfigProperties = util.parseJson(data);
+		var obj:ConfigProperties;
+		try
+		{
+			obj = util.parseJson(data);
+		}
+		catch(err)
+		{
+			err.fsPath = this.path;
+			throw err;
+		}
 		if (!(obj instanceof Object))
 		{
 			const error = new TypeError("Invalid json data type: "+ typeof obj);
@@ -570,6 +550,7 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 		this.scheduler.cancel();
 		var res:boolean = false;
 		return this.scheduler.task(name,
+			work.NORMAL,
 			async(task)=>{
 				try
 				{

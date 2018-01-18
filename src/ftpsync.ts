@@ -10,6 +10,7 @@ import * as vsutil from './vsutil/vsutil';
 
 import * as ftp from './ftp';
 import * as cfg from './config';
+import { ServerConfig, DIRECTORY_NOT_FOUND } from './vsutil/fileinterface';
 
 export interface BatchOptions
 {
@@ -64,19 +65,31 @@ export interface TaskList
 	[key:string]:string;
 }
 
-class FtpCacher
+export class FtpCacher implements ws.WorkspaceItem
 {
 	private readonly fs:f.FileSystem = new f.FileSystem;
 	private readonly refreshed:Map<string, RefreshedData> = new Map;
+	private readonly config:ServerConfig;
 	private readonly mainConfig:cfg.Config;
 	private readonly logger:log.Logger;
 	private readonly ftp:ftp.FtpManager;
 	
-	constructor(public readonly workspace:ws.Workspace, private readonly config:cfg.ServerConfig)
+	constructor(public readonly workspace:ws.Workspace, config?:ServerConfig)
 	{
-		this.ftp = new ftp.FtpManager(workspace, config);
-		this.logger = workspace.query(log.Logger);
 		this.mainConfig = workspace.query(cfg.Config);
+		this.config = config || this.mainConfig;
+		this.ftp = new ftp.FtpManager(workspace, this.config);
+		this.logger = workspace.query(log.Logger);
+	}
+
+	public dispose():void
+	{
+		this.ftp.destroy();
+	}
+
+	public destroy():void
+	{
+		this.ftp.destroy();
 	}
 
 	private async _getUpdatedFileInDir(cmp:f.Directory|null, path:File, list:{[key:string]:Stats}):Promise<void>
@@ -120,10 +133,6 @@ class FtpCacher
 		}
 	}
 
-	public destroy():void
-	{
-		this.ftp.destroy();
-	}
 
 	delete(path:string):void
 	{
@@ -255,27 +264,7 @@ class FtpCacher
 			report.file = oldfile;
 			return report;
 		}
-		if (this.mainConfig === this.config && !this.mainConfig.autoDownload)
-		{
-			const oldtype = oldfile.type;
-			const oldsize = oldfile.size;
-			const ftpstats = await this.ftpStat(task, path, options);
-	
-			if (ftpstats.type == oldtype && oldsize === ftpstats.size) return await next();
-	
-			const selected = await this.logger.errorConfirm(`${path.fsPath}: Remote file modified detected.`, "Upload anyway", "Download");
-			if (selected)
-			{
-				if (selected !== "Download") return await next();
-				await this.ftpDownload(task, path);
-			}
-			report.file = oldfile;
-			return report;
-		}
-		else
-		{
-			return await next();
-		}
+		return await next();
 	}
 
 	async ftpDownload(task:work.Task, path:File, options?:BatchOptions):Promise<void>
@@ -311,7 +300,7 @@ class FtpCacher
 			throw e;
 		}
 		const file = await this.ftpStat(task, path);
-		if (!file)
+		if (!file || (file.lmtime < +stats.mtime))
 		{
 			if (this.mainConfig === this.config && this.mainConfig.autoUpload)
 			{
@@ -328,10 +317,10 @@ class FtpCacher
 		file.lmtimeWithThreshold = file.lmtime + 1000;
 	}
 
-	async ftpStat(task:work.Task, path:File, options?:BatchOptions):Promise<f.State>
+	async ftpStat(task:work.Task, path:File, options?:BatchOptions):Promise<f.State|null>
 	{
 		const dir = await this.ftpList(task, path.parent(), options);
-		return dir.files[path.basename()];
+		return dir.files[path.basename()] || null;
 	}
 
 	async init(task:work.Task):Promise<void>
@@ -342,7 +331,7 @@ class FtpCacher
 		}
 		catch(e)
 		{
-			if (e.ftpError !== ftp.DIRECTORY_NOT_FOUND) 
+			if (e.ftpError !== DIRECTORY_NOT_FOUND) 
 			{
 				throw e;
 			}
@@ -731,10 +720,10 @@ export class FtpSyncManager implements ws.WorkspaceItem
 	{
 		this.logger = workspace.query(log.Logger);
 		this.config = workspace.query(cfg.Config);
-		this.ftp = new FtpCacher(workspace, this.config);
+		this.ftp = workspace.query(FtpCacher);
 	}
 
-	getServer(config:cfg.ServerConfig):FtpCacher
+	getServer(config:ServerConfig):FtpCacher
 	{
 		if (config === this.config) return this.ftp;
 		return new FtpCacher(this.workspace, config);
@@ -764,7 +753,6 @@ export class FtpSyncManager implements ws.WorkspaceItem
 
 	dispose():void
 	{
-		this.ftp.destroy();
 	}
 
 	public reconnect(task:work.Task):Promise<void>

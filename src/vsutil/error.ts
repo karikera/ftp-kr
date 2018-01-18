@@ -16,33 +16,31 @@ declare global
 
 export function processError(logger:log.Logger, err)
 {
-	switch (err)
+	if (err instanceof Error)
 	{
-	case 'IGNORE': break;
-	default:
-		if (err instanceof Error)
+		if (!err.suppress)
 		{
-			if (!err.suppress)
+			logger.error(err);
+		}
+		else
+		{
+			logger.show();
+			logger.message(err.message);
+		}
+		if (err.fsPath)
+		{
+			if (err.line)
 			{
-				logger.error(err);
+				vsutil.open(err.fsPath, err.line, err.column);
 			}
 			else
 			{
-				logger.show();
-				logger.message(err.message);
-			}
-			if (err.fsPath)
-			{
-				if (err.line)
-				{
-					vsutil.open(err.fsPath, err.line, err.column);
-				}
-				else
-				{
-					vsutil.open(err.fsPath);
-				}
+				vsutil.open(err.fsPath);
 			}
 		}
-		break;
+	}
+	else
+	{
+		logger.error(err);
 	}
 }

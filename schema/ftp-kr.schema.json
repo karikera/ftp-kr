@@ -35,6 +35,10 @@
 			"type": "boolean",
 			"description": "It will check modification of every opening and download if it modified"
 		},
+		"autoDownloadAlways": {
+			"type": "number",
+			"description": "Check server modification at set time intervals and download it"
+		},
 		"logLevel": {
 			"enum": [
 				"VERBOSE",

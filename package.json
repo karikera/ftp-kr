@@ -107,8 +107,8 @@
   "dependencies": {
     "ftp": "^0.3.10",
     "glob": "7.1.0",
-    "iconv-lite": "0.4.13",
-    "ssh2-sftp-client": "^1.1.0",
+	"iconv-lite": "0.4.13",
+    "ssh2": "^0.5.5",
     "strip-json-comments": "2.0.1"
   },
   "devDependencies": {
@@ -117,7 +117,7 @@
     "@types/iconv-lite": "0.0.1",
     "@types/mocha": "^2.2.46",
     "@types/node": "^6.0.96",
-    "@types/ssh2-sftp-client": "^1.1.0",
+    "@types/ssh2": "^0.5.35",
     "@types/strip-json-comments": "0.0.28",
     "mocha": "^2.3.3",
     "typescript": "^2.6.2",

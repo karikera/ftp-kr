@@ -79,6 +79,7 @@ export class Logger implements ws.WorkspaceItem
 		
 	public error(err:NodeJS.ErrnoException|string):void
 	{
+		if (err === 'IGNORE') return;
 		console.error(err);
 		this.log(LogLevelEnum.ERROR, err.toString());
 		if (err instanceof Error)

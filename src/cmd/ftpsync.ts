@@ -34,7 +34,7 @@ export const commands:cmd.Command = {
 		await config.loadTest();
 
 		const path = args.file;
-		scheduler.task('ftpkr.upload', async(task) => {
+		scheduler.task('ftpkr.upload', work.NORMAL, async(task) => {
 			const isdir = await path.isDirectory();
 			if (isdir)
 			{
@@ -65,7 +65,7 @@ export const commands:cmd.Command = {
 		await config.loadTest();
 
 		const path = args.file;
-		scheduler.task('ftpkr.download', async (task) => {
+		scheduler.task('ftpkr.download', work.NORMAL, async (task) => {
 			const isdir = await path.isDirectory();
 			if (isdir)
 			{
@@ -93,7 +93,7 @@ export const commands:cmd.Command = {
 
 		await config.loadTest();
 		await vscode.workspace.saveAll();
-		scheduler.taskWithTimeout('ftpkr.uploadAll', 1000, task => ftp.uploadAll(task, config.basePath));
+		scheduler.taskWithTimeout('ftpkr.uploadAll', work.NORMAL, 1000, task => ftp.uploadAll(task, config.basePath));
 	},
 	async 'ftpkr.downloadAll' (args: cmd.Args)
 	{
@@ -110,7 +110,7 @@ export const commands:cmd.Command = {
 
 		await config.loadTest();
 		await vscode.workspace.saveAll();
-		scheduler.taskWithTimeout('ftpkr.downloadAll', 1000, task => ftp.downloadAll(task, config.basePath));
+		scheduler.taskWithTimeout('ftpkr.downloadAll', work.NORMAL, 1000, task => ftp.downloadAll(task, config.basePath));
 	},
 	async 'ftpkr.cleanAll' (args: cmd.Args)
 	{
@@ -127,7 +127,7 @@ export const commands:cmd.Command = {
 
 		await config.loadTest();
 		await vscode.workspace.saveAll();
-		scheduler.taskWithTimeout('ftpkr.cleanAll', 1000, async (task) => ftp.cleanAll(task));
+		scheduler.taskWithTimeout('ftpkr.cleanAll', work.NORMAL, 1000, async (task) => ftp.cleanAll(task));
 	},
 	async 'ftpkr.refreshAll' (args: cmd.Args)
 	{
@@ -143,7 +143,7 @@ export const commands:cmd.Command = {
 		const ftp = workspace.query(ftpsync.FtpSyncManager);
 
 		await config.loadTest();
-		scheduler.taskWithTimeout('ftpkr.refreshAll', 1000, task => ftp.refreshForce(task));
+		scheduler.taskWithTimeout('ftpkr.refreshAll', work.NORMAL, 1000, task => ftp.refreshForce(task));
 	},
 
 	async 'ftpkr.list' (args: cmd.Args)
@@ -160,7 +160,7 @@ export const commands:cmd.Command = {
 		const ftp = workspace.query(ftpsync.FtpSyncManager);
 
 		await config.loadTest();
-		scheduler.taskWithTimeout('ftpkr.list', 1000, task => ftp.list(task, config.basePath));
+		scheduler.taskWithTimeout('ftpkr.list', work.NORMAL, 1000, task => ftp.list(task, config.basePath));
 	},
 	
 	async 'ftpkr.reconnect' (args: cmd.Args)
@@ -178,6 +178,6 @@ export const commands:cmd.Command = {
 
 		await config.loadTest();
 		scheduler.cancel();
-		scheduler.task('ftpkr.reconnect', task => ftp.reconnect(task));
+		scheduler.task('ftpkr.reconnect', work.NORMAL, task => ftp.reconnect(task));
 	},
 };

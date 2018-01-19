@@ -5,7 +5,7 @@ import * as work from './vsutil/work';
 import * as cfg from './config';
 
 import * as ftp from './ftpsync';
-import File from './util/file';
+import {File} from './util/file';
 
 export class FtpDownloader implements ws.WorkspaceItem
 {
@@ -72,35 +72,43 @@ export class FtpDownloader implements ws.WorkspaceItem
 
 	private async _downloadDir(dir:File):Promise<void>
 	{
-		const list = await this.scheduler.task(`autoDownloadAlways.list`, work.IDLE, task=>this.ftp.ftpList(task, dir));
+		const ftppath = this.ftp.ftppath(dir);
+		const list = await this.scheduler.task(`autoDownloadAlways.list`, work.IDLE, task=>this.ftp.ftpList(task, ftppath));
 		if (!this.enabled) throw 'IGNORE';
 		for (const childName in list.files)
 		{
 			switch(childName)
 			{
-			case '': case '.': case '..': break;
-			default:
-				const child = list.files[childName];
-				const childFile = dir.child(childName);
-				if (this.config.checkIgnorePath(dir)) continue;
+			case '': case '.': case '..': continue;
+			}
+			const _child = list.files[childName];
+			if (!_child) continue;
+			var child = _child;
+			const childFile = dir.child(childName);
+			if (this.config.checkIgnorePath(dir)) continue;
 
-				try
+			try
+			{
+				if (child.type === 'l')
 				{
-					if (child.type === 'd')
-					{
-						await this._downloadDir(childFile);
-					}
-					else
-					{
-						await this.scheduler.task(`autoDownloadAlways.download`, work.IDLE, task=>this.ftp.ftpDownloadWithCheck(task, childFile));
-						if (!this.enabled) throw 'IGNORE';
-					}
+					if (!this.config.followLink) continue;
+					const stats = await this.scheduler.task(`autoDownloadAlways.download`, work.IDLE, task=>this.ftp.ftpTargetStat(task, child));
+					if (!stats) continue;
+					child = stats;
 				}
-				catch(err)
+				if (child.type === 'd')
 				{
-					console.error(err);
+					await this._downloadDir(childFile);
 				}
-				break;
+				else
+				{
+					await this.scheduler.task(`autoDownloadAlways.download`, work.IDLE, task=>this.ftp.ftpDownloadWithCheck(task, childFile));
+					if (!this.enabled) throw 'IGNORE';
+				}
+			}
+			catch(err)
+			{
+				console.error(err);
 			}
 		}
 	}

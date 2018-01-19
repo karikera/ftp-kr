@@ -1,6 +1,6 @@
 
 import * as vscode from 'vscode';
-import File from '../util/file';
+import {File} from '../util/file';
 import * as ws from './ws';
 
 const window = vscode.window;

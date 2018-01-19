@@ -1,5 +1,5 @@
 
-import File from '../util/file';
+import {File} from '../util/file';
 import * as event from '../util/event';
 import { workspace, Uri, WorkspaceFolder, ParameterInformation, Disposable, ExtensionContext } from 'vscode';
 

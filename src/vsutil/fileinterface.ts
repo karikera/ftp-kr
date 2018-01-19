@@ -1,56 +1,19 @@
 
 import * as iconv from 'iconv-lite';
-import {Options as FtpOptions} from 'ftp';
-import {ConnectConfig as SftpOptions} from 'ssh2';
 
-import File from '../util/file';
+import {File} from '../util/file';
 
 import * as log from './log';
 import * as vsutil from './vsutil';
 import * as ws from './ws';
 
 import * as cfg from '../config';
+import { ServerConfig, FileInfo } from '../util/fileinfo';
+import { ftp_path } from '../util/ftp_path';
 
 export const NOT_CREATED = 'not created connection access';
 export const DIRECTORY_NOT_FOUND = 1;
 export const FILE_NOT_FOUND = 2;
-
-export class FileInfo
-{
-	type:string = '';
-	name:string = '';
-	size:number = 0;
-	date:number = 0;
-}
-
-export interface ServerConfig
-{
-	name?:string;
-	remotePath?:string;
-	protocol?:string;
-	fileNameEncoding?:string;
-
-	host?:string;
-	username?:string;
-	password?:string;
-	keepPasswordInMemory?:boolean;
-	port?:number;
-	ignoreWrongFileEncoding?:boolean;
-	createSyncCache?:boolean;
-	
-	passphrase?:string;
-	connectionTimeout?:number;
-	autoDownloadRefreshTime?:number;
-	blockDetectingDuration?:number;
-	refreshTime?:number;
-	privateKey?:string;
-	showGreeting?:boolean;
-	
-	ftpOverride?:FtpOptions;
-	sftpOverride?:SftpOptions;
-	
-	passwordInMemory?:string;
-}
 
 function _errorWrap(err):Error
 {
@@ -97,10 +60,6 @@ export abstract class FileInterface
 		var buf = iconv.encode(str, this.config.fileNameEncoding || 'utf-8');
 		return iconv.decode(buf, 'binary');
 	}
-	private toftpPath(workpath:string):string
-	{
-		return this.str2bin(this.config.remotePath+'/'+workpath);
-	}
 
 	private logWithState(command:string):void
 	{
@@ -115,51 +74,49 @@ export abstract class FileInterface
 		this.logger.message(message);
 	}
 
-	_callWithName<T>(name:string, workpath:string, ignorecode:number, defVal:T, callback:(name:string)=>Promise<T>):Promise<T>
+	_callWithName<T>(name:string, ftppath:string, ignorecode:number, defVal:T, callback:(name:string)=>Promise<T>):Promise<T>
 	{
-		this.logWithState(name+' '+workpath);
-		const ftppath = this.toftpPath(workpath);
-		return callback(ftppath).then(v=>{
+		this.logWithState(name+' '+ftppath);
+		return callback(this.str2bin(ftppath)).then(v=>{
 			this.state.close();
 			return v;
 		})
 		.catch((err):T=>{
 			this.state.close();
 			if (err.ftpCode === ignorecode) return defVal;
-			this.log(name+" fail: "+workpath);
+			this.log(name+" fail: "+ftppath);
 			throw _errorWrap(err);
 		});
 	}
 
-	upload(workpath:string, localpath:File):Promise<void>
+	upload(ftppath:string, localpath:File):Promise<void>
 	{
-		this.logWithState('upload '+workpath);
-		const ftppath = this.toftpPath(workpath);
+		this.logWithState('upload '+ftppath);
+		const binpath = this.str2bin(ftppath);
 
-		return this._put(localpath, ftppath)
+		return this._put(localpath, binpath)
 		.catch(err=>{
 			if (err.ftpCode !== DIRECTORY_NOT_FOUND) throw err;
 			const ftpdir = ftppath.substr(0, ftppath.lastIndexOf("/") + 1);
 			if (!ftpdir) throw err;
 			return this._mkdir(ftpdir, true)
-			.then(()=>this._put(localpath, ftppath));
+			.then(()=>this._put(localpath, binpath));
 		})
 		.then(()=>{
 			this.state.close();
 		})
 		.catch((err)=>{
 			this.state.close();
-			this.log("upload fail: "+workpath);
+			this.log("upload fail: "+ftppath);
 			throw _errorWrap(err);
 		});
 	}
 
-	download(localpath:File, workpath:string):Promise<void>
+	download(localpath:File, ftppath:string):Promise<void>
 	{
-		this.logWithState('download '+workpath);
-		const ftppath = this.toftpPath(workpath);
+		this.logWithState('download '+ftppath);
 
-		return this._get(ftppath)
+		return this._get(this.str2bin(ftppath))
 		.then((stream)=>{
 			return new Promise<void>(resolve=>{
 				stream.once('close', ()=>{
@@ -171,19 +128,17 @@ export abstract class FileInterface
 		})
 		.catch(err=>{
 			this.state.close();
-			this.log("download fail: "+workpath);
+			this.log("download fail: "+ftppath);
 			throw _errorWrap(err);
 		});
 	}
 
-	list(workpath:string):Promise<FileInfo[]>
+	list(ftppath:string):Promise<FileInfo[]>
 	{
-		this.logWithState('list '+workpath);
-
-		var ftppath = this.toftpPath(workpath);
 		if (!ftppath) ftppath = ".";
+		this.logWithState('list '+ftppath);
 
-		return this._list(ftppath).then((list)=>{
+		return this._list(this.str2bin(ftppath)).then((list)=>{
 			this.state.close();
 
 			const errfiles:string[] = [];
@@ -205,39 +160,49 @@ export abstract class FileInterface
 		})
 		.catch(err=>{
 			this.state.close();
-			this.log("list fail: "+workpath);
+			this.log("list fail: "+ftppath);
 			throw _errorWrap(err);
 		});
 	}
 
-	rmdir(workpath:string):Promise<void>
+	rmdir(ftppath:string):Promise<void>
 	{
-		return this._callWithName("rmdir", workpath, FILE_NOT_FOUND, undefined, ftppath=>this._rmdir(ftppath, true));
+		return this._callWithName("rmdir", ftppath, FILE_NOT_FOUND, undefined, binpath=>this._rmdir(binpath, true));
 	}
 
-	delete(workpath:string):Promise<void>
+	delete(ftppath:string):Promise<void>
 	{
-		return this._callWithName("delete", workpath, FILE_NOT_FOUND, undefined, ftppath=>this._delete(ftppath));
+		return this._callWithName("delete", ftppath, FILE_NOT_FOUND, undefined, binpath=>this._delete(binpath));
 	}
 
-	mkdir(workpath:string):Promise<void>
+	mkdir(ftppath:string):Promise<void>
 	{
-		return this._callWithName("mkdir", workpath, 0, undefined, ftppath=>this._mkdir(ftppath, true));
+		return this._callWithName("mkdir", ftppath, 0, undefined, binpath=>this._mkdir(binpath, true));
 	}
 
-	lastmod(workpath:string):Promise<number>
+	readlink(fileinfo:FileInfo):Promise<string>
 	{
-		return this._callWithName("lastmod", workpath, 0, 0, ftppath=>this._lastmod(ftppath));
+		if (fileinfo.type !== 'l') throw Error(fileinfo.ftppath + ' is not symlink');
+		this.logWithState('readlink '+fileinfo.name);
+		return this._readlink(fileinfo, this.str2bin(fileinfo.ftppath)).then(v=>{
+			if (v.startsWith('/')) v = ftp_path.normalize(v);
+			else v = ftp_path.normalize(fileinfo.ftppath + '/../' + v);
+			fileinfo.link = v;
+			this.state.close();
+			return v;
+		}).catch((err)=>{
+			this.state.close();
+			this.log("readlink fail: "+fileinfo.name);
+			throw _errorWrap(err);
+		});
 	}
+
 
 	abstract _mkdir(path:string, recursive:boolean):Promise<void>;
 	abstract _rmdir(path:string, recursive:boolean):Promise<void>;
-	abstract _delete(workpath:string):Promise<void>;
+	abstract _delete(ftppath:string):Promise<void>;
 	abstract _put(localpath:File, ftppath:string):Promise<void>;
 	abstract _get(ftppath:string):Promise<NodeJS.ReadableStream>;
 	abstract _list(ftppath:string):Promise<Array<FileInfo>>;
-	_lastmod(ftppath:string):Promise<number>
-	{
-		return Promise.reject('NOTSUPPORTED');
-	}
+	abstract _readlink(fileinfo:FileInfo, ftppath:string):Promise<string>;
 }

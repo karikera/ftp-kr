@@ -3,7 +3,7 @@ import * as ssh2 from 'ssh2';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import * as util from './util/util';
-import File from './util/file';
+import {File} from './util/file';
 
 import * as ws from './vsutil/ws';
 import * as log from './vsutil/log';
@@ -12,9 +12,10 @@ import * as vsutil from './vsutil/vsutil';
 
 import * as cfg from './config';
 import * as stream from 'stream';
-import { FileInterface, ServerConfig, FileInfo } from './vsutil/fileinterface';
+import { FileInterface } from './vsutil/fileinterface';
 import { SftpConnection } from './vsutil/sftp';
 import { FtpConnection } from './vsutil/ftp';
+import { ServerConfig, FileInfo } from './util/fileinfo';
 
 function createClient(workspace:ws.Workspace, config:ServerConfig):FileInterface
 {
@@ -101,21 +102,43 @@ export class FtpManager
 	private blockTestWith<T>(task:Promise<T>):Promise<T>
 	{
 		return new Promise<T>((resolve, reject)=>{
-			if (this.cancelBlockedCommand) throw Error('Multiple order at same time');
-			var blockTimeout = setTimeout(()=>reject('BLOCKED'), this.config.blockDetectingDuration || 8000);
+			if (this.cancelBlockedCommand)
+			{
+				throw Error('Multiple order at same time');
+			}
+			var blockTimeout:NodeJS.Timer|null = setTimeout(()=>{
+				if (blockTimeout)
+				{
+					this.cancelBlockedCommand = null;
+					blockTimeout = null;
+					reject('BLOCKED');
+				}
+			}, this.config.blockDetectingDuration || 8000);
 			this.cancelBlockedCommand = ()=>{
-				this.cancelBlockedCommand = null;
-				clearTimeout(blockTimeout);
-				reject('CANCELLED');
+				if (blockTimeout)
+				{
+					this.cancelBlockedCommand = null;
+					clearTimeout(blockTimeout);
+					blockTimeout = null;
+					reject('CANCELLED');
+				}
 			};
 			task.then(t=>{
-				this.cancelBlockedCommand = null;
-				clearTimeout(blockTimeout);
-				resolve(t);
+				if (blockTimeout)
+				{
+					this.cancelBlockedCommand = null;
+					clearTimeout(blockTimeout);
+					blockTimeout = null;
+					resolve(t);
+				}
 			}).catch(err=>{
-				this.cancelBlockedCommand = null;
-				clearTimeout(blockTimeout);
-				reject(err);
+				if (blockTimeout)
+				{
+					this.cancelBlockedCommand = null;
+					clearTimeout(blockTimeout);
+					blockTimeout = null;
+					reject(err);
+				}
 			});
 		});
 	}
@@ -172,7 +195,6 @@ export class FtpManager
 		}
 		url += '/';
 		url += config.remotePath;
-		url += '/';
 	
 		const usepk = config.protocol === 'sftp' && !!config.privateKey;
 	
@@ -289,33 +311,38 @@ export class FtpManager
 		return this.client;
 	}
 	
-	public rmdir(task:work.Task, workpath:string):Promise<void>
+	public rmdir(task:work.Task, ftppath:string):Promise<void>
 	{
-		return this.blockTestWrap(task, client=>client.rmdir(workpath));
+		return this.blockTestWrap(task, client=>client.rmdir(ftppath));
 	}
 	
-	public remove(task:work.Task, workpath:string):Promise<void>
+	public remove(task:work.Task, ftppath:string):Promise<void>
 	{
-		return this.blockTestWrap(task, client=>client.delete(workpath));
+		return this.blockTestWrap(task, client=>client.delete(ftppath));
 	}
 	
-	public mkdir(task:work.Task, workpath:string):Promise<void>
+	public mkdir(task:work.Task, ftppath:string):Promise<void>
 	{
-		return this.blockTestWrap(task, client=>client.mkdir(workpath));
+		return this.blockTestWrap(task, client=>client.mkdir(ftppath));
 	}
 	
-	public upload(task:work.Task, workpath:string, localpath:File):Promise<void>
+	public upload(task:work.Task, ftppath:string, localpath:File):Promise<void>
 	{
-		return this.blockTestWrap(task, client=>client.upload(workpath, localpath));
+		return this.blockTestWrap(task, client=>client.upload(ftppath, localpath));
 	}
 	
-	public download(task:work.Task, localpath:File, workpath:string):Promise<void>
+	public download(task:work.Task, localpath:File, ftppath:string):Promise<void>
 	{
-		return this.blockTestWrap(task, client=>client.download(localpath, workpath));
+		return this.blockTestWrap(task, client=>client.download(localpath, ftppath));
 	}
 	
-	public list(task:work.Task, workpath:string):Promise<FileInfo[]>
+	public list(task:work.Task, ftppath:string):Promise<FileInfo[]>
 	{
-		return this.blockTestWrap(task, client=>client.list(workpath));
-	}	
+		return this.blockTestWrap(task, client=>client.list(ftppath));
+	}
+
+	public readlink(task:work.Task, fileinfo:FileInfo):Promise<string>
+	{
+		return this.blockTestWrap(task, client=>client.readlink(fileinfo));
+	}
 }

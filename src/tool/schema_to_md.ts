@@ -1,5 +1,5 @@
 
-import File from '../util/file';
+import {File} from '../util/file';
 
 
 function mergeType(obj:any, other:any):void

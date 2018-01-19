@@ -2,10 +2,11 @@
 import FtpClientO = require('ftp');
 import * as stream from 'stream';
 
-import File from '../util/file';
+import {File} from '../util/file';
 import * as util from '../util/util';
 
-import { FileInterface, NOT_CREATED, FILE_NOT_FOUND, DIRECTORY_NOT_FOUND, FileInfo } from "./fileinterface";
+import { FileInterface, NOT_CREATED, FILE_NOT_FOUND, DIRECTORY_NOT_FOUND } from "./fileinterface";
+import { FileInfo } from '../util/fileinfo';
 
 
 
@@ -223,10 +224,11 @@ export class FtpConnection extends FileInterface
 		return FtpConnection.wrapToPromise<FtpClientO.ListingElement[]>(callback=>client.list(ftppath, false, callback))
 		.then(list=>list.map(from=>{
 			const to = new FileInfo;
-			to.type = from.type;
+			to.type = <any>from.type;
 			to.name = from.name;
 			to.date = +from.date;
 			to.size = +from.size;
+			to.link = from.target;
 			return to;
 		}))
 		.catch(e=>{
@@ -235,12 +237,10 @@ export class FtpConnection extends FileInterface
 		});
 	}
 
-	_lastmod(ftppath:string):Promise<number>
+	_readlink(fileinfo:FileInfo, ftppath:string):Promise<string>
 	{
-		const client = this.client;
-		if (!client) return Promise.reject(Error(NOT_CREATED));
-		return FtpConnection.wrapToPromise(callback=>client.lastMod(ftppath, callback))
-		.then(date=>+date);
+		if (fileinfo.link === undefined) return Promise.reject(fileinfo.ftppath + ' is not symlink');
+		return Promise.resolve(fileinfo.link);
 	}
 
 }

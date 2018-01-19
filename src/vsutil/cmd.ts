@@ -1,5 +1,5 @@
 
-import File from '../util/file';
+import {File} from '../util/file';
 import * as ws from './ws';
 import * as log from './log';
 import * as work from './work';

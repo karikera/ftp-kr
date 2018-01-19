@@ -4,14 +4,15 @@ import minimatch = require('minimatch');
 
 import * as util from "./util/util";
 import * as event from "./util/event";
-import File from "./util/file";
+import {File} from "./util/file";
 import {ConfigContainer} from './util/config';
 
 import * as ws from "./vsutil/ws";
 import * as work from "./vsutil/work";
 import * as log from "./vsutil/log";
 import * as vsutil from "./vsutil/vsutil";
-import { ServerConfig } from './vsutil/fileinterface';
+import { ServerConfig } from './util/fileinfo';
+import { ftp_path } from './util/ftp_path';
 
 var initTimeForVSBug:number = 0;
 
@@ -169,6 +170,7 @@ interface ConfigProperties extends ServerConfig
 	ignore?:(string|RegExp)[];
 	altServer?:ServerConfig[];
 	localBasePath?:string;
+	followLink?:boolean;
 	autoUpload?:boolean;
 	autoDelete?:boolean;
 	autoDownload?:boolean;
@@ -215,15 +217,6 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 		this.appendConfig(CONFIG_BASE);
 		this.logger = workspace.query(log.Logger);
 		this.scheduler = workspace.query(work.Scheduler);
-
-		switch (workspace.openState)
-		{
-		case ws.WorkspaceOpenState.OPENED:
-			this.load();
-			break;
-		case ws.WorkspaceOpenState.CREATED:
-			break;
-		}
 	}
 
 	dispose()
@@ -332,9 +325,9 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 			throwJsonError(data, /\"username\"[ \t\r\n]*\:/, 'username field must be string');
 		}
 		
-		if (!obj.remotePath) obj.remotePath = '';
+		if (!obj.remotePath) obj.remotePath = '.';
 		else if (obj.remotePath.endsWith("/"))
-			obj.remotePath = obj.remotePath.substr(0, obj.remotePath.length-1);
+			obj.remotePath = ftp_path.normalize(obj.remotePath.substr(0, obj.remotePath.length-1));
 		switch (obj.protocol)
 		{
 		case 'ftps':

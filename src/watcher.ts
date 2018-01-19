@@ -1,7 +1,7 @@
 
 import * as vscode from 'vscode';
 
-import File from './util/File';
+import {File} from './util/File';
 import * as util from './util/util';
 
 import * as log from './vsutil/log';
@@ -42,7 +42,6 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 		this.ftp = this.workspace.query(ftpsync.FtpSyncManager);
 
 		this.config.onLoad(async(task)=>{
-			// await this.ftp.load();
 			await this.ftp.init(task);
 			this.attachWatcher(this.config.autoUpload || this.config.autoDelete ? WatcherMode.FULL : WatcherMode.CONFIG);
 			this.attachOpenWatcher(!!this.config.autoDownload);
@@ -54,6 +53,14 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 		this.config.onNotFound(() => {
 			this.attachOpenWatcher(false);
 			this.attachWatcher(WatcherMode.NONE);
+		});
+		
+		this.config.path.exists().then(exists=>{
+			if (exists)
+			{
+				this.attachWatcher(WatcherMode.CONFIG);
+				this.config.load();
+			}
 		});
 	}
 

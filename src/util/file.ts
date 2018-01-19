@@ -35,7 +35,7 @@ function join_rms(...pathes:string[]):string
 
 export type Stats = fs.Stats;
 
-export default class File
+export class File
 {
 	constructor(public readonly fsPath:string)
 	{

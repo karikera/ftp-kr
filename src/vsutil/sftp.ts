@@ -1,11 +1,12 @@
 
 import {Client, ConnectConfig, SFTPWrapper} from 'ssh2';
 
-import { FileInterface, ServerConfig, NOT_CREATED, DIRECTORY_NOT_FOUND, FileInfo, FILE_NOT_FOUND } from './fileinterface';
+import { FileInterface, NOT_CREATED, DIRECTORY_NOT_FOUND, FILE_NOT_FOUND } from './fileinterface';
 import { Workspace } from './ws';
-import File from '../util/file';
+import {File} from '../util/file';
 
 import * as util from '../util/util';
+import { ServerConfig, FileInfo } from '../util/fileinfo';
 
 
 export class SftpConnection extends FileInterface
@@ -84,7 +85,20 @@ export class SftpConnection extends FileInterface
 		}
 	}
 
-	_rmdirSingle(ftppath:string):Promise<void>
+	private _readLink(ftppath:string):Promise<string>
+	{
+		return new Promise<string>((resolve, reject)=>{
+			if (!this.sftp) return reject(Error(NOT_CREATED));
+			const sftp = this.sftp;
+
+			sftp.readlink(ftppath, (err, target)=>{
+				if (err) return reject(err);
+				resolve(target);
+			});
+		})
+	}
+
+	private _rmdirSingle(ftppath:string):Promise<void>
 	{
 		return new Promise((resolve, reject) => {
 			if (!this.sftp) return reject(Error(NOT_CREATED));
@@ -226,10 +240,17 @@ export class SftpConnection extends FileInterface
 					else reject(err);
 					return false;
 				}
+
+				if (!ftppath.endsWith('/')) ftppath += '/';
+
 				// reset file info
-				const nlist = list.map(item => {
+				const nlist:FileInfo[] = new Array(list.length);
+				for (var i=0;i<list.length;i++)
+				{
+					const item = list[i];
 					const to = new FileInfo;
-					to.type = item.longname.substr(0, 1);
+					to.ftppath = ftppath + item.filename;
+					to.type = <any>item.longname.substr(0, 1);
 					to.name = item.filename;
 					to.date = item.attrs.mtime * 1000;
 					to.size = +item.attrs.size;
@@ -242,15 +263,28 @@ export class SftpConnection extends FileInterface
 					// },
 					// owner: item.attrs.uid,
 					// group: item.attrs.gid
-					return to;
-				});
+					nlist[i] = to;
+				}
 				resolve(nlist);
 			});
 		});
 	}
 
-	lastmod(ftppath:string):Promise<number>
+	_readlink(fileinfo:FileInfo, ftppath:string):Promise<string>
 	{
-		return Promise.reject('NOTSUPPORTED');
+		return new Promise<string>((resolve, reject)=>{
+			if (fileinfo.link)
+			{
+				resolve(fileinfo.link);
+				return;
+			}
+			if (!this.sftp) return reject(Error(NOT_CREATED));
+			const sftp = this.sftp;
+			sftp.readlink(ftppath, (err, target)=>{
+				if (err) return reject(err);
+				fileinfo.link = target;
+				resolve(target);
+			});
+		});
 	}
 }

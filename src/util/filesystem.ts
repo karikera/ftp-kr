@@ -1,20 +1,12 @@
 
 import {Stats as FSStats} from 'fs';
 import {ListingElement as FTPStats} from 'ftp';
+import { FileInfo, FileType } from './fileinfo';
 
 interface FileNameSet
 {
 	dir:string;
 	name:string;
-}
-
-interface SerializedState
-{
-	type?:string;// d
-	name?:string;
-	size?:number;
-	files?:SerializedState[];
-	target?:string;
 }
 
 export function splitFileName(path:string):FileNameSet
@@ -27,31 +19,31 @@ export function splitFileName(path:string):FileNameSet
     };
 }
 
-export type FileType = ''|'-'|'d'|'l';
-
-export abstract class State
+export abstract class State extends FileInfo
 {
+	linkType:FileType|undefined = undefined;
 	parent:Directory;
-	type:FileType = "";
 	lmtime:number = 0;
-	size:number = 0;
 	lmtimeWithThreshold:number = 0;
 
-	constructor(parent:Directory|null, public name:string)
+	constructor(parent:Directory|undefined, name:string)
 	{
+		super();
+
+		this.name = name;
+
 		if (parent) this.parent = parent;
 		else if (this instanceof Directory) this.parent = this;
 		else throw TypeError('Internal error, construct State without directory parameter');
 	}
 
-	abstract serialize():SerializedState;
-	abstract deserialize(file:SerializedState, add?:boolean):void;
+	abstract readFile(file:FileInfo, add?:boolean):void;
 
 }
 
 export abstract class FileCommon extends State
 {
-	constructor(parent:Directory|null, name:string)
+	constructor(parent:Directory|undefined, name:string)
 	{
 		super(parent, name);
 	}
@@ -61,26 +53,20 @@ export abstract class FileCommon extends State
 		this.size = st.size;
 	}
 
-	deserialize(file:SerializedState, add?:boolean)
+	readFile(file:FileInfo, add?:boolean)
 	{
-		if (file.size !== undefined) this.size = file.size;
-	}
-
-	serialize():SerializedState
-	{
-		return {
-			type: this.type,
-			name: this.name,
-			size: this.size
-		};  
+		this.ftppath = file.ftppath;
+		this.size = file.size;
+		this.date = file.date;
+		this.link = file.link;
 	}
 }
 
 export class Directory extends FileCommon
 {
-	files:{[key:string]:State} = {};
+	files:{[key:string]:State|undefined} = {};
 
-	constructor(parent:Directory|null, name:string)
+	constructor(parent:Directory|undefined, name:string)
 	{
 		super(parent, name);
 		
@@ -89,32 +75,8 @@ export class Directory extends FileCommon
 		this.files[""] = this.files["."] = this;
 		this.files[".."] = this.parent;
 	}
-	
-	serialize():SerializedState
-	{
-		const out = super.serialize(); 
 
-		var olist:SerializedState[] = [];
-		for(var name in this.files)
-		{
-			switch(name)
-			{
-			case "": case ".": case "..": break;
-			default: olist.push(this.files[name].serialize()); break;
-			}
-		}
-		out.type = "d";
-		out.files = olist;
-		return out;
-	}
-
-	deserialize(file:SerializedState, add?:boolean):void
-	{
-		super.deserialize(file, add);
-		if (file.files) this.readFiles(file.files, add);
-	}
-
-	readFiles(list:SerializedState[], add?:boolean):void
+	readFiles(list:FileInfo[], add?:boolean):void
 	{
 		var nfiles = {};
 		nfiles["."] = nfiles[""] = this;
@@ -126,7 +88,7 @@ export class Directory extends FileCommon
 			{
 			case undefined: break;
 			case "..": break;
-			case ".": this.deserialize(ftpfile, add); break;
+			case ".": this.readFile(ftpfile, add); break;
 			default:
 				var file = this.files[ftpfile.name];
 				if ((!add) || (!file || file.type !== ftpfile.type))
@@ -140,7 +102,7 @@ export class Directory extends FileCommon
 					}
 				}
 				nfiles[ftpfile.name] = file;
-				file.deserialize(ftpfile, add);
+				file.readFile(ftpfile, add);
 				break;
 			}
 		}
@@ -151,27 +113,11 @@ export class Directory extends FileCommon
 
 export class SymLink extends FileCommon
 {
-	target:string = '';
-
 	constructor(parent:Directory, name:string)
 	{
 		super(parent, name);
 		this.type = 'l';
 	}
-
-	serialize():SerializedState
-	{
-		var out = super.serialize();
-		out.target = this.target;
-		return out;
-	}
-
-	deserialize(file:SerializedState):void
-	{
-		if (file.target) this.target = file.target;
-		return super.deserialize(file);
-	}
-
 }
 
 export class File extends FileCommon
@@ -194,7 +140,7 @@ export class FileSystem
 	
 	reset():void
 	{
-		this.root = new Directory(null, "");
+		this.root = new Directory(undefined, "");
 	}
 
 	putByStat(path:string, st:FSStats):void
@@ -211,7 +157,7 @@ export class FileSystem
 		dir.files[fn.name] = file;
 	}
 
-	get(path:string, make?:boolean):Directory|null
+	get(path:string, make?:boolean):Directory|undefined
 	{
 		const dirs = path.split("/");
 		var dir:Directory = this.root;
@@ -226,13 +172,13 @@ export class FileSystem
 					continue;
 				}
 			}
-			if (!make) return null;
+			if (!make) return undefined;
 			dir = dir.files[cd] = new Directory(dir, cd);
 		}
 		return dir;
 	}
 
-	refresh(path:string, list:SerializedState[]):Directory
+	refresh(path:string, list:FileInfo[]):Directory
 	{
 		const dir = <Directory>this.get(path, true);
 		dir.readFiles(list, true);
@@ -259,13 +205,8 @@ export class FileSystem
 		return <Directory>this.get(path, true);
 	}
 
-	serialize():SerializedState
+	readFile(data:FileInfo, add?:boolean):void
 	{
-		return this.root.serialize();
-	}
-
-	deserialize(data:SerializedState, add?:boolean):void
-	{
-		this.root.deserialize(data, add);
+		this.root.readFile(data, add);
 	}
 }

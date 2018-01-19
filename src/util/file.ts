@@ -212,7 +212,7 @@ export class File
 		}
 		catch(err)
 		{
-			err.fsPath = this;
+			if (err instanceof Error) err.fsPath = this;
 			throw err;
 		}
 	}

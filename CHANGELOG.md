@@ -1,3 +1,7 @@
+# 1.2.3
+* Fix *All commands
+* Fix list-download without local directory
+
 # 1.2.2
 * Fix that localBasePath is not activated if it is ends with slash
 * Fix that ftp-kr.task.json is generated at root

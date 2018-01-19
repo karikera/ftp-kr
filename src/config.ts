@@ -499,7 +499,7 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 			await this.fireInvalid(err);
 			throw 'IGNORE';
 		default:
-			err.path = this.path;
+			if (err instanceof Error) err.fsPath = this.path;
 			await this.fireInvalid(err);
 			throw err;
 		}

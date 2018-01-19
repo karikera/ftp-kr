@@ -250,7 +250,11 @@ export class FtpCacher implements ws.WorkspaceItem
 		}
 
 		if (file instanceof f.Directory) await path.mkdirp();
-		else await this.ftpmgr.download(task, path, ftppath);
+		else
+		{
+			await path.parent().mkdirp();
+			await this.ftpmgr.download(task, path, ftppath);
+		}
 		const stats = await path.stat();
 		file.lmtime = +stats.mtime;
 		file.lmtimeWithThreshold = file.lmtime + 1000;
@@ -370,7 +374,7 @@ export class FtpCacher implements ws.WorkspaceItem
 		for (const file in tasklist)
 		{
 			const exec = tasklist[file];
-			const path = this.mainConfig.basePath.child(file);
+			const path = this.fromFtpPath(file);
 			try
 			{
 				switch (exec)
@@ -501,10 +505,7 @@ export class FtpCacher implements ws.WorkspaceItem
 			});
 		}
 		
-		await pick.open().catch(err=> {
-			console.error(err);
-			throw err;
-		});
+		await pick.open();
 	}
 	
 	private async _syncTestUpload(task:work.Task, path:File):Promise<TaskList>

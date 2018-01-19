@@ -143,7 +143,7 @@ export class QuickPick
 		this.items.length = 0;
 	}
 	
-	public item(label:string, onselect:()=>any):QuickPickItem
+	public item(label:string, onselect:()=>Promise<any>|void):QuickPickItem
 	{
 		const item = new QuickPickItem();
 		item.label = label;

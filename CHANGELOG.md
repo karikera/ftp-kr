@@ -1,3 +1,6 @@
+# 1.2.5
+* Windows share path error fix
+
 # 1.2.4
 * Bugfix about path
 

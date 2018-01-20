@@ -33,7 +33,7 @@ export const ftp_path = {
 	{
 		const idx = ftppath.lastIndexOf('/');
 		if (idx === 0) return '/.';
-		if (idx !== -1) return ftppath.substr(0, idx + 1);
+		if (idx !== -1) return ftppath.substr(0, idx);
 		return '.';
 	},
 	basename(ftppath:string):string

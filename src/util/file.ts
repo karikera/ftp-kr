@@ -1,8 +1,150 @@
 
 import * as fs from 'fs';
-import * as path from 'path';
 import * as util from './util';
 import glob from './pglob';
+import {sep} from 'path';
+import * as os from 'os';
+
+
+const win32 = os.platform() === 'win32';
+
+function win32_drivePrefix(path:string):string
+{
+	if (path.charAt(1) === ':') return path.substr(0, 2);
+	if (path.startsWith('\\\\'))
+	{
+		const driveidx = path.indexOf('\\', 2);
+		if (driveidx === -1) return path;
+		return path.substr(0, driveidx);
+	}
+	return '';
+}
+
+function win32_join(...path:string[]):string
+{
+	var i = path.length;
+	while (i--)
+	{
+		const p = path[i];
+		if (p.charAt(1) === ':')
+		{
+			return mypath.normalize(path.slice(i).join('\\'));
+		}
+		if (p.startsWith('\\\\'))
+		{
+			return mypath.normalize(path.slice(i).join('\\'));
+		}
+		if (p.startsWith('\\') || p.startsWith('/'))
+		{
+			var j = i;
+			while (j--)
+			{
+				const p2 = path[j];
+				const driveprefix = win32_drivePrefix(p2);
+				if (driveprefix)
+				{
+					return mypath.normalize(driveprefix + path.slice(i).join('\\'));
+				}
+			}
+			return mypath.normalize(path.slice(i).join('\\'));
+		}
+	}
+	return mypath.normalize(path.join('/'));
+}
+
+function unix_join(...path:string[]):string
+{
+	var i = path.length;
+	while (i--)
+	{
+		const p = path[i];
+		if (p.startsWith('\\') || p.startsWith('/'))
+		{
+			return mypath.normalize(path.slice(i).join('/'));
+		}
+	}
+	return mypath.normalize(path.join('/'));
+}
+
+function win32_resolve(path:string):string
+{
+	if (path.charAt(1) === ':')
+	{
+		return mypath.normalize(path);
+	}
+	else if (path.startsWith('/') || path.startsWith('\\'))
+	{
+		return mypath.join(process.cwd(), path);
+	}
+	else
+	{
+		return mypath.normalize(path);
+	}
+}
+
+function unix_resolve(path:string):string
+{
+	if (path.startsWith('/') || path.startsWith('\\'))
+	{
+		return mypath.join(process.cwd(), path);
+	}
+	else
+	{
+		return mypath.normalize(path);
+	}
+}
+
+const mypath = {
+	dirname(path:string):string
+	{
+		const idx = path.lastIndexOf(sep);
+		if (idx === -1) return '';
+		return path.substr(0, idx);
+	},
+
+	normalize(path:string):string
+	{
+		const npath:string[] = [];
+		const pathes = path.split(/\\\//g);
+		for (const p of pathes)
+		{
+			switch (p)
+			{
+			case '..':
+				if (npath.length === 0 || npath[npath.length-1] === '..')
+				{
+					npath.push('..');
+				}
+				else
+				{
+					npath.pop();
+				}
+				break;
+			case '':
+			case '.':
+				break;
+			default:
+				npath.push(p);
+				break;
+			}
+		}
+		const res = npath.join(sep);
+		if (path.startsWith('\\\\')) return '\\\\'+res;
+		if (path.startsWith(sep)) return sep + res;
+		return res;
+	},
+
+	isAbsolute(path:string):boolean
+	{
+		if (path.startsWith('/')) return true;
+		if (path.startsWith('\\')) return true;
+		if (path.charAt(1) == ':') return true;
+		return false;
+	},
+
+	resolve:win32? win32_resolve : unix_resolve,
+	join:win32 ? win32_join : unix_join,
+};
 
 
 function mkdirParent(dirPath:string, callback:(err?:Error)=>void):void
@@ -16,21 +158,11 @@ function mkdirParent(dirPath:string, callback:(err?:Error)=>void):void
 				callback();
 				return;
             case 'ENOENT':
-                return mkdirParent(path.dirname(dirPath), () => fs.mkdir(dirPath, callback));
+                return mkdirParent(mypath.dirname(dirPath), () => fs.mkdir(dirPath, callback));
             }
         }
         callback && callback(error);
     });
-}
-
-function join_rms(...pathes:string[]):string
-{
-	const fsPath = path.join(...pathes);
-	if (fsPath.endsWith(path.sep))
-	{
-		return fsPath.substr(0,fsPath.length-1);
-	}
-	return fsPath;
 }
 
 export type Stats = fs.Stats;
@@ -48,7 +180,7 @@ export class File
 
 	in(parent:File):boolean
 	{
-		return this.fsPath.startsWith(parent.fsPath + path.sep);
+		return this.fsPath.startsWith(parent.fsPath + sep);
 	}
 
 	initJson(defaultValue:Object):Promise<any>
@@ -73,7 +205,8 @@ export class File
 
 	basename():string
 	{
-		return path.basename(this.fsPath);
+		const idx = this.fsPath.lastIndexOf(sep);
+		return this.fsPath.substr(idx+1);
 	}
 
 	ext():string
@@ -86,7 +219,7 @@ export class File
 
 	reext(newext:string):File
 	{
-		const pathidx = this.fsPath.lastIndexOf(path.sep);
+		const pathidx = this.fsPath.lastIndexOf(sep);
 		const extidx = this.fsPath.indexOf('.', pathidx+1);
 		if (extidx === -1) new File(this.fsPath+'.'+newext);
 		return new File(this.fsPath.substr(0, extidx+1)+newext);
@@ -100,30 +233,22 @@ export class File
 
 	static parse(pathname:string)
 	{
-		return new File(path.resolve(pathname));
+		return new File(mypath.resolve(pathname));
 	}
 
 	sibling(filename:string):File
 	{
-		return new File(join_rms(path.dirname(this.fsPath), filename));
+		return new File(mypath.join(mypath.dirname(this.fsPath), filename));
 	}
 
 	child(...filename:string[]):File
 	{
-		var i = filename.length;
-		while (i--)
-		{
-			if (path.isAbsolute(filename[i]))
-			{
-				return new File(path.resolve(...filename.slice(i)));
-			}
-		}
-		return new File(join_rms(this.fsPath, ...filename));
+		return new File(mypath.join(this.fsPath, ...filename));
 	}
 
 	parent():File
 	{
-		return new File(path.dirname(this.fsPath));
+		return new File(mypath.dirname(this.fsPath));
 	}
 
 	relativeFrom(parent:File):string|undefined

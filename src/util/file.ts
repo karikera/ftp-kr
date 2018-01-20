@@ -115,7 +115,7 @@ export class File
 		{
 			if (path.isAbsolute(filename[i]))
 			{
-				return new File(join_rms(...filename.slice(i)));
+				return new File(path.resolve(...filename.slice(i)));
 			}
 		}
 		return new File(join_rms(this.fsPath, ...filename));
@@ -212,7 +212,7 @@ export class File
 		}
 		catch(err)
 		{
-			if (err instanceof Error) err.fsPath = this;
+			if (err instanceof Error) err.file = this;
 			throw err;
 		}
 	}

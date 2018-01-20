@@ -299,7 +299,7 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 		}
 		catch(err)
 		{
-			err.fsPath = this.path;
+			err.file = this.path;
 			throw err;
 		}
 		if (!(obj instanceof Object))
@@ -499,7 +499,7 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 			await this.fireInvalid(err);
 			throw 'IGNORE';
 		default:
-			if (err instanceof Error) err.fsPath = this.path;
+			if (err instanceof Error) err.file = this.path;
 			await this.fireInvalid(err);
 			throw err;
 		}

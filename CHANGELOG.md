@@ -1,3 +1,6 @@
+# 1.2.4
+* Bugfix about path
+
 # 1.2.3
 * Fix *All commands
 * Fix list-download without local directory

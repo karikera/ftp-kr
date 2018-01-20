@@ -8,7 +8,7 @@ declare global
 	interface Error
 	{
 		suppress?:boolean;
-		fsPath?:File;
+		file?:File;
 		line?:number;
 		column?:number;
 	}
@@ -27,15 +27,15 @@ export function processError(logger:log.Logger, err)
 			logger.show();
 			logger.message(err.message);
 		}
-		if (err.fsPath)
+		if (err.file)
 		{
 			if (err.line)
 			{
-				vsutil.open(err.fsPath, err.line, err.column);
+				vsutil.open(err.file, err.line, err.column);
 			}
 			else
 			{
-				vsutil.open(err.fsPath);
+				vsutil.open(err.file);
 			}
 		}
 	}

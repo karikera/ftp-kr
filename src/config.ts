@@ -11,6 +11,7 @@ import * as ws from "./vsutil/ws";
 import * as work from "./vsutil/work";
 import * as log from "./vsutil/log";
 import * as vsutil from "./vsutil/vsutil";
+import * as error from "./vsutil/error";
 import { ServerConfig } from './util/fileinfo';
 import { ftp_path } from './util/ftp_path';
 
@@ -256,7 +257,7 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 		}
 	}
 
-	public async init()
+	public init():Promise<boolean>
 	{
 		return this.loadWrap('ftp-kr.init', async(task)=>{
 			initTimeForVSBug = Date.now();
@@ -436,7 +437,7 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 		this.logger.verbose(`${this.workspace.name}.state = ${State[newState]}`);
 	}
 
-	public load():Thenable<boolean>
+	public load():Promise<boolean>
 	{
 		return this.loadWrap('config loading', async(task)=>{
 			try
@@ -493,7 +494,14 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 			vsutil.info('ftp-kr Login Request', 'Login').then(confirm=>{
 				if (confirm === 'Login')
 				{
-					this.loadWrap('login', task=>Promise.resolve());
+					try
+					{
+						this.loadWrap('login', task=>Promise.resolve());
+					}
+					catch (err)
+					{
+						error.processError(this.logger, err);
+					}
 				}
 			});
 			await this.fireInvalid(err);
@@ -538,7 +546,7 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 		return workpath;
 	}
 
-	private loadWrap(name:string, onwork:(task:work.Task)=>Promise<void>):Thenable<boolean>
+	private loadWrap(name:string, onwork:(task:work.Task)=>Promise<void>):Promise<boolean>
 	{
 		this.scheduler.cancel();
 		var res:boolean = false;

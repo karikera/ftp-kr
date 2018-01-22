@@ -15,7 +15,7 @@ export const commands:cmd.Command = {
 		args.workspace = await vsutil.createWorkspace();
 		if (!args.workspace) return;
 		const config = args.workspace.query(cfg.Config);
-		config.init();
+		await config.init();
 	},
 
 	async 'ftpkr.cancel'(args:cmd.Args)

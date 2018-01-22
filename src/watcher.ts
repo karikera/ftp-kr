@@ -59,7 +59,7 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 			if (exists)
 			{
 				this.attachWatcher(WatcherMode.CONFIG);
-				this.config.load();
+				this.config.load().catch(err=>error.processError(this.logger, err));
 			}
 		});
 	}

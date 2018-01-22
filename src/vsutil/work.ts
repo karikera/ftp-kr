@@ -73,6 +73,11 @@ class TaskImpl<T> implements Task
 					}
 					else
 					{
+						if (err instanceof Error)
+						{
+							err.task = name;
+						}
+
 						this.logger.verbose(`[TASK:${this.name}] errored`);
 						reject(err);
 					}

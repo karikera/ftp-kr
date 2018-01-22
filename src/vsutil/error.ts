@@ -11,6 +11,7 @@ declare global
 		file?:File;
 		line?:number;
 		column?:number;
+		task?:string;
 	}
 }
 

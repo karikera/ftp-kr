@@ -105,7 +105,7 @@ const mypath = {
 	normalize(path:string):string
 	{
 		const npath:string[] = [];
-		const pathes = path.split(/\\\//g);
+		const pathes = path.split(/[\\\/]/g);
 		for (const p of pathes)
 		{
 			switch (p)
@@ -130,16 +130,8 @@ const mypath = {
 		}
 		const res = npath.join(sep);
 		if (path.startsWith('\\\\')) return '\\\\'+res;
-		if (path.startsWith(sep)) return sep + res;
+		if (path.startsWith('\\') || path.startsWith('/')) return sep + res;
 		return res;
-	},
-
-	isAbsolute(path:string):boolean
-	{
-		if (path.startsWith('/')) return true;
-		if (path.startsWith('\\')) return true;
-		if (path.charAt(1) == ':') return true;
-		return false;
 	},
 
 	resolve:win32? win32_resolve : unix_resolve,

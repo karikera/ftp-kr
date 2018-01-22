@@ -92,7 +92,7 @@ export function selectWorkspace():Promise<ws.Workspace|undefined>
 export function fileOrEditorFile(uri: any): Promise<File> {
 	try
 	{
-		if (uri instanceof vscode.Uri && uri.fsPath) { // file.fsPath is undefined when activated by hotkey
+		if (uri instanceof vscode.Uri && uri.fsPath) { // uri.fsPath is undefined when activated by hotkey
 			const path = new File(uri.fsPath);
 			return Promise.resolve(path);
 		}

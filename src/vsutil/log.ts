@@ -87,7 +87,14 @@ export class Logger implements ws.WorkspaceItem
 			window.showErrorMessage(err.message, 'Detail')
 			.then(res=>{
 				if (res !== 'Detail') return;
-				var output = '[';
+				var output = '';
+				if (err.task)
+				{
+					output += 'Task: ';
+					output += err.task;
+					output += '\n';
+				}
+				output += '[';
 				output += err.constructor.name;
 				output += ']\nmessage: ';
 				output += err.message;

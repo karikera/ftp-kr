@@ -1,3 +1,6 @@
+# 1.2.6
+* Fix path normalize error
+
 # 1.2.5
 * Windows share path error fix
 

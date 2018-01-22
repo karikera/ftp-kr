@@ -88,8 +88,8 @@ export class SftpConnection extends FileInterface
 	private _readLink(ftppath:string):Promise<string>
 	{
 		return new Promise<string>((resolve, reject)=>{
-			if (!this.sftp) return reject(Error(NOT_CREATED));
 			const sftp = this.sftp;
+			if (!sftp) return reject(Error(NOT_CREATED));
 
 			sftp.readlink(ftppath, (err, target)=>{
 				if (err) return reject(err);
@@ -101,8 +101,8 @@ export class SftpConnection extends FileInterface
 	private _rmdirSingle(ftppath:string):Promise<void>
 	{
 		return new Promise((resolve, reject) => {
-			if (!this.sftp) return reject(Error(NOT_CREATED));
 			const sftp = this.sftp;
+			if (!sftp) return reject(Error(NOT_CREATED));
 			return sftp.rmdir(ftppath, (err) => {
 				if (err)
 				{
@@ -152,9 +152,9 @@ export class SftpConnection extends FileInterface
 
 	_delete(ftppath:string):Promise<void>
 	{
-		return new Promise((resolve, reject) => {
-			if (!this.sftp) return reject(Error(NOT_CREATED));	
+		return new Promise((resolve, reject) => {	
 			const sftp = this.sftp;
+			if (!sftp) return reject(Error(NOT_CREATED));
 			sftp.unlink(ftppath, (err) => {
 				if (err) {
 					if (err.code === 2) err.ftpCode = FILE_NOT_FOUND;
@@ -168,9 +168,9 @@ export class SftpConnection extends FileInterface
 
 	_mkdir(ftppath:string):Promise<void>
 	{
-		return new Promise((resolve, reject) => {
-			if (!this.sftp) return reject(Error(NOT_CREATED));	
+		return new Promise((resolve, reject) => {	
 			const sftp = this.sftp;
+			if (!sftp) return reject(Error(NOT_CREATED));
 			const tokens = ftppath.split(/\//g);
 			var p = '';
 			const mkdir = () => {
@@ -197,8 +197,9 @@ export class SftpConnection extends FileInterface
 	_put(localpath:File, ftppath:string):Promise<void>
 	{
 		return new Promise((resolve, reject) => {
-			if (!this.sftp) return reject(Error(NOT_CREATED));
-			this.sftp.fastPut(localpath.fsPath, ftppath, (err) => {
+			const sftp = this.sftp;
+			if (!sftp) return reject(Error(NOT_CREATED));
+			sftp.fastPut(localpath.fsPath, ftppath, (err) => {
 				if (err)
 				{
 					if (err.code === 2) err.ftpCode = DIRECTORY_NOT_FOUND;
@@ -213,8 +214,8 @@ export class SftpConnection extends FileInterface
 	_get(ftppath:string):Promise<NodeJS.ReadableStream>
 	{
 		return new Promise((resolve, reject) => {
-			if (!this.sftp) return reject(Error(NOT_CREATED));
 			const sftp = this.sftp;
+			if (!sftp) return reject(Error(NOT_CREATED));
 			try
 			{
 				const stream = sftp.createReadStream(ftppath, {encoding:<any>null});
@@ -231,8 +232,8 @@ export class SftpConnection extends FileInterface
 	_list(ftppath:string):Promise<FileInfo[]>
 	{
 		return new Promise((resolve, reject) => {
-			if (!this.sftp) return reject(Error(NOT_CREATED));
 			const sftp = this.sftp;
+			if (!sftp) return reject(Error(NOT_CREATED));
 			sftp.readdir(ftppath, (err, list) => {
 				if (err) {
 					if (err.code === 2) return resolve([]);
@@ -278,8 +279,8 @@ export class SftpConnection extends FileInterface
 				resolve(fileinfo.link);
 				return;
 			}
-			if (!this.sftp) return reject(Error(NOT_CREATED));
 			const sftp = this.sftp;
+			if (!sftp) return reject(Error(NOT_CREATED));
 			sftp.readlink(ftppath, (err, target)=>{
 				if (err) return reject(err);
 				fileinfo.link = target;

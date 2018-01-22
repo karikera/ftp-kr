@@ -1,3 +1,6 @@
+# 1.2.7
+* Fix SFTP connection exception
+
 # 1.2.6
 * Fix path normalize error
 

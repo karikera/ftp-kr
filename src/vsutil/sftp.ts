@@ -72,6 +72,7 @@ export class SftpConnection extends FileInterface
 				this.client.end();
 				this.client = null;
 			}
+			throw err;
 		}
 	}
 	
@@ -119,8 +120,8 @@ export class SftpConnection extends FileInterface
 
 	async _rmdir(ftppath:string):Promise<void>
 	{
-		if (!this.sftp) throw Error(NOT_CREATED);
 		const sftp = this.sftp;
+		if (!sftp) throw Error(NOT_CREATED);
 
 		const list = await this.list(ftppath);
 		if (list.length === 0)

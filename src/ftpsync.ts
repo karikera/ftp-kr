@@ -19,6 +19,7 @@ export interface BatchOptions
 	doNotRefresh?:boolean;
 	doNotMakeDirectory?:boolean;
 	ignoreNotExistFile?:boolean;
+	doNotCheckLatest?:boolean;
 }
 
 function testLatest(file:f.State|undefined, localStat:Stats):boolean
@@ -220,17 +221,20 @@ export class FtpCacher implements ws.WorkspaceItem
 		if (!filedir) return await next();
 		oldfile = filedir.files[path.basename()];
 		if (!oldfile) return await next();
-		if (+stats.mtime <= oldfile.lmtimeWithThreshold)
+		if (!options || !options.doNotCheckLatest)
 		{
-			report.latestIgnored = true;
-			report.file = oldfile;
-			return report;
-		}
-		if (+stats.mtime === oldfile.lmtime)
-		{
-			report.latestIgnored = true;
-			report.file = oldfile;
-			return report;
+			if (+stats.mtime <= oldfile.lmtimeWithThreshold)
+			{
+				report.latestIgnored = true;
+				report.file = oldfile;
+				return report;
+			}
+			if (+stats.mtime === oldfile.lmtime)
+			{
+				report.latestIgnored = true;
+				report.file = oldfile;
+				return report;
+			}
 		}
 		return await next();
 	}
@@ -640,8 +644,6 @@ export class FtpCacher implements ws.WorkspaceItem
 					vsutil.info("Nothing to DO");
 					return;
 				}
-				this.logger.show();
-				this.logger.message(taskname + ' started');
 				await taskFile.create(JSON.stringify(tasks, null, 1));
 				await vsutil.open(taskFile);
 				const res = await infocallback();
@@ -650,6 +652,8 @@ export class FtpCacher implements ws.WorkspaceItem
 					taskFile.unlink();
 					return;
 				}
+				this.logger.show();
+				this.logger.message(taskname + ' started');
 				const editor = await vsutil.open(taskFile);
 				if (editor) await editor.document.save();
 				const startTime = Date.now();

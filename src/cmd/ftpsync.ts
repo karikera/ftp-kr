@@ -9,13 +9,14 @@ import * as ws from '../vsutil/ws';
 import * as ftpsync from '../ftpsync';
 import * as cfg from '../config';
 
-function taskTimer(taskname: string, taskpromise: Promise<void>): Promise<void> {
+function taskTimer<T>(taskname: string, taskpromise: Promise<T>): Promise<T> {
 	const startTime = Date.now();
-	return taskpromise.then(() => {
+	return taskpromise.then(res => {
 		const passedTime = Date.now() - startTime;
 		if (passedTime > 1000) {
 			vsutil.info(taskname + " completed");
 		}
+		return res;
 	});
 }
 
@@ -34,7 +35,7 @@ export const commands:cmd.Command = {
 		await config.loadTest();
 
 		const path = args.file;
-		scheduler.task('ftpkr.upload', work.NORMAL, async(task) => {
+		await scheduler.task('ftpkr.upload', work.NORMAL, async(task) => {
 			const isdir = await path.isDirectory();
 			if (isdir)
 			{
@@ -42,12 +43,7 @@ export const commands:cmd.Command = {
 			}
 			else
 			{
-				await taskTimer('Upload', ftp.upload(task, path, {doNotMakeDirectory:true}).then(res => {
-					if (res.latestIgnored)
-					{
-						logger.message(`latest: ${config.workpath(path)}`);
-					}
-				}));
+				await taskTimer('Upload', ftp.upload(task, path, {doNotMakeDirectory:true, doNotCheckLatest:true}));
 			}
 		});
 	},
@@ -65,7 +61,7 @@ export const commands:cmd.Command = {
 		await config.loadTest();
 
 		const path = args.file;
-		scheduler.task('ftpkr.download', work.NORMAL, async (task) => {
+		await scheduler.task('ftpkr.download', work.NORMAL, async (task) => {
 			const isdir = await path.isDirectory();
 			if (isdir)
 			{
@@ -178,6 +174,6 @@ export const commands:cmd.Command = {
 
 		await config.loadTest();
 		scheduler.cancel();
-		scheduler.task('ftpkr.reconnect', work.NORMAL, task => ftp.reconnect(task));
+		await scheduler.task('ftpkr.reconnect', work.NORMAL, task => ftp.reconnect(task));
 	},
 };

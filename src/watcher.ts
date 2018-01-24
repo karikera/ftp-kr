@@ -106,19 +106,20 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 		this.openWatcherMode = mode;
 		if (mode) {
 			this.openWatcher = vscode.workspace.onDidOpenTextDocument(e => {
-				const path = new File(e.uri.fsPath);
-				const workspace = ws.getFromFile(path);
-				const config = workspace.query(cfg.Config);
-				const scheduler = workspace.query(work.Scheduler);
-				const logger = workspace.query(log.Logger);
-
 				try {
+					const path = new File(e.uri.fsPath);
+					const workspace = ws.getFromFile(path);
+					const config = workspace.query(cfg.Config);
+					const scheduler = workspace.query(work.Scheduler);
+					const logger = workspace.query(log.Logger);
+	
 					if (!config.autoDownload) return;
 					if (config.checkIgnorePath(path)) return;
 					if (!path.in(this.config.basePath)) return;
 					scheduler.task('download '+config.workpath(path),
 						work.NORMAL,
-						task => this.ftp.downloadWithCheck(task, path));
+						task => this.ftp.downloadWithCheck(task, path))
+						.catch(err=>error.processError(this.logger, err));
 				}
 				catch (err) {
 					error.processError(this.logger, err);

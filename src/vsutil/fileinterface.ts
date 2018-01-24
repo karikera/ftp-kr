@@ -97,9 +97,9 @@ export abstract class FileInterface
 		return this._put(localpath, binpath)
 		.catch(err=>{
 			if (err.ftpCode !== DIRECTORY_NOT_FOUND) throw err;
-			const ftpdir = ftppath.substr(0, ftppath.lastIndexOf("/") + 1);
-			if (!ftpdir) throw err;
-			return this._mkdir(ftpdir, true)
+			const idx = ftppath.lastIndexOf("/");
+			if (idx <= 0) throw err;
+			return this._mkdir(ftppath.substr(0, idx), true)
 			.then(()=>this._put(localpath, binpath));
 		})
 		.then(()=>{

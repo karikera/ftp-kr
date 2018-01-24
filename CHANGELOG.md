@@ -1,3 +1,6 @@
+# 1.2.10
+* Fix directory auto generation
+
 # 1.2.9
 * Update algorithms field of ssh2 schema json
 

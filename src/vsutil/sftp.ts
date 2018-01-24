@@ -167,32 +167,41 @@ export class SftpConnection extends FileInterface
 		});	
 	}
 
-	_mkdir(ftppath:string):Promise<void>
+	_mkdirSingle(ftppath:string):Promise<void>
 	{
 		return new Promise((resolve, reject) => {	
 			const sftp = this.sftp;
 			if (!sftp) return reject(Error(NOT_CREATED));
-			const tokens = ftppath.split(/\//g);
-			var p = '';
-			const mkdir = () => {
-				const token = tokens.shift();
-				if (!token && !tokens.length) {
-					resolve();
-					return;
-				}
-				p = p + token;
-				sftp.mkdir(p, (err) => {
-					if (err && err.code !== 3 && err.code !== 5)
-					{
-						reject(err);
-						return;
-					}
-					p += '/';
-					mkdir();
-				});
-			};
-			mkdir();
+			sftp.mkdir(ftppath, (err) => {
+				if (err) reject(err);
+				else resolve();
+			});
 		});
+	}
+
+	async _mkdir(ftppath:string):Promise<void>
+	{
+		var idx = 0;
+		for (;;)
+		{
+			try
+			{
+				const find = ftppath.indexOf('/', idx);
+				if (find === -1) break;
+				idx = find+1;
+				const parentpath = ftppath.substr(0, find);
+				if (!parentpath) continue;
+				await this._mkdirSingle(parentpath);
+			}
+			catch(err)
+			{
+				if (err.code !== 3 && err.code !== 4 && err.code !== 5)
+				{
+					throw err;
+				}
+			}
+		}
+		await this._mkdirSingle(ftppath);
 	}
 
 	_put(localpath:File, ftppath:string):Promise<void>

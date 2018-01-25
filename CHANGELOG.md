@@ -1,3 +1,6 @@
+# 1.2.11
+* Fix autoDownload bug
+
 # 1.2.10
 * Fix directory auto generation
 

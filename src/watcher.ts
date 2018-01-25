@@ -108,7 +108,15 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 			this.openWatcher = vscode.workspace.onDidOpenTextDocument(e => {
 				try {
 					const path = new File(e.uri.fsPath);
-					const workspace = ws.getFromFile(path);
+					var workspace:ws.Workspace;
+					try
+					{
+						workspace = ws.getFromFile(path);
+					}
+					catch (err)
+					{
+						return;
+					}
 					const config = workspace.query(cfg.Config);
 					const scheduler = workspace.query(work.Scheduler);
 					const logger = workspace.query(log.Logger);

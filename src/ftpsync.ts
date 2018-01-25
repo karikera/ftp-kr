@@ -278,7 +278,7 @@ export class FtpCacher implements ws.WorkspaceItem
 			throw e;
 		}
 		const file = await this.ftpStat(task, ftppath);
-		if (!file || (file.lmtime < +stats.mtime))
+		if (!file || (file.lmtime !== 0 && file.lmtime < +stats.mtime))
 		{
 			if (this.mainConfig === this.config && this.mainConfig.autoUpload)
 			{

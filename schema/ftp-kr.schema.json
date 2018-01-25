@@ -5,6 +5,9 @@
 		"closure": {
 			"deprecationMessage": "Closure Compiler feature is splitted. If you want to use, Please download Closure Compiler extension."
 		},
+		"disableFtp": {
+			"deprecationMessage": "This option is deleted"
+		},
 		"altServer": {
 			"type": "array",
 			"description": "alternate servers. It has similar properties with root manifest",

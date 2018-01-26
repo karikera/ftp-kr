@@ -1,3 +1,6 @@
+# 1.2.12
+* Diff!
+
 # 1.2.11
 * Fix autoDownload bug
 

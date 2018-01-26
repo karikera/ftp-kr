@@ -10,7 +10,7 @@ import * as vsutil from './vsutil/vsutil';
 
 import * as ftpmgr from './ftpmgr';
 import * as cfg from './config';
-import { DIRECTORY_NOT_FOUND } from './vsutil/fileinterface';
+import { DIRECTORY_NOT_FOUND, FILE_NOT_FOUND } from './vsutil/fileinterface';
 import { ServerConfig } from './util/fileinfo';
 import { ftp_path } from './util/ftp_path';
 
@@ -317,6 +317,24 @@ export class FtpCacher implements ws.WorkspaceItem
 		}
 	}
 
+	public async ftpDiff(task:work.Task, file:File):Promise<void>
+	{
+		const basename = file.basename();
+		const diffFile:File = await this.workspace.child('.vscode/ftp-kr.diff.'+basename).findEmptyIndex();
+		var title:string = basename+ ' Diff';
+		try
+		{
+			await this.ftpmgr.download(task, diffFile, this.ftppath(file));
+		}
+		catch (err)
+		{
+			if (err.ftpCode !== FILE_NOT_FOUND) throw err;
+			await diffFile.create("");
+			title += ' (NOT FOUND)';
+		}
+		vsutil.diff(file, diffFile, title);
+	}
+
 	public async init(task:work.Task):Promise<void>
 	{
 		await this.ftpList(task, this.mainConfig.remotePath || '.');
@@ -421,6 +439,18 @@ export class FtpCacher implements ws.WorkspaceItem
 	
 	public async list(task:work.Task, path:File):Promise<void>
 	{
+		const openFile = (file:f.State)=>{
+			const npath = path.child(file.name);
+			pick.clear();
+			pick.item('Download '+file.name, ()=>this.ftpDownload(task, npath));
+			pick.item('Upload '+file.name, ()=>this.ftpUpload(task, npath));
+			pick.item('Delete '+file.name, ()=>this.ftpDelete(task, npath));
+			pick.item('Diff '+file.name, ()=>this.ftpDiff(task, npath));
+			pick.oncancel = ()=>this.list(task, path);
+			return pick.open();
+		};
+		const openDirectory = (dir:f.State)=>this.list(task, path.child(dir.name));
+
 		const ftppath = this.ftppath(path);
 		const dir = await this.ftpList(task, ftppath);
 		const pick = new vsutil.QuickPick;
@@ -472,7 +502,7 @@ export class FtpCacher implements ws.WorkspaceItem
 
 		for (const dir of dirs)
 		{
-			pick.item('[DIR]\t' + dir.name, ()=>this.list(task, path.child(dir.name)));
+			pick.item('[DIR]\t' + dir.name, ()=>openDirectory(dir));
 		}
 
 		for (const link of links)
@@ -483,30 +513,16 @@ export class FtpCacher implements ws.WorkspaceItem
 				switch (stats.type)
 				{
 				case 'd':
-					return await this.list(task, path.child(link.name));
+					return await openDirectory(link);
 				case '-':
-					const npath = path.child(stats.name);
-					pick.clear();
-					pick.item('Download '+stats.name, ()=>this.ftpDownload(task, npath));
-					pick.item('Upload '+stats.name, ()=>this.ftpUpload(task, npath));
-					pick.item('Delete '+stats.name, ()=>this.ftpDelete(task, npath));
-					pick.oncancel = ()=>this.list(task, path);
-					return pick.open();
+					return await openFile(stats);
 				}
 			});
 		}
 
 		for (const file of files)
 		{
-			pick.item('[FILE]\t' + file.name, ()=>{
-				const npath = path.child(file.name);
-				pick.clear();
-				pick.item('Download '+file.name, ()=>this.ftpDownload(task, npath));
-				pick.item('Upload '+file.name, ()=>this.ftpUpload(task, npath));
-				pick.item('Delete '+file.name, ()=>this.ftpDelete(task, npath));
-				pick.oncancel = ()=>this.list(task, path);
-				return pick.open();
-			});
+			pick.item('[FILE]\t' + file.name, ()=>openFile(file));
 		}
 		
 		await pick.open();
@@ -814,6 +830,11 @@ export class FtpSyncManager implements ws.WorkspaceItem
 	public download(task:work.Task, path:File, doNotRefresh?:boolean):Promise<void>
 	{
 		return this.ftpcacher.ftpDownload(task, path, {doNotRefresh});
+	}
+
+	public diff(task:work.Task, path:File):Promise<void>
+	{
+		return this.ftpcacher.ftpDiff(task, path);
 	}
 
 	public downloadWithCheck(task:work.Task, path:File):Promise<void>

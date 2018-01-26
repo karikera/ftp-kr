@@ -73,6 +73,25 @@ export const commands:cmd.Command = {
 			}
 		});
 	},
+	async 'ftpkr.diff' (args: cmd.Args)
+	{
+		if (!args.file) return vsutil.info('File is not selected');
+		if (!args.workspace) throw Error('workspace is not defined');
+
+		const logger = args.workspace.query(log.Logger);
+		const config = args.workspace.query(cfg.Config);
+		const scheduler = args.workspace.query(work.Scheduler);
+		const ftp = args.workspace.query(ftpsync.FtpSyncManager);
+		logger.show();
+		
+		await config.loadTest();
+
+		const path = args.file;
+		const isdir = await path.isDirectory();
+		if (isdir) throw Error('Diff only supported for file');
+
+		await scheduler.task('ftpkr.diff', work.NORMAL, task => taskTimer('Diff', ftp.diff(task, path)));
+	},
 
 	async 'ftpkr.uploadAll' (args: cmd.Args)
 	{

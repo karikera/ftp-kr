@@ -201,12 +201,23 @@ export class File
 		return this.fsPath.substr(idx+1);
 	}
 
+	filenameWithoutExt():string
+	{
+		const name = this.basename();
+		const extidx = name.indexOf('.');
+		if (extidx === -1) return name;
+		return name.substr(0, extidx);
+	}
+
+	/**
+	 * ext with dot
+	 */
 	ext():string
 	{
 		const name = this.basename();
 		const idx = name.indexOf('.');
 		if (idx === -1) return '';
-		return name.substr(idx+1);
+		return name.substr(idx);
 	}
 
 	reext(newext:string):File
@@ -231,6 +242,37 @@ export class File
 	sibling(filename:string):File
 	{
 		return new File(mypath.join(mypath.dirname(this.fsPath), filename));
+	}
+	
+	/**
+	 * Find not duplicated file name with index
+	 */
+	async findEmptyIndex():Promise<File>
+	{
+		if (!await this.exists()) return this;
+
+		const basename = this.basename();
+		const idx = basename.indexOf('.');
+		var filename:string;
+		var ext:string;
+		if (idx === -1)
+		{
+			filename = this.fsPath;
+			ext = '';
+		}
+		else
+		{
+			const extidx = this.fsPath.length - basename.length + idx;
+			filename = basename.substr(0, extidx);
+			ext = basename.substr(extidx);
+		}
+		var index = 2;
+		for (;;)
+		{
+			const nfile = new File(filename + index + ext);
+			if (!await nfile.exists()) return nfile;
+			index ++;
+		}
 	}
 
 	child(...filename:string[]):File

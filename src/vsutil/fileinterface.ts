@@ -15,18 +15,24 @@ export const NOT_CREATED = 'not created connection access';
 export const DIRECTORY_NOT_FOUND = 1;
 export const FILE_NOT_FOUND = 2;
 
+declare global
+{
+	interface Error
+	{
+		ftpCode?:number;
+	}
+}
+
 function _errorWrap(err):Error
 {
-	var nerr:Error;
 	if (err.code)
 	{
-		nerr = new Error(err.message + "[" + err.code + "]");
+		err.message = err.message + "[" + err.code + "]";
 	}
-	else
-	{
-		nerr = new Error(err.message);
-	}
-	return nerr;
+	const nstack = Error(err.message).stack || '';
+	nstack.substr(nstack.indexOf('\n'));
+	err.stack = nstack;
+	return err;
 }
 
 export abstract class FileInterface

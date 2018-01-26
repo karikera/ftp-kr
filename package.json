@@ -3,7 +3,7 @@
   "displayName": "ftp-kr",
   "description": "FTP/SFTP Sync Extension",
   "license": "MIT",
-  "version": "1.2.11",
+  "version": "1.2.12",
   "icon": "images/icon.png",
   "publisher": "ruakr",
   "repository": {
@@ -55,6 +55,11 @@
         "category": "ftp-kr"
       },
       {
+        "command": "ftpkr.diff",
+        "title": "Diff This",
+        "category": "ftp-kr"
+      },
+      {
         "command": "ftpkr.refreshAll",
         "title": "Refresh All",
         "category": "ftp-kr"
@@ -89,12 +94,14 @@
       "explorer/context": [
         {
           "command": "ftpkr.upload",
-          "title": "ftp-kr Upload",
           "group": "ftp-kr"
         },
         {
           "command": "ftpkr.download",
-          "title": "ftp-kr Download",
+          "group": "ftp-kr"
+        },
+        {
+          "command": "ftpkr.diff",
           "group": "ftp-kr"
         }
       ]

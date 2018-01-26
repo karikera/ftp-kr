@@ -234,6 +234,8 @@ export class SftpConnection extends FileInterface
 			}
 			catch(err)
 			{
+				if (err.code === 2) err.ftpCode = FILE_NOT_FOUND;
+				else if(err.code === 550) err.ftpCode = FILE_NOT_FOUND;
 				reject(err);
 			}
 		});	

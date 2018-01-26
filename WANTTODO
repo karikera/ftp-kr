@@ -2,8 +2,3 @@
 Is it possible?
 Should I find other ftp module? (Chilkat?..  Can i use it?)
 Or implement all FTP spec directly?
-
-
-I realized that node-ftp has some bug in upload function ..
-
-multi server

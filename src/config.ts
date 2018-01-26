@@ -45,7 +45,8 @@ const CONFIG_BASE:ConfigProperties = {
 		"/.vscode/.key",
 		"/.vscode/ftp-kr.task.json",
 		"/.vscode/ftp-kr.error.log",
-		"/.vscode/ftp-kr.sync.*.json"
+		"/.vscode/ftp-kr.sync.*.json",
+		"/.vscode/ftp-kr.diff.*"
 	],
 };
 const CONFIG_INIT:ConfigProperties = {
@@ -66,7 +67,8 @@ const CONFIG_INIT:ConfigProperties = {
 		"/.vscode/.key",
 		"/.vscode/ftp-kr.task.json",
 		"/.vscode/ftp-kr.error.log",
-		"/.vscode/ftp-kr.sync.*.json"
+		"/.vscode/ftp-kr.sync.*.json",
+		"/.vscode/ftp-kr.diff.*"
 	],
 };
 const REGEXP_MAP = {

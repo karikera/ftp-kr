@@ -214,7 +214,14 @@ export class FtpConnection extends FileInterface
 	{
 		const client = this.client;
 		if (!client) return Promise.reject(Error(NOT_CREATED));
-		return FtpConnection.wrapToPromise(callback=>client.get(ftppath, callback));
+		return FtpConnection.wrapToPromise<NodeJS.ReadableStream>(callback=>client.get(ftppath, callback))
+		.catch(e=>{
+			if (e.code === 550)
+			{
+				e.ftpCode = FILE_NOT_FOUND;
+			}
+			throw e;
+		});
 	}
 
 	_list(ftppath:string):Promise<FileInfo[]>

@@ -1,14 +1,11 @@
 
-import * as vscode from 'vscode';
 import {File} from '../util/file';
 import * as ws from './ws';
-
-const window = vscode.window;
-const workspace = vscode.workspace;
+import { commands, StatusBarItem, window, workspace, Uri, TextEditor, TextDocument, Position, Selection, Range } from 'vscode';
 
 export class StateBar implements ws.WorkspaceItem
 {
-	private statebar:vscode.StatusBarItem|undefined;
+	private statebar:StatusBarItem|undefined;
 	private disposed:boolean = false;
 	
 	constructor(workspace:ws.Workspace)
@@ -92,7 +89,7 @@ export function selectWorkspace():Promise<ws.Workspace|undefined>
 export function fileOrEditorFile(uri: any): Promise<File> {
 	try
 	{
-		if (uri instanceof vscode.Uri && uri.fsPath) { // uri.fsPath is undefined when activated by hotkey
+		if (uri instanceof Uri) {
 			const path = new File(uri.fsPath);
 			return Promise.resolve(path);
 		}
@@ -115,13 +112,13 @@ export function info(info:string, ...items:string[]):Thenable<string|undefined>
 	return window.showInformationMessage(info, ...items);
 }
 
-export function openWithError(path:File, message:string, line?:number, column?:number):Promise<vscode.TextEditor>
+export function openWithError(path:File, message:string, line?:number, column?:number):Promise<TextEditor>
 {
 	window.showErrorMessage(path + ": " + message);
 	return open(path, line, column);
 }
 
-export class QuickPickItem implements vscode.QuickPickItem
+export class QuickPickItem implements QuickPickItem
 {
 	public label: string;
 	public description: string = '';
@@ -167,7 +164,7 @@ export class QuickPick
 
 }
 
-export async function open(path:File, line?:number, column?:number):Promise<vscode.TextEditor>
+export async function open(path:File, line?:number, column?:number):Promise<TextEditor>
 {
 	const doc = await workspace.openTextDocument(path.fsPath);
 	const editor = await window.showTextDocument(doc);
@@ -176,16 +173,34 @@ export async function open(path:File, line?:number, column?:number):Promise<vsco
 		line --;
 		if (column === undefined) column = 0;
 		
-		const pos = new vscode.Position(line, column);
-		editor.selection = new vscode.Selection(pos, pos);
-		editor.revealRange(new vscode.Range(pos, pos));		
+		const pos = new Position(line, column);
+		editor.selection = new Selection(pos, pos);
+		editor.revealRange(new Range(pos, pos));		
 	}
 	return editor;
 }
 
-export async function openNew(content:string):Promise<vscode.TextDocument>
+export async function openNew(content:string):Promise<TextDocument>
 {
 	const doc = await workspace.openTextDocument({content});
 	window.showTextDocument(doc);
 	return doc;
+}
+
+export async function diff(left:File, right:File, title?:string):Promise<void>
+{
+	const leftUri = Uri.file(left.fsPath);
+	const rightUri = Uri.file(right.fsPath);
+	await commands.executeCommand('vscode.diff', leftUri, rightUri, title);
+	if (window.activeTextEditor)
+	{
+		const doc = window.activeTextEditor.document;
+		const dispose = workspace.onDidCloseTextDocument(e=>{
+			if (e.uri.toString() === doc.uri.toString())
+			{
+				dispose.dispose();
+				right.unlink();
+			}
+		});
+	}
 }

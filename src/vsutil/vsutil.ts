@@ -1,7 +1,7 @@
 
 import {File} from '../util/file';
 import * as ws from './ws';
-import { commands, StatusBarItem, window, workspace, Uri, TextEditor, TextDocument, Position, Selection, Range } from 'vscode';
+import { commands, StatusBarItem, window, workspace, Uri, TextEditor, TextDocument, Position, Selection, Range, TextDocumentShowOptions, ExtensionContext } from 'vscode';
 
 export class StateBar implements ws.WorkspaceItem
 {
@@ -187,20 +187,22 @@ export async function openNew(content:string):Promise<TextDocument>
 	return doc;
 }
 
-export async function diff(left:File, right:File, title?:string):Promise<void>
+export function diff(left:File, right:File, title?:string):Thenable<void>
 {
-	const leftUri = Uri.file(left.fsPath);
-	const rightUri = Uri.file(right.fsPath);
-	await commands.executeCommand('vscode.diff', leftUri, rightUri, title);
-	if (window.activeTextEditor)
-	{
-		const doc = window.activeTextEditor.document;
-		const dispose = workspace.onDidCloseTextDocument(e=>{
-			if (e.uri.toString() === doc.uri.toString())
-			{
-				dispose.dispose();
-				right.unlink();
-			}
+	return new Promise(resolve=>{
+		const leftUri = Uri.file(left.fsPath);
+		const rightUri = Uri.file(right.fsPath);
+		var options:TextDocumentShowOptions;
+		commands.executeCommand('vscode.diff', leftUri, rightUri, title).then((res)=>{
+			
+			const dispose = workspace.onDidCloseTextDocument(e=>{
+				if (e.uri.fsPath === left.fsPath)
+				{
+					dispose.dispose();
+					resolve();
+					return;
+				}
+			});
 		});
-	}
+	});
 }

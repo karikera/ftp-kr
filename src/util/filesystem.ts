@@ -9,6 +9,16 @@ interface FileNameSet
 	name:string;
 }
 
+interface SerializedState
+{
+	[key:string]:(SerializedState|string|number|boolean|undefined);
+	type?:string;
+	size?:number;
+	lmtime?:number;
+	modified?:boolean;
+	
+}
+
 export function splitFileName(path:string):FileNameSet
 {
     var pathidx = path.lastIndexOf('/');
@@ -21,44 +31,60 @@ export function splitFileName(path:string):FileNameSet
 
 export abstract class State extends FileInfo
 {
+	ftppath:string = '';
+	type:FileType = '';
+	name:string = '';
+	size:number = 0;
+	date:number = 0;
 	linkType:FileType|undefined = undefined;
-	parent:Directory;
 	lmtime:number = 0;
 	lmtimeWithThreshold:number = 0;
+	modified:boolean = false;
 
-	constructor(parent:Directory|undefined, name:string)
+	constructor(public fs:FileSystem, public parent:Directory|undefined, name:string)
 	{
 		super();
 
 		this.name = name;
-
-		if (parent) this.parent = parent;
-		else if (this instanceof Directory) this.parent = this;
-		else throw TypeError('Internal error, construct State without directory parameter');
 	}
 
-	abstract readFile(file:FileInfo, add?:boolean):void;
+	getFullPath():string
+	{
+		const names:string[] = [this.name];
+		var p = this.parent;
+		while (p)
+		{
+			names.push(p.name);
+			p = p.parent;
+		}
+		return names.reverse().join('/');
+	}
+
+	abstract serialize():SerializedState;
+	abstract deserialize(data:SerializedState):void;
+	abstract setByInfo(file:FileInfo):void;
 
 }
 
 export abstract class FileCommon extends State
 {
-	constructor(parent:Directory|undefined, name:string)
+	constructor(fs:FileSystem, parent:Directory|undefined, name:string)
 	{
-		super(parent, name);
+		super(fs, parent, name);
 	}
 	
 	setByStat(st:FSStats):void
 	{
 		this.size = st.size;
+		this.lmtime = +st.mtime;
+		this.lmtimeWithThreshold = this.lmtime + 1000;
 	}
 
-	readFile(file:FileInfo, add?:boolean)
+	setByInfo(file:FileInfo):void
 	{
 		this.ftppath = file.ftppath;
 		this.size = file.size;
 		this.date = file.date;
-		this.link = file.link;
 	}
 }
 
@@ -66,9 +92,9 @@ export class Directory extends FileCommon
 {
 	files:{[key:string]:State|undefined} = {};
 
-	constructor(parent:Directory|undefined, name:string)
+	constructor(fs:FileSystem, parent:Directory|undefined, name:string)
 	{
-		super(parent, name);
+		super(fs, parent, name);
 		
 		this.type = "d";
 
@@ -76,7 +102,50 @@ export class Directory extends FileCommon
 		this.files[".."] = this.parent;
 	}
 
-	readFiles(list:FileInfo[], add?:boolean):void
+	serialize():SerializedState
+	{
+		var files:SerializedState = {};
+		for (const filename in this.files)
+		{
+			const file = this.files[filename];
+			if (!file) continue;
+			switch (filename)
+			{
+			case '': case '.': case '..': continue;
+			}
+			files[filename] = file.serialize();
+		}
+		return files;
+	}
+
+	deserialize(data:SerializedState):void
+	{
+		if (typeof data !== 'object') return;
+		for (const filename in data)
+		{
+			const sfile = data[filename];
+			if (!sfile) continue;
+			if (typeof sfile !== 'object') continue;
+
+			var file:State;
+			switch (sfile.type)
+			{
+			case '-':
+				file = new File(this.fs, this, filename);
+				break;
+			case 'l':
+				file = new SymLink(this.fs, this, filename);
+				break;
+			default:
+				file = new Directory(this.fs, this, filename);
+				break;
+			}
+			file.deserialize(sfile);
+			this.files[filename] = file;
+		}
+	}
+
+	setByInfos(list:FileInfo[]):void
 	{
 		var nfiles = {};
 		nfiles["."] = nfiles[""] = this;
@@ -88,21 +157,38 @@ export class Directory extends FileCommon
 			{
 			case undefined: break;
 			case "..": break;
-			case ".": this.readFile(ftpfile, add); break;
+			case ".": this.setByInfo(ftpfile); break;
 			default:
 				var file = this.files[ftpfile.name];
-				if ((!add) || (!file || file.type !== ftpfile.type))
+				delete this.files[ftpfile.name];
+				const oldfile = file;
+				if (!file || file.type !== ftpfile.type)
 				{ 
 					switch (ftpfile.type)
 					{
-					case 'd': file = new Directory(this, ftpfile.name); break;
-					case '-': file = new File(this, ftpfile.name); break;
-					case 'l': file = new SymLink(this, ftpfile.name); break;
+					case 'd': file = new Directory(this.fs, this, ftpfile.name); break;
+					case '-': 
+						file = new File(this.fs, this, ftpfile.name);
+						break;
+					case 'l':
+						file = new SymLink(this.fs, this, ftpfile.name);
+						break;
 					default: break _nofile;
 					}
 				}
+				if (oldfile)
+				{
+					if (file !== oldfile)
+					{
+						file.modified = true;
+					}
+					else if (file.type === '-' && ftpfile.size !== file.size)
+					{
+						file.modified = true;
+					}
+				}
 				nfiles[ftpfile.name] = file;
-				file.readFile(ftpfile, add);
+				file.setByInfo(ftpfile);
 				break;
 			}
 		}
@@ -113,19 +199,52 @@ export class Directory extends FileCommon
 
 export class SymLink extends FileCommon
 {
-	constructor(parent:Directory, name:string)
+	constructor(fs:FileSystem, parent:Directory, name:string)
 	{
-		super(parent, name);
+		super(fs, parent, name);
 		this.type = 'l';
 	}
+
+	serialize():SerializedState
+	{
+		return {
+			type:this.type,
+			size:this.size,
+			lmtime:this.lmtime,
+			modified:this.modified,
+		};
+	}
+	deserialize(data:SerializedState):void
+	{
+		this.size = Number(data.size) || 0;
+		this.lmtime = Number(data.lmtime) || 0;
+		this.modified = Boolean(data.modified);
+	}
+
 }
 
 export class File extends FileCommon
 {
-	constructor(parent:Directory, name:string)
+	constructor(fs:FileSystem, parent:Directory, name:string)
 	{
-		super(parent, name);
+		super(fs, parent, name);
 		this.type = "-";
+	}
+
+	serialize():SerializedState
+	{
+		return {
+			type:this.type,
+			size:this.size,
+			lmtime:this.lmtime,
+			modified:this.modified,
+		};
+	}
+	deserialize(data:SerializedState):void
+	{
+		this.size = Number(data.size) || 0;
+		this.lmtime = Number(data.lmtime) || 0;
+		this.modified = Boolean(data.modified);
 	}
 }
 
@@ -137,10 +256,20 @@ export class FileSystem
 	{
     	this.reset();
 	}
+
+	serialize():any
+	{
+		return this.root.serialize();
+	}
+
+	deserialize(data:SerializedState):void
+	{
+		this.root.deserialize(data);
+	}
 	
 	reset():void
 	{
-		this.root = new Directory(undefined, "");
+		this.root = new Directory(this, undefined, "");
 	}
 
 	putByStat(path:string, st:FSStats):void
@@ -149,9 +278,9 @@ export class FileSystem
 		var fn = splitFileName(path);
 		var dir = <Directory>this.get(fn.dir, true);
 
-		if (st.isSymbolicLink()) file = new SymLink(dir, fn.name);
-		else if(st.isDirectory()) file = new Directory(dir, fn.name);
-		else if(st.isFile()) file = new File(dir, fn.name);
+		if (st.isSymbolicLink()) file = new SymLink(this, dir, fn.name);
+		else if(st.isDirectory()) file = new Directory(this, dir, fn.name);
+		else if(st.isFile()) file = new File(this, dir, fn.name);
 		else throw Error('invalid file');
 		file.setByStat(st);
 		dir.files[fn.name] = file;
@@ -173,7 +302,7 @@ export class FileSystem
 				}
 			}
 			if (!make) return undefined;
-			dir = dir.files[cd] = new Directory(dir, cd);
+			dir = dir.files[cd] = new Directory(this, dir, cd);
 		}
 		return dir;
 	}
@@ -181,7 +310,7 @@ export class FileSystem
 	refresh(path:string, list:FileInfo[]):Directory
 	{
 		const dir = <Directory>this.get(path, true);
-		dir.readFiles(list, true);
+		dir.setByInfos(list);
 		return dir;
 	}
 
@@ -189,7 +318,7 @@ export class FileSystem
 	{
 		const fn = splitFileName(path);
 		const dir = <Directory>this.get(fn.dir, true);
-		const file = dir.files[fn.name] = new File(dir, fn.name);
+		const file = dir.files[fn.name] = new File(this, dir, fn.name);
 		return file;
 	}
 
@@ -203,10 +332,5 @@ export class FileSystem
 	mkdir(path:string):Directory
 	{
 		return <Directory>this.get(path, true);
-	}
-
-	readFile(data:FileInfo, add?:boolean):void
-	{
-		this.root.readFile(data, add);
 	}
 }

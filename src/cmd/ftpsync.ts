@@ -30,6 +30,7 @@ export const commands:cmd.Command = {
 		const config = args.workspace.query(cfg.Config);
 		const scheduler = args.workspace.query(work.Scheduler);
 		const ftp = args.workspace.query(ftpsync.FtpSyncManager);
+		
 		logger.show();
 
 		await config.loadTest();
@@ -43,7 +44,7 @@ export const commands:cmd.Command = {
 			}
 			else
 			{
-				await taskTimer('Upload', ftp.upload(task, path, {doNotMakeDirectory:true, doNotCheckLatest:true}));
+				await taskTimer('Upload', ftp.upload(task, path, {doNotMakeDirectory:true, forceUpload:true}));
 			}
 		});
 	},
@@ -56,6 +57,7 @@ export const commands:cmd.Command = {
 		const config = args.workspace.query(cfg.Config);
 		const scheduler = args.workspace.query(work.Scheduler);
 		const ftp = args.workspace.query(ftpsync.FtpSyncManager);
+
 		logger.show();
 		
 		await config.loadTest();
@@ -82,6 +84,7 @@ export const commands:cmd.Command = {
 		const config = args.workspace.query(cfg.Config);
 		const scheduler = args.workspace.query(work.Scheduler);
 		const ftp = args.workspace.query(ftpsync.FtpSyncManager);
+		
 		logger.show();
 		
 		await config.loadTest();

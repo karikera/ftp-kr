@@ -62,6 +62,17 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 				this.config.load().catch(err=>error.processError(this.logger, err));
 			}
 		});
+		
+		// It has many bug, not completed code
+		// this.ftp.onCreated = path=>{
+		// 	this.logger.verbose("ftp.onCreated: "+path);
+		// };
+		// this.ftp.onModified = path=>{
+		// 	this.logger.verbose("ftp.onModified: "+path);
+		// };
+		// this.ftp.onDeleted = path=>{
+		// 	this.logger.verbose("ftp.onDeleted: "+path);
+		// };
 	}
 
 	dispose()
@@ -71,7 +82,7 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 
 	async processWatcher(
 		path: File, 
-		workFunc: (this:ftpsync.FtpSyncManager, task:work.Task, path: File) => Promise<any>, 
+		workFunc: (task:work.Task, path: File) => Promise<any>, 
 		workName: string,
 		autoSync: boolean): Promise<void>
 	{
@@ -81,7 +92,7 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 				// #2. 와처가 바로 이전에 생성한 설정 파일에 반응하는 상황을 우회
 				if (cfg.testInitTimeBiasForVSBug())
 				{
-					if (workFunc === this.ftp.upload) return;
+					if (workName === 'upload') return;
 				}
 
 				this.logger.show();
@@ -94,7 +105,7 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 			if (!path.in(this.config.basePath)) return;
 			await this.scheduler.task(workName+' '+this.config.workpath(path), 
 				work.NORMAL,
-				task => workFunc.call(this.ftp, task, path));
+				task => workFunc(task, path));
 		}
 		catch (err) {
 			error.processError(this.logger, err);
@@ -147,7 +158,7 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 		const workspace = ws.getFromFile(path);
 		const config = workspace.query(cfg.Config);
 
-		this.processWatcher(path, this.ftp.upload, 'upload', !!config.autoUpload);
+		this.processWatcher(path, (task, path)=>this.ftp.upload(task, path, {ignoreNotExistFile: true}), 'upload', !!config.autoUpload);
 		try
 		{
 			if (!(await path.isDirectory())) return;

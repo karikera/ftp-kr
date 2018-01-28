@@ -22,9 +22,14 @@
 				}
 			}
 		},
+		"createSyncCache": {
+			"type": "boolean",
+			"description": "Create ftp-kr.cache.json file to save remote modification (default: true)",
+			"default": true
+		},
 		"followLink":{
 			"type": "boolean",
-			"description":"If it is true, extension will access symlink target or ignore symlink",
+			"description":"If it is true, extension will access symlink target or ignore symlink (default: false)",
 			"default": false
 		},
 		"localBasePath":{
@@ -33,22 +38,22 @@
 		},
         "autoUpload": {
             "type": "boolean",
-            "description": "Upload file when save",
+            "description": "Upload file when save (default: false)",
 			"default": false
         },
         "autoDelete": {
             "type": "boolean",
-            "description": "Delete FTP file when delete in workspace",
+            "description": "Delete FTP file when delete in workspace (default: false)",
 			"default": false
         },
 		"autoDownload": {
 			"type": "boolean",
-			"description": "It will check modification of every opening and download if it modified",
+			"description": "It will check modification of every opening and download if it modified (default: false)",
 			"default": false
 		},
 		"autoDownloadAlways": {
 			"type": "number",
-			"description": "Check server modification at set time intervals and download it",
+			"description": "Check server modification at set time intervals and download it. If it is zero, feature is disabled (default: 0)",
 			"default": 0
 		},
 		"logLevel": {
@@ -56,7 +61,7 @@
 				"VERBOSE",
 				"NORMAL"
 			],
-            "description": "Log level setting for debug",
+            "description": "Log level setting for debug (default: NORMAL)",
 			"default": "NORMAL"
 		},
 		"ignore": {

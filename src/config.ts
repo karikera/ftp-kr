@@ -178,6 +178,7 @@ interface ConfigProperties extends ServerConfig
 	autoDelete?:boolean;
 	autoDownload?:boolean;
 	autoDownloadAlways?:number;
+	createSyncCache?:boolean;
 	logLevel?:log.Level;
 }
 

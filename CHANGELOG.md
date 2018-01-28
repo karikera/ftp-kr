@@ -1,3 +1,7 @@
+# 1.2.13
+* Conflict check and diff when auto upload
+* Reuse cache file
+
 # 1.2.12
 * Diff!
 

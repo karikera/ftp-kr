@@ -215,7 +215,7 @@ export class File
 	ext():string
 	{
 		const name = this.basename();
-		const idx = name.indexOf('.');
+		const idx = name.lastIndexOf('.');
 		if (idx === -1) return '';
 		return name.substr(idx);
 	}
@@ -252,19 +252,20 @@ export class File
 		if (!await this.exists()) return this;
 
 		const basename = this.basename();
-		const idx = basename.indexOf('.');
+		const idx = basename.lastIndexOf('.');
 		var filename:string;
 		var ext:string;
 		if (idx === -1)
 		{
-			filename = this.fsPath;
+			filename = this.fsPath + '.';
+			
 			ext = '';
 		}
 		else
 		{
 			const extidx = this.fsPath.length - basename.length + idx;
-			filename = basename.substr(0, extidx);
-			ext = basename.substr(extidx);
+			filename = this.fsPath.substr(0, extidx) + '.';
+			ext = this.fsPath.substr(extidx);
 		}
 		var index = 2;
 		for (;;)
@@ -390,6 +391,11 @@ export class File
 	unlink():Promise<void>
 	{
 		return util.callbackToPromise<void>((callback)=>fs.unlink(this.fsPath, callback));
+	}
+
+	quietUnlink():Promise<void>
+	{
+		return new Promise(resolve=>fs.unlink(this.fsPath, ()=>resolve()));
 	}
 
 	isDirectory():Promise<boolean>

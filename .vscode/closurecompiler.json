@@ -1,0 +1,4 @@
+{
+    "create_source_map": "%js_output_file%.map",
+    "output_wrapper": "%output%\n//# sourceMappingURL=%js_output_file_filename%.map"
+}

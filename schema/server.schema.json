@@ -211,11 +211,6 @@
 			"type": "boolean",
 			"description": "Suppress of the file encoding error assumption"
 		},
-		"createSyncCache": {
-			"type": "boolean",
-			"description": "Create sync.json file for next FTP access(Not effective ' -';)",
-			"deprecationMessage": "sync cache feature is removed"
-		},
 		"autoDownloadRefreshTime": {
 			"type": "integer",
 			"default": 1000,

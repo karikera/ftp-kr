@@ -1,17 +1,15 @@
 
-import * as vscode from 'vscode';
+import { FileSystemWatcher, Disposable, workspace } from 'vscode';
 
-import {File} from './util/File';
-import * as util from './util/util';
+import { File } from './util/file';
 
-import * as log from './vsutil/log';
-import * as ws from './vsutil/ws';
-import * as work from './vsutil/work';
-import * as cmd from './vsutil/cmd';
-import * as error from './vsutil/error';
+import { PRIORITY_NORMAL, Scheduler, Task } from './vsutil/work';
+import { Workspace, WorkspaceItem } from './vsutil/ws';
+import { Logger } from './vsutil/log';
+import { processError } from './vsutil/error';
 
-import * as cfg from './config';
-import * as ftpsync from './ftpsync';
+import { FtpSyncManager } from './ftpsync';
+import { Config, testInitTimeBiasForVSBug } from './config';
 
 enum WatcherMode
 {
@@ -20,26 +18,26 @@ enum WatcherMode
 	FULL,
 }
 
-export class WorkspaceWatcher implements ws.WorkspaceItem
+export class WorkspaceWatcher implements WorkspaceItem
 {
 	private watcherQueue : Promise<void> = Promise.resolve();
-	private watcher: vscode.FileSystemWatcher | null = null;
-	private openWatcher: vscode.Disposable | null = null;
+	private watcher: FileSystemWatcher | null = null;
+	private openWatcher: Disposable | null = null;
 	
 	private watcherMode:WatcherMode = WatcherMode.NONE;
 	private openWatcherMode = false;
 	
-	private readonly logger:log.Logger;
-	private readonly config:cfg.Config;
-	private readonly scheduler:work.Scheduler;
-	private readonly ftp:ftpsync.FtpSyncManager;
+	private readonly logger:Logger
+	private readonly config:Config;
+	private readonly scheduler:Scheduler;
+	private readonly ftp:FtpSyncManager;
 
-	constructor(public readonly workspace:ws.Workspace)
+	constructor(public readonly workspace:Workspace)
 	{
-		this.logger = this.workspace.query(log.Logger);
-		this.config = this.workspace.query(cfg.Config);
-		this.scheduler = this.workspace.query(work.Scheduler);
-		this.ftp = this.workspace.query(ftpsync.FtpSyncManager);
+		this.logger = this.workspace.query(Logger);
+		this.config = this.workspace.query(Config);
+		this.scheduler = this.workspace.query(Scheduler);
+		this.ftp = this.workspace.query(FtpSyncManager);
 
 		this.config.onLoad(async(task)=>{
 			await this.ftp.init(task);
@@ -59,7 +57,7 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 			if (exists)
 			{
 				this.attachWatcher(WatcherMode.CONFIG);
-				this.config.load().catch(err=>error.processError(this.logger, err));
+				this.config.load().catch(err=>processError(this.logger, err));
 			}
 		});
 		
@@ -82,7 +80,7 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 
 	async processWatcher(
 		path: File, 
-		workFunc: (task:work.Task, path: File) => Promise<any>, 
+		workFunc: (task:Task, path: File) => Promise<any>, 
 		workName: string,
 		autoSync: boolean): Promise<void>
 	{
@@ -90,7 +88,7 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 		{
 			if (path.fsPath == this.config.path.fsPath) {
 				// #2. 와처가 바로 이전에 생성한 설정 파일에 반응하는 상황을 우회
-				if (cfg.testInitTimeBiasForVSBug())
+				if (testInitTimeBiasForVSBug())
 				{
 					if (workName === 'upload') return;
 				}
@@ -104,11 +102,11 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 			if (this.config.checkIgnorePath(path)) return;
 			if (!path.in(this.config.basePath)) return;
 			await this.scheduler.task(workName+' '+this.config.workpath(path), 
-				work.NORMAL,
+				PRIORITY_NORMAL,
 				task => workFunc(task, path));
 		}
 		catch (err) {
-			error.processError(this.logger, err);
+			processError(this.logger, err);
 		}
 	}
 
@@ -116,32 +114,32 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 		if (this.openWatcherMode === mode) return;
 		this.openWatcherMode = mode;
 		if (mode) {
-			this.openWatcher = vscode.workspace.onDidOpenTextDocument(e => {
+			this.openWatcher = workspace.onDidOpenTextDocument(e => {
 				try {
 					const path = new File(e.uri.fsPath);
-					var workspace:ws.Workspace;
+					var workspace:Workspace;
 					try
 					{
-						workspace = ws.getFromFile(path);
+						workspace = Workspace.fromFile(path);
 					}
 					catch (err)
 					{
 						return;
 					}
-					const config = workspace.query(cfg.Config);
-					const scheduler = workspace.query(work.Scheduler);
-					const logger = workspace.query(log.Logger);
+					const config = workspace.query(Config);
+					const scheduler = workspace.query(Scheduler);
+					const logger = workspace.query(Logger);
 	
 					if (!config.autoDownload) return;
 					if (config.checkIgnorePath(path)) return;
 					if (!path.in(this.config.basePath)) return;
 					scheduler.task('download '+config.workpath(path),
-						work.NORMAL,
+						PRIORITY_NORMAL,
 						task => this.ftp.downloadWithCheck(task, path))
-						.catch(err=>error.processError(this.logger, err));
+						.catch(err=>processError(this.logger, err));
 				}
 				catch (err) {
-					error.processError(this.logger, err);
+					processError(this.logger, err);
 				}
 			});
 		}
@@ -155,8 +153,8 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 
 	async uploadCascade(path: File):Promise<void>
 	{
-		const workspace = ws.getFromFile(path);
-		const config = workspace.query(cfg.Config);
+		const workspace = Workspace.fromFile(path);
+		const config = workspace.query(Config);
 
 		this.processWatcher(path, (task, path)=>this.ftp.upload(task, path, {ignoreNotExistFile: true}), 'upload', !!config.autoUpload);
 		try
@@ -197,7 +195,7 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 			default: return;
 		}
 
-		this.watcher = vscode.workspace.createFileSystemWatcher(watcherPath);
+		this.watcher = workspace.createFileSystemWatcher(watcherPath);
 
 		this.watcher.onDidChange(uri => {
 			this.logger.verbose('watcher.onDidChange: '+uri.fsPath);
@@ -211,8 +209,8 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 		});
 		this.watcher.onDidCreate(uri => {
 			const path = new File(uri.fsPath);
-			const workspace = ws.getFromFile(path);
-			const logger = workspace.query(log.Logger);
+			const workspace = Workspace.fromFile(path);
+			const logger = workspace.query(Logger);
 			logger.verbose('watcher.onDidCreate: '+uri.fsPath);
 			this.watcherQueue = this.watcherQueue.then(()=>{
 				return this.uploadCascade(path);
@@ -220,9 +218,9 @@ export class WorkspaceWatcher implements ws.WorkspaceItem
 		});
 		this.watcher.onDidDelete(uri => {
 			const path = new File(uri.fsPath);
-			const workspace = ws.getFromFile(path);
-			const logger = workspace.query(log.Logger);
-			const config = workspace.query(cfg.Config);
+			const workspace = Workspace.fromFile(path);
+			const logger = workspace.query(Logger);
+			const config = workspace.query(Config);
 			logger.verbose('watcher.onDidDelete: '+uri.fsPath);
 			this.watcherQueue = this.watcherQueue.then(()=>{
 				return this.processWatcher(path, 

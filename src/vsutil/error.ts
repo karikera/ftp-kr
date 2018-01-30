@@ -1,7 +1,7 @@
 
-import {File} from '../util/file';
-import * as log from './log';
-import * as vsutil from './vsutil';
+import { File } from '../util/file';
+import { vsutil } from './vsutil';
+import { Logger } from './log';
 
 declare global
 {
@@ -15,7 +15,7 @@ declare global
 	}
 }
 
-export function processError(logger:log.Logger, err)
+export function processError(logger:Logger, err)
 {
 	if (err instanceof Error)
 	{

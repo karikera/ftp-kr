@@ -231,7 +231,13 @@
 			"type": "boolean",
 			"description": "Show FTP Greeting message. SFTP is not supported"
 		},
-		"ftpOverride": { "$ref": "ftp.schema.json" },
-		"sftpOverride": { "$ref": "sftp.schema.json" }
+		"ftpOverride": {
+			"$ref": "ftp.schema.json",
+			"description": "It will pass to connect function of nodejs ftp package"
+		},
+		"sftpOverride": {
+			"$ref": "sftp.schema.json",
+			"description": "It will pass to connect function of nodejs ssh2 package"
+		}
 	}
 }

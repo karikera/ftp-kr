@@ -1,13 +1,12 @@
 import * as vscode from 'vscode';
 
-import * as cmd from '../vsutil/cmd';
-import * as vsutil from '../vsutil/vsutil';
-import * as log from '../vsutil/log';
-import * as work from '../vsutil/work';
-import * as ws from '../vsutil/ws';
 
-import * as ftpsync from '../ftpsync';
-import * as cfg from '../config';
+import { PRIORITY_NORMAL, Scheduler } from '../vsutil/work';
+import { Logger } from '../vsutil/log';
+import { FtpSyncManager } from '../ftpsync';
+import { Config } from '../config';
+import { vsutil } from '../vsutil/vsutil';
+import { Command, CommandArgs } from '../vsutil/cmd';
 
 function taskTimer<T>(taskname: string, taskpromise: Promise<T>): Promise<T> {
 	const startTime = Date.now();
@@ -20,23 +19,23 @@ function taskTimer<T>(taskname: string, taskpromise: Promise<T>): Promise<T> {
 	});
 }
 
-export const commands:cmd.Command = {
-	async 'ftpkr.upload' (args: cmd.Args)
+export const commands:Command = {
+	async 'ftpkr.upload' (args: CommandArgs)
 	{
 		if (!args.file) return vsutil.info('File is not selected');
 		if (!args.workspace) throw Error('workspace is not defined');
 
-		const logger = args.workspace.query(log.Logger);
-		const config = args.workspace.query(cfg.Config);
-		const scheduler = args.workspace.query(work.Scheduler);
-		const ftp = args.workspace.query(ftpsync.FtpSyncManager);
+		const logger = args.workspace.query(Logger);
+		const config = args.workspace.query(Config);
+		const scheduler = args.workspace.query(Scheduler);
+		const ftp = args.workspace.query(FtpSyncManager);
 		
 		logger.show();
 
 		await config.loadTest();
 
 		const path = args.file;
-		await scheduler.task('ftpkr.upload', work.NORMAL, async(task) => {
+		await scheduler.task('ftpkr.upload', PRIORITY_NORMAL, async(task) => {
 			const isdir = await path.isDirectory();
 			if (isdir)
 			{
@@ -48,22 +47,22 @@ export const commands:cmd.Command = {
 			}
 		});
 	},
-	async 'ftpkr.download' (args: cmd.Args)
+	async 'ftpkr.download' (args: CommandArgs)
 	{
 		if (!args.file) return vsutil.info('File is not selected');
 		if (!args.workspace) throw Error('workspace is not defined');
 
-		const logger = args.workspace.query(log.Logger);
-		const config = args.workspace.query(cfg.Config);
-		const scheduler = args.workspace.query(work.Scheduler);
-		const ftp = args.workspace.query(ftpsync.FtpSyncManager);
+		const logger = args.workspace.query(Logger);
+		const config = args.workspace.query(Config);
+		const scheduler = args.workspace.query(Scheduler);
+		const ftp = args.workspace.query(FtpSyncManager);
 
 		logger.show();
 		
 		await config.loadTest();
 
 		const path = args.file;
-		await scheduler.task('ftpkr.download', work.NORMAL, async (task) => {
+		await scheduler.task('ftpkr.download', PRIORITY_NORMAL, async (task) => {
 			const isdir = await path.isDirectory();
 			if (isdir)
 			{
@@ -75,15 +74,15 @@ export const commands:cmd.Command = {
 			}
 		});
 	},
-	async 'ftpkr.diff' (args: cmd.Args)
+	async 'ftpkr.diff' (args: CommandArgs)
 	{
 		if (!args.file) return vsutil.info('File is not selected');
 		if (!args.workspace) throw Error('workspace is not defined');
 
-		const logger = args.workspace.query(log.Logger);
-		const config = args.workspace.query(cfg.Config);
-		const scheduler = args.workspace.query(work.Scheduler);
-		const ftp = args.workspace.query(ftpsync.FtpSyncManager);
+		const logger = args.workspace.query(Logger);
+		const config = args.workspace.query(Config);
+		const scheduler = args.workspace.query(Scheduler);
+		const ftp = args.workspace.query(FtpSyncManager);
 		
 		logger.show();
 		
@@ -93,10 +92,10 @@ export const commands:cmd.Command = {
 		const isdir = await path.isDirectory();
 		if (isdir) throw Error('Diff only supported for file');
 
-		await scheduler.task('ftpkr.diff', work.NORMAL, task => taskTimer('Diff', ftp.diff(task, path)));
+		await scheduler.task('ftpkr.diff', PRIORITY_NORMAL, task => taskTimer('Diff', ftp.diff(task, path)));
 	},
 
-	async 'ftpkr.uploadAll' (args: cmd.Args)
+	async 'ftpkr.uploadAll' (args: CommandArgs)
 	{
 		if (!args.workspace)
 		{
@@ -105,15 +104,15 @@ export const commands:cmd.Command = {
 		}
 
 		const workspace = args.workspace;
-		const config = workspace.query(cfg.Config);
-		const scheduler = workspace.query(work.Scheduler);
-		const ftp = workspace.query(ftpsync.FtpSyncManager);
+		const config = workspace.query(Config);
+		const scheduler = workspace.query(Scheduler);
+		const ftp = workspace.query(FtpSyncManager);
 
 		await config.loadTest();
 		await vscode.workspace.saveAll();
-		await scheduler.taskWithTimeout('ftpkr.uploadAll', work.NORMAL, 1000, task => ftp.uploadAll(task, config.basePath));
+		await scheduler.taskWithTimeout('ftpkr.uploadAll', PRIORITY_NORMAL, 1000, task => ftp.uploadAll(task, config.basePath));
 	},
-	async 'ftpkr.downloadAll' (args: cmd.Args)
+	async 'ftpkr.downloadAll' (args: CommandArgs)
 	{
 		if (!args.workspace)
 		{
@@ -122,15 +121,15 @@ export const commands:cmd.Command = {
 		}
 
 		const workspace = args.workspace;
-		const config = workspace.query(cfg.Config);
-		const scheduler = workspace.query(work.Scheduler);
-		const ftp = workspace.query(ftpsync.FtpSyncManager);
+		const config = workspace.query(Config);
+		const scheduler = workspace.query(Scheduler);
+		const ftp = workspace.query(FtpSyncManager);
 
 		await config.loadTest();
 		await vscode.workspace.saveAll();
-		await scheduler.taskWithTimeout('ftpkr.downloadAll', work.NORMAL, 1000, task => ftp.downloadAll(task, config.basePath));
+		await scheduler.taskWithTimeout('ftpkr.downloadAll', PRIORITY_NORMAL, 1000, task => ftp.downloadAll(task, config.basePath));
 	},
-	async 'ftpkr.cleanAll' (args: cmd.Args)
+	async 'ftpkr.cleanAll' (args: CommandArgs)
 	{
 		if (!args.workspace)
 		{
@@ -139,15 +138,15 @@ export const commands:cmd.Command = {
 		}
 		
 		const workspace = args.workspace;
-		const config = workspace.query(cfg.Config);
-		const scheduler = workspace.query(work.Scheduler);
-		const ftp = workspace.query(ftpsync.FtpSyncManager);
+		const config = workspace.query(Config);
+		const scheduler = workspace.query(Scheduler);
+		const ftp = workspace.query(FtpSyncManager);
 
 		await config.loadTest();
 		await vscode.workspace.saveAll();
-		await scheduler.taskWithTimeout('ftpkr.cleanAll', work.NORMAL, 1000, async (task) => ftp.cleanAll(task));
+		await scheduler.taskWithTimeout('ftpkr.cleanAll', PRIORITY_NORMAL, 1000, async (task) => ftp.cleanAll(task));
 	},
-	async 'ftpkr.refreshAll' (args: cmd.Args)
+	async 'ftpkr.refreshAll' (args: CommandArgs)
 	{
 		if (!args.workspace)
 		{
@@ -156,15 +155,15 @@ export const commands:cmd.Command = {
 		}
 		
 		const workspace = args.workspace;
-		const config = workspace.query(cfg.Config);
-		const scheduler = workspace.query(work.Scheduler);
-		const ftp = workspace.query(ftpsync.FtpSyncManager);
+		const config = workspace.query(Config);
+		const scheduler = workspace.query(Scheduler);
+		const ftp = workspace.query(FtpSyncManager);
 
 		await config.loadTest();
-		await scheduler.taskWithTimeout('ftpkr.refreshAll', work.NORMAL, 1000, task => ftp.refreshForce(task));
+		await scheduler.taskWithTimeout('ftpkr.refreshAll', PRIORITY_NORMAL, 1000, task => ftp.refreshForce(task));
 	},
 
-	async 'ftpkr.list' (args: cmd.Args)
+	async 'ftpkr.list' (args: CommandArgs)
 	{
 		if (!args.workspace)
 		{
@@ -173,15 +172,27 @@ export const commands:cmd.Command = {
 		}
 		
 		const workspace = args.workspace;
-		const config = workspace.query(cfg.Config);
-		const scheduler = workspace.query(work.Scheduler);
-		const ftp = workspace.query(ftpsync.FtpSyncManager);
+		const config = workspace.query(Config);
+		const scheduler = workspace.query(Scheduler);
+		const ftp = workspace.query(FtpSyncManager);
 
 		await config.loadTest();
-		await scheduler.taskWithTimeout('ftpkr.list', work.NORMAL, 1000, task => ftp.list(task, config.basePath));
+
+		await scheduler.taskWithTimeout('ftpkr.list', PRIORITY_NORMAL, 1000, task => ftp.list(task, config.basePath));
+	},
+
+	async 'ftpkr.view' (args: CommandArgs)
+	{
+		throw Error ('Not implemented yet');
+		// if (args.uri)
+		// {
+		// 	vscode.workspace.openTextDocument(args.uri).then(document => {
+		// 		vscode.window.showTextDocument(document);
+		// 	});
+		// }
 	},
 	
-	async 'ftpkr.reconnect' (args: cmd.Args)
+	async 'ftpkr.reconnect' (args: CommandArgs)
 	{
 		if (!args.workspace)
 		{
@@ -190,12 +201,12 @@ export const commands:cmd.Command = {
 		}
 		
 		const workspace = args.workspace;
-		const config = workspace.query(cfg.Config);
-		const scheduler = workspace.query(work.Scheduler);
-		const ftp = workspace.query(ftpsync.FtpSyncManager);
+		const config = workspace.query(Config);
+		const scheduler = workspace.query(Scheduler);
+		const ftp = workspace.query(FtpSyncManager);
 
 		await config.loadTest();
 		scheduler.cancel();
-		await scheduler.task('ftpkr.reconnect', work.NORMAL, task => ftp.reconnect(task));
+		await scheduler.task('ftpkr.reconnect', PRIORITY_NORMAL, task => ftp.reconnect(task));
 	},
 };

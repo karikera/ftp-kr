@@ -1,9 +1,10 @@
 
 import * as fs from 'fs';
 import * as util from './util';
-import glob from './pglob';
-import {sep} from 'path';
 import * as os from 'os';
+
+import { sep } from 'path';
+import glob from './pglob';
 
 
 const win32 = os.platform() === 'win32';
@@ -28,11 +29,11 @@ function win32_join(...path:string[]):string
 		const p = path[i];
 		if (p.charAt(1) === ':')
 		{
-			return mypath.normalize(path.slice(i).join('\\'));
+			return mypath.normalize(path.slice(i).join(sep));
 		}
 		if (p.startsWith('\\\\'))
 		{
-			return mypath.normalize(path.slice(i).join('\\'));
+			return mypath.normalize(path.slice(i).join(sep));
 		}
 		if (p.startsWith('\\') || p.startsWith('/'))
 		{
@@ -46,10 +47,10 @@ function win32_join(...path:string[]):string
 					return mypath.normalize(driveprefix + path.slice(i).join('\\'));
 				}
 			}
-			return mypath.normalize(path.slice(i).join('\\'));
+			return mypath.normalize(path.slice(i).join(sep));
 		}
 	}
-	return mypath.normalize(path.join('/'));
+	return mypath.normalize(path.join(sep));
 }
 
 function unix_join(...path:string[]):string
@@ -60,10 +61,10 @@ function unix_join(...path:string[]):string
 		const p = path[i];
 		if (p.startsWith('\\') || p.startsWith('/'))
 		{
-			return mypath.normalize(path.slice(i).join('/'));
+			return mypath.normalize(path.slice(i).join(sep));
 		}
 	}
-	return mypath.normalize(path.join('/'));
+	return mypath.normalize(path.join(sep));
 }
 
 function win32_resolve(path:string):string

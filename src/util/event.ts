@@ -1,29 +1,61 @@
 
 export interface Event<T>
 {
-	(onfunc:(value:T)=>void):void
+	(onfunc:(value:T)=>void|Promise<void>):void
 	
 	fire(value?:T):Promise<void>;
 	rfire(value?:T):Promise<void>;
+	remove(onfunc:(value:T)=>void|Promise<void>):boolean;
 }
 
-export function make<T>():Event<T>
+export namespace Event
 {
-    const list:((value:T)=>void|Promise<void>)[] = [];
-	
-    const event = <Event<T>>function event(onfunc:()=>void):void
-    {
-        list.push(onfunc);
-    };
-    event.fire = async function(value:T):Promise<void>
-    {
-        for(const func of list)
-            await func(value);
-    };
-    event.rfire = async function(value:T):Promise<void>
-    {
-        for(var i = list.length -1 ; i>= 0; i--)
-            await list[i](value);
-    };
-	return event;
+	export function make<T>():Event<T>
+	{
+		var list:(((value:T)=>void|Promise<void>) | undefined)[] = [];
+		var firing = false;
+		
+		const event = <Event<T>>function event(onfunc:(value:T)=>void|Promise<void>):void
+		{
+			list.push(onfunc);
+		};
+
+		event.fire = async function(value:T):Promise<void>
+		{
+			if (firing) throw Error('Event is already firing');
+			firing = true;
+			list = list.filter(v=>v);
+			await Promise.resolve();
+			for(const func of list)
+			{
+				if (!func) continue;
+				await func(value);
+			}
+			firing = false;
+		};
+		event.rfire = async function(value:T):Promise<void>
+		{
+			if (firing) throw Error('Event is already firing');
+			firing = true;list = list.filter(v=>v);
+			await Promise.resolve();
+			for(var i = list.length -1 ; i>= 0; i--)
+			{
+				const func = list[i];
+				if (!func) continue;
+				await func(value);
+			}
+			firing = false;
+		};
+		event.remove = function(onfunc:(value:T)=>void|Promise<void>):boolean
+		{
+			const idx = list.indexOf(onfunc);
+			if (idx !== -1)
+			{
+				list[idx] = undefined;
+				return true;
+			}
+			return false;
+		};
+		return event;
+	}
 }

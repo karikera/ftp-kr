@@ -39,7 +39,7 @@ You can use SFTP with private key!
 ![privatekey](images/privatekey.png)
 
 * Use more ftp/sftp options  
-You can override ftp/sftp options by `ftpOverride`/`sftpOverride` field, It will pass to connect function of `ftp`/`ssh2-sftp-client` package.
+You can override ftp/sftp options by `ftpOverride`/`sftpOverride` field, It will pass to connect function of `ftp`/`ssh2` package.
 
 ## Available functions & commands
 * Real-Time FTP/SFTP synchronization(You can off it!)

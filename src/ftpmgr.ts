@@ -1,23 +1,23 @@
 
 import * as ssh2 from 'ssh2';
 import * as path from 'path';
-import * as vscode from 'vscode';
-import * as util from './util/util';
-import {File} from './util/file';
-
-import * as ws from './vsutil/ws';
-import * as log from './vsutil/log';
-import * as work from './vsutil/work';
-import * as vsutil from './vsutil/vsutil';
-
-import * as cfg from './config';
 import * as stream from 'stream';
+import { window } from 'vscode';
+
+import { File } from './util/file';
+import { ServerConfig, FileInfo } from './util/fileinfo';
+
 import { FileInterface } from './vsutil/fileinterface';
 import { SftpConnection } from './vsutil/sftp';
 import { FtpConnection } from './vsutil/ftp';
-import { ServerConfig, FileInfo } from './util/fileinfo';
+import { vsutil } from './vsutil/vsutil';
+import { Logger } from './vsutil/log';
+import { Workspace } from './vsutil/ws';
+import { Task } from './vsutil/work';
 
-function createClient(workspace:ws.Workspace, config:ServerConfig):FileInterface
+import { Config } from './config';
+
+function createClient(workspace:Workspace, config:ServerConfig):FileInterface
 {
 	var newclient:FileInterface;
 	switch (config.protocol)
@@ -32,18 +32,17 @@ function createClient(workspace:ws.Workspace, config:ServerConfig):FileInterface
 
 export class FtpManager
 {
-	client:FileInterface|null = null;
-
+	private client:FileInterface|null = null;
 	private connectionInfo:string = '';
 	private destroyTimeout:NodeJS.Timer|null = null;
 	private cancelBlockedCommand:(()=>void)|null = null;
 	private connected:boolean = false;
 	
-	private readonly logger:log.Logger;
+	private readonly logger:Logger;
 
-	constructor(public readonly workspace:ws.Workspace, public readonly config:ServerConfig)
+	constructor(public readonly workspace:Workspace, public readonly config:ServerConfig)
 	{
-		this.logger = workspace.query(log.Logger);
+		this.logger = workspace.query(Logger);
 	}
 
 	private cancelDestroyTimeout():void
@@ -143,7 +142,7 @@ export class FtpManager
 		});
 	}
 	
-	private blockTestWrap<T>(task:work.Task, callback:(client:FileInterface)=>Promise<T>)
+	private blockTestWrap<T>(task:Task, callback:(client:FileInterface)=>Promise<T>)
 	{
 		return this.init(task).then(async(client)=>{
 			for (;;)
@@ -166,7 +165,7 @@ export class FtpManager
 		});
 	}
 
-	public async init(task:work.Task):Promise<FileInterface>
+	public async init(task:Task):Promise<FileInterface>
 	{
 		const that = this;
 		const coninfo = this.makeConnectionInfo();
@@ -183,19 +182,6 @@ export class FtpManager
 		this.connectionInfo = coninfo;
 		
 		const config = this.config;
-
-		var url = '';
-		url += config.protocol;
-		url += '://';
-		url += config.host;
-		if (config.port)
-		{
-			url += ':';
-			url += config.port;
-		}
-		url += '/';
-		url += config.remotePath;
-	
 		const usepk = config.protocol === 'sftp' && !!config.privateKey;
 	
 		async function tryToConnect(password:string|undefined):Promise<void>
@@ -205,7 +191,7 @@ export class FtpManager
 				const client = createClient(that.workspace, config);
 				try
 				{
-					that.logger.message(`Try connect to ${url} with user ${config.username}`);
+					that.logger.message(`Try connect to ${config.url} with user ${config.username}`);
 					await task.with(that.blockTestWith(client.connect(password)));
 					client.log('Connected');
 					that.client = client;
@@ -262,7 +248,7 @@ export class FtpManager
 			}
 			else for (;;)
 			{
-				const promptedPassword = await vscode.window.showInputBox({
+				const promptedPassword = await window.showInputBox({
 					prompt:'ftp-kr: '+(config.protocol||'').toUpperCase()+" Password Request",
 					password: true,
 					ignoreFocusOut: true,
@@ -302,7 +288,7 @@ export class FtpManager
 			.then((res)=>{
 				switch(res)
 				{
-				case 'Open config': vsutil.open(this.workspace.query(cfg.Config).path); break; 
+				case 'Open config': vsutil.open(this.workspace.query(Config).path); break; 
 				case 'Ignore after': this.config.ignoreWrongFileEncoding = true; break;
 				}
 			});
@@ -311,38 +297,43 @@ export class FtpManager
 		return this.client;
 	}
 	
-	public rmdir(task:work.Task, ftppath:string):Promise<void>
+	public rmdir(task:Task, ftppath:string):Promise<void>
 	{
 		return this.blockTestWrap(task, client=>client.rmdir(ftppath));
 	}
 	
-	public remove(task:work.Task, ftppath:string):Promise<void>
+	public remove(task:Task, ftppath:string):Promise<void>
 	{
 		return this.blockTestWrap(task, client=>client.delete(ftppath));
 	}
 	
-	public mkdir(task:work.Task, ftppath:string):Promise<void>
+	public mkdir(task:Task, ftppath:string):Promise<void>
 	{
 		return this.blockTestWrap(task, client=>client.mkdir(ftppath));
 	}
 	
-	public upload(task:work.Task, ftppath:string, localpath:File):Promise<void>
+	public upload(task:Task, ftppath:string, localpath:File):Promise<void>
 	{
 		return this.blockTestWrap(task, client=>client.upload(ftppath, localpath));
 	}
 	
-	public download(task:work.Task, localpath:File, ftppath:string):Promise<void>
+	public download(task:Task, localpath:File, ftppath:string):Promise<void>
 	{
 		return this.blockTestWrap(task, client=>client.download(localpath, ftppath));
 	}
 	
-	public list(task:work.Task, ftppath:string):Promise<FileInfo[]>
+	public view(task:Task, ftppath:string):Promise<string>
+	{
+		return this.blockTestWrap(task, client=>client.view(ftppath));
+	}
+	
+	public list(task:Task, ftppath:string):Promise<FileInfo[]>
 	{
 		return this.blockTestWrap(task, client=>client.list(ftppath));
 	}
 
-	public readlink(task:work.Task, fileinfo:FileInfo):Promise<string>
+	public readlink(task:Task, fileinfo:FileInfo, ftppath:string):Promise<string>
 	{
-		return this.blockTestWrap(task, client=>client.readlink(fileinfo));
+		return this.blockTestWrap(task, client=>client.readlink(fileinfo, ftppath));
 	}
 }

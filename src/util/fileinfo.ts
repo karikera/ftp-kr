@@ -6,7 +6,6 @@ export type FileType = ''|'-'|'d'|'l';
 
 export class FileInfo
 {
-	ftppath:string = '';
 	type:FileType = '';
 	name:string = '';
 	size:number = 0;
@@ -20,6 +19,7 @@ export interface ServerConfig
 	remotePath?:string;
 	protocol?:string;
 	fileNameEncoding?:string;
+	url?:string;
 
 	host?:string;
 	username?:string;

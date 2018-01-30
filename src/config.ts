@@ -4,16 +4,17 @@ import minimatch = require('minimatch');
 
 import * as util from "./util/util";
 import * as event from "./util/event";
-import {File} from "./util/file";
-import {ConfigContainer} from './util/config';
 
-import * as ws from "./vsutil/ws";
-import * as work from "./vsutil/work";
-import * as log from "./vsutil/log";
-import * as vsutil from "./vsutil/vsutil";
-import * as error from "./vsutil/error";
+import { File } from "./util/file";
+import { ConfigContainer } from './util/config';
 import { ServerConfig } from './util/fileinfo';
 import { ftp_path } from './util/ftp_path';
+import { PRIORITY_NORMAL, Task, Scheduler } from './vsutil/work';
+import { vsutil } from './vsutil/vsutil';
+import { processError } from './vsutil/error';
+import { Logger, LogLevel } from './vsutil/log';
+import { WorkspaceItem, Workspace } from './vsutil/ws';
+import { Event } from './util/event';
 
 var initTimeForVSBug:number = 0;
 
@@ -83,7 +84,7 @@ const REGEXP_MAP = {
 	"**": ".*"
 };
 
-export enum State
+export enum VFSState
 {
 	NOTFOUND,
 	INVALID,
@@ -179,7 +180,26 @@ interface ConfigProperties extends ServerConfig
 	autoDownload?:boolean;
 	autoDownloadAlways?:number;
 	createSyncCache?:boolean;
-	logLevel?:log.Level;
+	logLevel?:LogLevel;
+	viewSizeLimit?:number;
+	downloadTimeExtraThreshold?:number;
+}
+
+function makeUrl(config:ServerConfig):string
+{
+	var url = '';
+	url += config.protocol;
+	url += '://';
+	url += config.host;
+	if (config.port)
+	{
+		url += ':';
+		url += config.port;
+	}
+	url += '/';
+	url += config.remotePath;
+
+	return url;
 }
 
 export function testInitTimeBiasForVSBug():boolean
@@ -196,31 +216,31 @@ export function testInitTimeBiasForVSBug():boolean
 	return false;
 }
 
-class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
+class ConfigClass extends ConfigContainer implements WorkspaceItem
 {
 	public readonly path:File;
 
-	public state:State = State.NOTFOUND;
+	public state:VFSState = VFSState.NOTFOUND;
 	public lastError:Error|string|null = null;
 
 	public basePath:File;
 	
-	public readonly onLoad = event.make<work.Task>();
-	public readonly onInvalid = event.make<void>();
-	public readonly onNotFound = event.make<void>();
+	public readonly onLoad = Event.make<Task>();
+	public readonly onInvalid = Event.make<void>();
+	public readonly onNotFound = Event.make<void>();
 	
-	private readonly logger:log.Logger;
-	private readonly scheduler:work.Scheduler;
+	private readonly logger:Logger;
+	private readonly scheduler:Scheduler;
 	
-	constructor(private workspace:ws.Workspace)
+	constructor(private workspace:Workspace)
 	{
 		super();
 
 		this.path = workspace.child('./.vscode/ftp-kr.json');
 
 		this.appendConfig(CONFIG_BASE);
-		this.logger = workspace.query(log.Logger);
-		this.scheduler = workspace.query(work.Scheduler);
+		this.logger = workspace.query(Logger);
+		this.scheduler = workspace.query(Scheduler);
 	}
 
 	dispose()
@@ -429,15 +449,19 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 			{
 				if (!server.name) server.name = server.host || '';
 			}
+
+			server.url = makeUrl(server);
 		}
+
+		config.url = makeUrl(config);
 	}
 
-	public setState(newState:State, newLastError:Error|string|null):void
+	public setState(newState:VFSState, newLastError:Error|string|null):void
 	{
 		if (this.state === newState) return;
 		this.state = newState;
 		this.lastError = newLastError;
-		this.logger.verbose(`${this.workspace.name}.state = ${State[newState]}`);
+		this.logger.verbose(`${this.workspace.name}.state = ${VFSState[newState]}`);
 	}
 
 	public load():Promise<boolean>
@@ -457,31 +481,31 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 
 	private fireNotFound():Promise<void>
 	{
-		if (this.state === State.NOTFOUND)
+		if (this.state === VFSState.NOTFOUND)
 			return Promise.resolve();
 
-		this.setState(State.NOTFOUND, 'NOTFOUND');
+		this.setState(VFSState.NOTFOUND, 'NOTFOUND');
 		return this.onNotFound.rfire();
 	}
 
 	private fireInvalid(err:Error|string):Promise<void>
 	{
-		if (this.state === State.INVALID)
+		if (this.state === VFSState.INVALID)
 			return Promise.resolve();
 
-		this.setState(State.INVALID, err);
+		this.setState(VFSState.INVALID, err);
 		return this.onInvalid.fire();
 	}
 
-	private fireLoad(task:work.Task):Promise<void>
+	private fireLoad(task:Task):Promise<void>
 	{
 		return this.onLoad.fire(task).then(()=>{
 			this.logger.message("ftp-kr.json: loaded");
-			if (this.state !== State.LOADED)
+			if (this.state !== VFSState.LOADED)
 			{
 				vsutil.info('');
 			}
-			this.setState(State.LOADED, null);
+			this.setState(VFSState.LOADED, null);
 		});
 	}
 
@@ -503,7 +527,7 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 					}
 					catch (err)
 					{
-						error.processError(this.logger, err);
+						processError(this.logger, err);
 					}
 				}
 			});
@@ -518,9 +542,9 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 
 	public loadTest():Promise<void>
 	{
-		if (this.state !== State.LOADED)
+		if (this.state !== VFSState.LOADED)
 		{
-			if (this.state === State.NOTFOUND)
+			if (this.state === VFSState.NOTFOUND)
 			{
 				return Promise.reject('Config is not loaded. Retry it after load');
 			}
@@ -549,12 +573,12 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 		return workpath;
 	}
 
-	private loadWrap(name:string, onwork:(task:work.Task)=>Promise<void>):Promise<boolean>
+	private loadWrap(name:string, onwork:(task:Task)=>Promise<void>):Promise<boolean>
 	{
 		this.scheduler.cancel();
 		var res:boolean = false;
 		return this.scheduler.task(name,
-			work.NORMAL,
+			PRIORITY_NORMAL,
 			async(task)=>{
 				try
 				{
@@ -572,5 +596,5 @@ class ConfigClass extends ConfigContainer implements ws.WorkspaceItem
 
 }
 
-export const Config:{new(workspace:ws.Workspace):ConfigClass&ConfigProperties} = ConfigClass;
+export const Config:{new(workspace:Workspace):ConfigClass&ConfigProperties} = ConfigClass;
 export type Config = ConfigClass & ConfigProperties;

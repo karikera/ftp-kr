@@ -1,9 +1,9 @@
 
-import * as ws from './ws';
 import { OutputChannel, window } from 'vscode';
-import * as vsutil from './vsutil';
+import { WorkspaceItem, Workspace } from './ws';
+import { vsutil } from './vsutil';
 
-export type Level = 'VERBOSE' | 'NORMAL' | 'ERROR';
+export type LogLevel = 'VERBOSE' | 'NORMAL' | 'ERROR';
 enum LogLevelEnum
 {
 	VERBOSE,
@@ -12,15 +12,15 @@ enum LogLevelEnum
 }
 
 
-export class Logger implements ws.WorkspaceItem
+export class Logger implements WorkspaceItem
 {
 	public logLevel:LogLevelEnum = LogLevelEnum.NORMAL;
 	private output:OutputChannel|null = null;
 	public static all:Set<Logger> = new Set;
 
-	constructor(name:string|ws.Workspace)
+	constructor(name:string|Workspace)
 	{
-		if (name instanceof ws.Workspace)
+		if (name instanceof Workspace)
 		{
 			name = "ftp-kr/" + name.name;
 		}
@@ -48,7 +48,7 @@ export class Logger implements ws.WorkspaceItem
 		}
 	}
 	
-	public setLogLevel(level:Level):void
+	public setLogLevel(level:LogLevel):void
 	{
 		this.logLevel = LogLevelEnum[level];
 		this.verbose(`logLevel = ${level}`);

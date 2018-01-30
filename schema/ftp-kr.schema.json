@@ -56,6 +56,16 @@
 			"description": "Check server modification at set time intervals and download it. If it is zero, feature is disabled (default: 0)",
 			"default": 0
 		},
+		"viewSizeLimit": {
+			"type": "number",
+			"description": "Bytes. File download size limit in ftp tree view (default: 4MiB)",
+			"default": 4194304
+		},
+		"downloadTimeExtraThreshold": {
+			"type": "number",
+			"description": "Milliseconds. To avoid upload just downloaded file (default: 1000)",
+			"default": 1000
+		},
 		"logLevel": {
 			"enum": [
 				"VERBOSE",

@@ -29,9 +29,8 @@ export function splitFileName(path:string):FileNameSet
     };
 }
 
-export abstract class State extends FileInfo
+export abstract class VFSState extends FileInfo
 {
-	ftppath:string = '';
 	type:FileType = '';
 	name:string = '';
 	size:number = 0;
@@ -40,24 +39,29 @@ export abstract class State extends FileInfo
 	lmtime:number = 0;
 	lmtimeWithThreshold:number = 0;
 	modified:boolean = false;
-
-	constructor(public fs:FileSystem, public parent:Directory|undefined, name:string)
+	
+	constructor(public fs:FileSystem, public parent:VFSDirectory|undefined, name:string)
 	{
 		super();
 
 		this.name = name;
 	}
 
-	getFullPath():string
+	getPath():string
 	{
-		const names:string[] = [this.name];
-		var p = this.parent;
-		while (p)
+		const list:string[] = [this.name];
+		var parent = this.parent;
+		while (parent)
 		{
-			names.push(p.name);
-			p = p.parent;
+			list.push(parent.name);
+			parent = parent.parent;
 		}
-		return names.reverse().join('/');
+		return list.reverse().join('/');
+	}
+
+	getUri():string
+	{
+		return this.fs.uri + this.getPath();
 	}
 
 	abstract serialize():SerializedState;
@@ -66,9 +70,9 @@ export abstract class State extends FileInfo
 
 }
 
-export abstract class FileCommon extends State
+export abstract class VFSFileCommon extends VFSState
 {
-	constructor(fs:FileSystem, parent:Directory|undefined, name:string)
+	constructor(fs:FileSystem, parent:VFSDirectory|undefined, name:string)
 	{
 		super(fs, parent, name);
 	}
@@ -82,17 +86,16 @@ export abstract class FileCommon extends State
 
 	setByInfo(file:FileInfo):void
 	{
-		this.ftppath = file.ftppath;
 		this.size = file.size;
 		this.date = file.date;
 	}
 }
 
-export class Directory extends FileCommon
+export class VFSDirectory extends VFSFileCommon
 {
-	files:{[key:string]:State|undefined} = {};
+	files:{[key:string]:VFSState|undefined} = {};
 
-	constructor(fs:FileSystem, parent:Directory|undefined, name:string)
+	constructor(fs:FileSystem, parent:VFSDirectory|undefined, name:string)
 	{
 		super(fs, parent, name);
 		
@@ -127,17 +130,17 @@ export class Directory extends FileCommon
 			if (!sfile) continue;
 			if (typeof sfile !== 'object') continue;
 
-			var file:State;
+			var file:VFSState;
 			switch (sfile.type)
 			{
 			case '-':
-				file = new File(this.fs, this, filename);
+				file = new VFSFile(this.fs, this, filename);
 				break;
 			case 'l':
-				file = new SymLink(this.fs, this, filename);
+				file = new VFSSymLink(this.fs, this, filename);
 				break;
 			default:
-				file = new Directory(this.fs, this, filename);
+				file = new VFSDirectory(this.fs, this, filename);
 				break;
 			}
 			file.deserialize(sfile);
@@ -166,12 +169,12 @@ export class Directory extends FileCommon
 				{ 
 					switch (ftpfile.type)
 					{
-					case 'd': file = new Directory(this.fs, this, ftpfile.name); break;
+					case 'd': file = new VFSDirectory(this.fs, this, ftpfile.name); break;
 					case '-': 
-						file = new File(this.fs, this, ftpfile.name);
+						file = new VFSFile(this.fs, this, ftpfile.name);
 						break;
 					case 'l':
-						file = new SymLink(this.fs, this, ftpfile.name);
+						file = new VFSSymLink(this.fs, this, ftpfile.name);
 						break;
 					default: break _nofile;
 					}
@@ -197,9 +200,9 @@ export class Directory extends FileCommon
 }
 
 
-export class SymLink extends FileCommon
+export class VFSSymLink extends VFSFileCommon
 {
-	constructor(fs:FileSystem, parent:Directory, name:string)
+	constructor(fs:FileSystem, parent:VFSDirectory, name:string)
 	{
 		super(fs, parent, name);
 		this.type = 'l';
@@ -223,9 +226,9 @@ export class SymLink extends FileCommon
 
 }
 
-export class File extends FileCommon
+export class VFSFile extends VFSFileCommon
 {
-	constructor(fs:FileSystem, parent:Directory, name:string)
+	constructor(fs:FileSystem, parent:VFSDirectory, name:string)
 	{
 		super(fs, parent, name);
 		this.type = "-";
@@ -250,11 +253,11 @@ export class File extends FileCommon
 
 export class FileSystem
 {
-	root:Directory;
+	public readonly root:VFSDirectory = new VFSDirectory(this, undefined, "");
+	public uri:string = '';
 
 	constructor()
 	{
-    	this.reset();
 	}
 
 	serialize():any
@@ -267,58 +270,53 @@ export class FileSystem
 		this.root.deserialize(data);
 	}
 	
-	reset():void
-	{
-		this.root = new Directory(this, undefined, "");
-	}
-
 	putByStat(path:string, st:FSStats):void
 	{
-		var file:FileCommon;
+		var file:VFSFileCommon;
 		var fn = splitFileName(path);
-		var dir = <Directory>this.get(fn.dir, true);
+		var dir = <VFSDirectory>this.get(fn.dir, true);
 
-		if (st.isSymbolicLink()) file = new SymLink(this, dir, fn.name);
-		else if(st.isDirectory()) file = new Directory(this, dir, fn.name);
-		else if(st.isFile()) file = new File(this, dir, fn.name);
+		if (st.isSymbolicLink()) file = new VFSSymLink(this, dir, fn.name);
+		else if(st.isDirectory()) file = new VFSDirectory(this, dir, fn.name);
+		else if(st.isFile()) file = new VFSFile(this, dir, fn.name);
 		else throw Error('invalid file');
 		file.setByStat(st);
 		dir.files[fn.name] = file;
 	}
 
-	get(path:string, make?:boolean):Directory|undefined
+	get(path:string, make?:boolean):VFSDirectory|undefined
 	{
 		const dirs = path.split("/");
-		var dir:Directory = this.root;
+		var dir:VFSDirectory = this.root;
 		for (const cd of dirs)
 		{
 			const ndir = dir.files[cd];
 			if(ndir)
 			{
-				if (ndir instanceof Directory)
+				if (ndir instanceof VFSDirectory)
 				{
 					dir = ndir;
 					continue;
 				}
 			}
 			if (!make) return undefined;
-			dir = dir.files[cd] = new Directory(this, dir, cd);
+			dir = dir.files[cd] = new VFSDirectory(this, dir, cd);
 		}
 		return dir;
 	}
 
-	refresh(path:string, list:FileInfo[]):Directory
+	refresh(path:string, list:FileInfo[]):VFSDirectory
 	{
-		const dir = <Directory>this.get(path, true);
+		const dir = <VFSDirectory>this.get(path, true);
 		dir.setByInfos(list);
 		return dir;
 	}
 
-	create(path:string):File
+	create(path:string):VFSFile
 	{
 		const fn = splitFileName(path);
-		const dir = <Directory>this.get(fn.dir, true);
-		const file = dir.files[fn.name] = new File(this, dir, fn.name);
+		const dir = <VFSDirectory>this.get(fn.dir, true);
+		const file = dir.files[fn.name] = new VFSFile(this, dir, fn.name);
 		return file;
 	}
 
@@ -329,8 +327,8 @@ export class FileSystem
 		if (dir) delete dir.files[fn.name];
 	}
 
-	mkdir(path:string):Directory
+	mkdir(path:string):VFSDirectory
 	{
-		return <Directory>this.get(path, true);
+		return <VFSDirectory>this.get(path, true);
 	}
 }

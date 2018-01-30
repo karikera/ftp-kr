@@ -1,40 +1,41 @@
-import * as vscode from 'vscode';
-const workspace = vscode.workspace;
 
-import * as log from './vsutil/log';
-import * as ws from './vsutil/ws';
-import * as work from './vsutil/work';
-import * as vsutil from './vsutil/vsutil';
-import * as cmd from './vsutil/cmd';
+import { window, ExtensionContext } from 'vscode';
 
-import * as cfg from './config';
-import * as watcher from './watcher';
-import * as ftpdown from './ftpdown';
+import { Command } from './vsutil/cmd';
+import { Workspace } from './vsutil/ws';
 
-import {commands as cfgcmd} from './cmd/config';
-import {commands as ftpcmd} from './cmd/ftpsync';
+import { FtpTree } from './ftptree';
+import { WorkspaceWatcher } from './watcher';
+import { Config } from './config';
+import { FtpDownloader } from './ftpdown';
 
-ws.onNewWorkspace(workspace=>{
-	workspace.query(watcher.WorkspaceWatcher);
-	workspace.query(cfg.Config);
-	workspace.query(ftpdown.FtpDownloader);
+import { commands as cfgcmd } from './cmd/config';
+import { commands as ftpcmd } from './cmd/ftpsync';
+import { defaultLogger } from './vsutil/log';
+
+Workspace.onNew(workspace=>{
+	workspace.query(WorkspaceWatcher);
+	workspace.query(Config);
+	workspace.query(FtpDownloader);
 });
 
-export function activate(context:vscode.ExtensionContext) {
+export function activate(context:ExtensionContext) {
 	console.log('[extension: ftp-kr] activate');
 
-	cmd.registerCommands(context, cfgcmd, ftpcmd);
+	Command.register(context, cfgcmd, ftpcmd);
 	
-	ws.Workspace.loadAll();
+	Workspace.loadAll();
+
+	// window.registerTreeDataProvider('ftpExplorer', new FtpTree());
 }
 export function deactivate() {
     try
     {
-		ws.Workspace.unloadAll();
+		Workspace.unloadAll();
         console.log('[extension: ftp-kr] deactivate');
     }
     catch(err)
     {
-        log.defaultLogger.error(err);
+        defaultLogger.error(err);
     }
 }

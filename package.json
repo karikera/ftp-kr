@@ -23,6 +23,14 @@
   ],
   "main": "./out/index",
   "contributes": {
+	"views": {
+		"explorer": [
+			{
+				"id": "ftpExplorer",
+				"name": "FTP Explorer"
+			}
+		]
+	},
     "commands": [
       {
         "command": "ftpkr.init",
@@ -72,6 +80,11 @@
       {
         "command": "ftpkr.list",
         "title": "List",
+        "category": "ftp-kr"
+      },
+      {
+        "command": "ftpkr.view",
+        "title": "View",
         "category": "ftp-kr"
       },
       {

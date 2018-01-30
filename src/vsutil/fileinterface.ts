@@ -2,14 +2,11 @@
 import * as iconv from 'iconv-lite';
 
 import {File} from '../util/file';
-
-import * as log from './log';
-import * as vsutil from './vsutil';
-import * as ws from './ws';
-
-import * as cfg from '../config';
 import { ServerConfig, FileInfo } from '../util/fileinfo';
 import { ftp_path } from '../util/ftp_path';
+import { Logger } from './log';
+import { StateBar } from './vsutil';
+import { Workspace } from './ws';
 
 export const NOT_CREATED = 'not created connection access';
 export const DIRECTORY_NOT_FOUND = 1;
@@ -37,14 +34,14 @@ function _errorWrap(err):Error
 
 export abstract class FileInterface
 {
-	protected readonly logger:log.Logger;
-	protected readonly state:vsutil.StateBar;
+	protected readonly logger:Logger;
+	protected readonly state:StateBar;
 	public oninvalidencoding:(errfiles:string[])=>void = ()=>{};
 	
-	constructor(public readonly workspace:ws.Workspace, protected readonly config:ServerConfig)
+	constructor(public readonly workspace:Workspace, protected readonly config:ServerConfig)
 	{
-		this.logger = workspace.query(log.Logger);
-		this.state = workspace.query(vsutil.StateBar);
+		this.logger = workspace.query(Logger);
+		this.state = workspace.query(StateBar);
 	}
 
 	public connect(password?:string):Promise<void>
@@ -139,6 +136,30 @@ export abstract class FileInterface
 		});
 	}
 
+	view(ftppath:string):Promise<string>
+	{
+		this.logWithState('view '+ftppath);
+
+		return this._get(this.str2bin(ftppath))
+		.then((stream)=>{
+			return new Promise<string>(resolve=>{
+				var str = '';
+				stream.once('close', ()=>{
+					this.state.close();
+					resolve(str);
+				});
+				stream.on('data', data=>{
+					str += data.toString('utf-8');
+				});
+			});
+		})
+		.catch(err=>{
+			this.state.close();
+			this.log("view fail: "+ftppath);
+			throw _errorWrap(err);
+		});
+	}
+
 	list(ftppath:string):Promise<FileInfo[]>
 	{
 		if (!ftppath) ftppath = ".";
@@ -186,13 +207,13 @@ export abstract class FileInterface
 		return this._callWithName("mkdir", ftppath, 0, undefined, binpath=>this._mkdir(binpath, true));
 	}
 
-	readlink(fileinfo:FileInfo):Promise<string>
+	readlink(fileinfo:FileInfo, ftppath:string):Promise<string>
 	{
-		if (fileinfo.type !== 'l') throw Error(fileinfo.ftppath + ' is not symlink');
+		if (fileinfo.type !== 'l') throw Error(ftppath + ' is not symlink');
 		this.logWithState('readlink '+fileinfo.name);
-		return this._readlink(fileinfo, this.str2bin(fileinfo.ftppath)).then(v=>{
+		return this._readlink(fileinfo, this.str2bin(ftppath)).then(v=>{
 			if (v.startsWith('/')) v = ftp_path.normalize(v);
-			else v = ftp_path.normalize(fileinfo.ftppath + '/../' + v);
+			else v = ftp_path.normalize(ftppath + '/../' + v);
 			fileinfo.link = v;
 			this.state.close();
 			return v;

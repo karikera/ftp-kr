@@ -1,7 +1,6 @@
 
-import * as ws from './ws';
-import * as log from './log';
-import * as error from './error';
+import { Logger } from './log';
+import { WorkspaceItem, Workspace } from './ws';
 
 const resolvedPromise:Promise<void> = Promise.resolve();
 
@@ -29,7 +28,7 @@ export class OnCancel
 export interface Task
 {
 	readonly cancelled:boolean;
-	readonly logger:log.Logger;
+	readonly logger:Logger;
 	
 	oncancel(oncancel:()=>any):OnCancel;
 	checkCanceled():void;
@@ -47,7 +46,7 @@ class TaskImpl<T> implements Task
 	private cancelListeners:Array<()=>any> = [];
 	private timeout:NodeJS.Timer;
 	public promise:Promise<T>;
-	public readonly logger:log.Logger;
+	public readonly logger:Logger;
 	private run:()=>void;
 
 	constructor(
@@ -181,20 +180,20 @@ class TaskImpl<T> implements Task
 	}
 }
 
-export class Scheduler implements ws.WorkspaceItem
+export class Scheduler implements WorkspaceItem
 {
 	public currentTask:TaskImpl<any>|null = null;
 	private nextTask:TaskImpl<any>|null = null;
 	private lastTask:TaskImpl<any>|null = null;
-	public readonly logger:log.Logger;
+	public readonly logger:Logger;
 
 	private promise:Promise<void> = Promise.resolve();
 
-	constructor(arg:log.Logger|ws.Workspace)
+	constructor(arg:Logger|Workspace)
 	{
-		if (arg instanceof ws.Workspace)
+		if (arg instanceof Workspace)
 		{
-			this.logger = arg.query(log.Logger);
+			this.logger = arg.query(Logger);
 		}
 		else
 		{
@@ -323,6 +322,6 @@ export class Scheduler implements ws.WorkspaceItem
 }
 
 
-export const HIGH = 2000;
-export const NORMAL = 1000;
-export const IDLE = 0;
+export const PRIORITY_HIGH = 2000;
+export const PRIORITY_NORMAL = 1000;
+export const PRIORITY_IDLE = 0;

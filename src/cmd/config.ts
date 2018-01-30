@@ -1,28 +1,24 @@
 
-import * as vscode from 'vscode';
+import { vsutil } from '../vsutil/vsutil';
+import { Command, CommandArgs } from '../vsutil/cmd';
+import { Config } from '../config';
+import { Workspace } from '../vsutil/ws';
+import { Scheduler } from '../vsutil/work';
 
-import * as ws from '../vsutil/ws';
-import * as log from '../vsutil/log';
-import * as work from '../vsutil/work';
-import * as vsutil from '../vsutil/vsutil';
-import * as cmd from '../vsutil/cmd';
-
-import * as cfg from '../config';
-
-export const commands:cmd.Command = {
-	async 'ftpkr.init'(args:cmd.Args)
+export const commands:Command = {
+	async 'ftpkr.init'(args:CommandArgs)
 	{
 		args.workspace = await vsutil.createWorkspace();
 		if (!args.workspace) return;
-		const config = args.workspace.query(cfg.Config);
+		const config = args.workspace.query(Config);
 		await config.init();
 	},
 
-	async 'ftpkr.cancel'(args:cmd.Args)
+	async 'ftpkr.cancel'(args:CommandArgs)
 	{
-		for(const workspace of ws.Workspace.all())
+		for(const workspace of Workspace.all())
 		{
-			workspace.query(work.Scheduler).cancel();
+			workspace.query(Scheduler).cancel();
 		}
 	},
 };

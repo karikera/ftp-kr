@@ -1,18 +1,20 @@
 
-import * as f from './util/filesystem';
-import * as util from './util/util';
-import {File, Stats} from './util/file';
+import { window, workspace } from 'vscode';
 
-import * as log from './vsutil/log';
-import * as ws from './vsutil/ws';
-import * as work from './vsutil/work';
-import * as vsutil from './vsutil/vsutil';
-
-import * as ftpmgr from './ftpmgr';
-import * as cfg from './config';
-import { DIRECTORY_NOT_FOUND, FILE_NOT_FOUND } from './vsutil/fileinterface';
+import { File, Stats } from './util/file';
 import { ServerConfig } from './util/fileinfo';
 import { ftp_path } from './util/ftp_path';
+import { VFSState, FileSystem, VFSFile, VFSDirectory, VFSFileCommon } from './util/filesystem';
+import { Deferred, isEmptyObject } from './util/util';
+
+import { DIRECTORY_NOT_FOUND, FILE_NOT_FOUND } from './vsutil/fileinterface';
+import { WorkspaceItem, Workspace } from './vsutil/ws';
+import { vsutil, QuickPick } from './vsutil/vsutil';
+import { Logger } from './vsutil/log';
+import { Task } from './vsutil/work';
+
+import { Config } from './config';
+import { FtpManager } from './ftpmgr';
 
 export interface BatchOptions
 {
@@ -24,14 +26,14 @@ export interface BatchOptions
 	forceRefresh?:boolean;
 }
 
-function testLatest(file:f.State|undefined, localStat:Stats):boolean
+function testLatest(file:VFSState|undefined, localStat:Stats):boolean
 {
     if (!file) return false;
     switch(file.type)
     {
     case "-":
         if (!localStat.isFile()) return false;
-		if (file instanceof f.FileCommon)
+		if (file instanceof VFSFileCommon)
 		{
     		if (localStat.size !== file.size) return false;
 		}
@@ -47,7 +49,7 @@ function testLatest(file:f.State|undefined, localStat:Stats):boolean
 }
 
 
-class RefreshedData extends util.Deferred<f.Directory>
+class RefreshedData extends Deferred<VFSDirectory>
 {
 	accessTime:number = new Date().valueOf();
 
@@ -62,7 +64,7 @@ export class UploadReport
 	directoryIgnored?:boolean;
 	latestIgnored?:boolean;
 	noFileIgnored?:boolean;
-	file?:f.State;
+	file?:VFSState;
 }
 
 export interface TaskList
@@ -70,23 +72,44 @@ export interface TaskList
 	[key:string]:string;
 }
 
-export class FtpCacher implements ws.WorkspaceItem
+export class FtpCacher implements WorkspaceItem
 {
-	private readonly fs:f.FileSystem = new f.FileSystem;
+	public readonly config:ServerConfig;
+	public readonly mainConfig:Config;
+
+	private readonly fs:FileSystem = new FileSystem;
 	private readonly refreshed:Map<string, RefreshedData> = new Map;
-	private readonly config:ServerConfig;
-	private readonly mainConfig:cfg.Config;
-	private readonly logger:log.Logger;
-	private readonly ftpmgr:ftpmgr.FtpManager;
+	private readonly logger:Logger;
+	private readonly ftpmgr:FtpManager;
+
+	private readonly configLoadListener = ()=>{
+		const remotePath = this.mainConfig.remotePath || '';
+		this.fs.root.name = remotePath.startsWith('/') ? '' : '.';
+		this.fs.uri = this.mainConfig.url || '';
+	};
 	
-	constructor(public readonly workspace:ws.Workspace, config?:ServerConfig)
+	constructor(public readonly workspace:Workspace, config?:ServerConfig)
 	{
-		this.mainConfig = workspace.query(cfg.Config);
+		this.mainConfig = workspace.query(Config);
 		this.config = config || this.mainConfig;
-		this.ftpmgr = new ftpmgr.FtpManager(workspace, this.config);
-		this.logger = workspace.query(log.Logger);
+		this.ftpmgr = new FtpManager(workspace, this.config);
+		this.logger = workspace.query(Logger);
+
+		this.mainConfig.onLoad(this.configLoadListener);
+	}
+	
+	public dispose():void
+	{
+		this.destroy();
 	}
 
+	public destroy():void
+	{
+		this.mainConfig.onLoad.remove(this.configLoadListener);
+		this.ftpmgr.destroy();
+	}
+
+	
 	public serialize():any
 	{
 		return this.fs.serialize();
@@ -95,16 +118,6 @@ export class FtpCacher implements ws.WorkspaceItem
 	public deserialize(data:any):void
 	{
 		this.fs.deserialize(data);
-	}
-	
-	public dispose():void
-	{
-		this.ftpmgr.destroy();
-	}
-
-	public destroy():void
-	{
-		this.ftpmgr.destroy();
 	}
 
 	public ftppath(path:File):string
@@ -126,17 +139,17 @@ export class FtpCacher implements ws.WorkspaceItem
 		return this.mainConfig.basePath.child(ftppath.substr(remotePath.length+1));
 	}
 
-	public async ftpDelete(task:work.Task, path:File, options?:BatchOptions):Promise<void>
+	public async ftpDelete(task:Task, path:File, options?:BatchOptions):Promise<void>
 	{
 		const ftppath = this.ftppath(path);
 
-		const deleteTest = async(file:f.State):Promise<void>=>{
-			if (file instanceof f.Directory) await this.ftpmgr.rmdir(task, ftppath);
+		const deleteTest = async(file:VFSState):Promise<void>=>{
+			if (file instanceof VFSDirectory) await this.ftpmgr.rmdir(task, ftppath);
 			else await this.ftpmgr.remove(task, ftppath);
 			this._fsDelete(ftppath);
 		}
 
-		var file:f.State|undefined = this.fs.get(ftppath);
+		var file:VFSState|undefined = this.fs.get(ftppath);
 		if (file)
 		{
 			try
@@ -152,13 +165,13 @@ export class FtpCacher implements ws.WorkspaceItem
 		await deleteTest(file);
 	}
 
-	public async ftpUpload(task:work.Task, path:File, options?:BatchOptions):Promise<UploadReport>
+	public async ftpUpload(task:Task, path:File, options?:BatchOptions):Promise<UploadReport>
 	{
 		const ftppath = this.ftppath(path);
 		const report = new UploadReport;
 	
 		var stats:Stats;
-		var oldfile:f.State|undefined = undefined;
+		var oldfile:VFSState|undefined = undefined;
 		
 		try
 		{
@@ -185,7 +198,7 @@ export class FtpCacher implements ws.WorkspaceItem
 
 				if (oldfile)
 				{
-					if (oldfile instanceof f.Directory)
+					if (oldfile instanceof VFSDirectory)
 					{
 						oldfile.lmtimeWithThreshold = oldfile.lmtime = +stats.mtime;
 						report.file = oldfile;
@@ -282,21 +295,20 @@ export class FtpCacher implements ws.WorkspaceItem
 		return await next();
 	}
 
-	public async ftpDownload(task:work.Task, path:File, options?:BatchOptions):Promise<void>
+	public async ftpDownload(task:Task, path:File, options?:BatchOptions):Promise<void>
 	{
 		const ftppath = this.ftppath(path);
-		var file:f.State|undefined = this.fs.get(ftppath);
+		var file:VFSState|undefined = this.fs.get(ftppath);
 		if (!file)
 		{
 			file = await this.ftpStat(task, ftppath, options);
 			if (!file)
 			{
-				this.logger.error(`${ftppath} not found in remote`);
-				return Promise.resolve();
+				throw Error(`${ftppath} not found in remote`);
 			}
 		}
 
-		if (file instanceof f.Directory) await path.mkdirp();
+		if (file instanceof VFSDirectory) await path.mkdirp();
 		else
 		{
 			await path.parent().mkdirp();
@@ -304,11 +316,26 @@ export class FtpCacher implements ws.WorkspaceItem
 		}
 		const stats = await path.stat();
 		file.lmtime = +stats.mtime;
-		file.lmtimeWithThreshold = file.lmtime + 1000;
+		file.lmtimeWithThreshold = file.lmtime + (this.mainConfig.downloadTimeExtraThreshold || 1000);
 		file.modified = false;
 	}
 
-	public async ftpDownloadWithCheck(task:work.Task, path:File):Promise<void>
+	public async ftpView(task:Task, ftppath:string):Promise<string>
+	{
+		var file:VFSState|undefined = this.fs.get(ftppath);
+		if (!file)
+		{
+			file = await this.ftpStat(task, ftppath);
+			if (!file)
+			{
+				throw Error(`${ftppath} not found in remote`);
+			}
+		}
+		if (file.size > (this.mainConfig.viewSizeLimit || 1024*1024*4)) return '< File is too large >\nYou can change file size limit with "viewSizeLimit" option in ftp-kr.json';
+		return await this.ftpmgr.view(task, ftppath);
+	}
+
+	public async ftpDownloadWithCheck(task:Task, path:File):Promise<void>
 	{
 		const ftppath = this.ftppath(path);
 
@@ -331,8 +358,8 @@ export class FtpCacher implements ws.WorkspaceItem
 			return;
 		}
 
-		if (file instanceof f.File && stats.size === file.size) return;
-		if (file instanceof f.Directory) await path.mkdir();
+		if (file instanceof VFSFile && stats.size === file.size) return;
+		if (file instanceof VFSDirectory) await path.mkdir();
 		else
 		{
 			await path.parent().mkdirp();
@@ -340,22 +367,22 @@ export class FtpCacher implements ws.WorkspaceItem
 		}
 		stats = await path.stat();
 		file.lmtime = +stats.mtime;
-		file.lmtimeWithThreshold = file.lmtime + 1000;
+		file.lmtimeWithThreshold = file.lmtime + (this.mainConfig.downloadTimeExtraThreshold || 1000);
 		file.modified = false;
 	}
 
-	public async ftpStat(task:work.Task, ftppath:string, options?:BatchOptions):Promise<f.State|undefined>
+	public async ftpStat(task:Task, ftppath:string, options?:BatchOptions):Promise<VFSState|undefined>
 	{
 		const parent = ftp_path.dirname(ftppath);
 		const dir = await this.ftpList(task, parent, options);
 		return dir.files[ftp_path.basename(ftppath)];
 	}
 
-	public async ftpTargetStat(task:work.Task, linkfile:f.State):Promise<f.State|undefined>
+	public async ftpTargetStat(task:Task, linkfile:VFSState):Promise<VFSState|undefined>
 	{
 		for (;;)
 		{
-			const target = await this.ftpmgr.readlink(task, linkfile);
+			const target = await this.ftpmgr.readlink(task, linkfile, linkfile.getPath());
 			const stats = await this.ftpStat(task, target);
 			if (!stats) return undefined;
 			linkfile = stats;
@@ -363,7 +390,7 @@ export class FtpCacher implements ws.WorkspaceItem
 		}
 	}
 
-	public async ftpDiff(task:work.Task, file:File, sameCheck?:boolean):Promise<File>
+	public async ftpDiff(task:Task, file:File, sameCheck?:boolean):Promise<File>
 	{
 		const basename = file.basename();
 		const diffFile:File = await this.workspace.child('.vscode/ftp-kr.diff.'+basename).findEmptyIndex();
@@ -392,7 +419,7 @@ export class FtpCacher implements ws.WorkspaceItem
 		return diffFile;
 	}
 
-	public ftpList(task:work.Task, ftppath:string, options?:BatchOptions):Promise<f.Directory>
+	public ftpList(task:Task, ftppath:string, options?:BatchOptions):Promise<VFSDirectory>
 	{
 		const latest = this.refreshed.get(ftppath);
 		if (latest)
@@ -437,13 +464,13 @@ export class FtpCacher implements ws.WorkspaceItem
 		})();
 	}
 
-	public ftpRefreshForce(task:work.Task):Promise<void>
+	public ftpRefreshForce(task:Task):Promise<void>
 	{
 		this.refreshed.clear();
 		return this._refeshForce(task, ftp_path.normalize(this.mainConfig.remotePath + '.'));
 	}
 
-	public async exec(task:work.Task, tasklist:TaskList, options?:BatchOptions):Promise<{tasks:TaskList, count:number}|null>
+	public async exec(task:Task, tasklist:TaskList, options?:BatchOptions):Promise<{tasks:TaskList, count:number}|null>
 	{
 		var errorCount = 0;
 		const failedTasks:TaskList = {};
@@ -474,27 +501,27 @@ export class FtpCacher implements ws.WorkspaceItem
 		else return null;
 	}
 
-	public async uploadAll(task:work.Task, path: File): Promise<void>
+	public async uploadAll(task:Task, path: File): Promise<void>
 	{
 		const tasks = await this._syncTestUpload(task, path);
 		await this._reserveSyncTask(task, tasks, 'Upload All', {doNotRefresh:true});
 	}
 
-	public async downloadAll(task:work.Task, path: File): Promise<void>
+	public async downloadAll(task:Task, path: File): Promise<void>
 	{
 		const tasks = await this._syncTestDownload(task, path)
 		await this._reserveSyncTask(task, tasks, 'Download All', {doNotRefresh:true});
 	}
 
-	public async cleanAll(task:work.Task):Promise<void>
+	public async cleanAll(task:Task):Promise<void>
 	{
 		const tasks = await this._syncTestClean(task);
 		return this._reserveSyncTask(task, tasks, 'ftpkr.Clean All', {doNotRefresh:true});
 	}
 	
-	public async list(task:work.Task, path:File):Promise<void>
+	public async list(task:Task, path:File):Promise<void>
 	{
-		const openFile = (file:f.State)=>{
+		const openFile = (file:VFSState)=>{
 			const npath = path.child(file.name);
 			pick.clear();
 			pick.item('Download '+file.name, ()=>this.ftpDownload(task, npath));
@@ -504,26 +531,26 @@ export class FtpCacher implements ws.WorkspaceItem
 			pick.oncancel = ()=>this.list(task, path);
 			return pick.open();
 		};
-		const openDirectory = (dir:f.State)=>this.list(task, path.child(dir.name));
+		const openDirectory = (dir:VFSState)=>this.list(task, path.child(dir.name));
 
 		const ftppath = this.ftppath(path);
 		const dir = await this.ftpList(task, ftppath);
-		const pick = new vsutil.QuickPick;
+		const pick = new QuickPick;
 		if (path.fsPath !== this.mainConfig.basePath.fsPath)
 		{
-			pick.item('Current Directory Action', ()=>{
-				const pick = new vsutil.QuickPick;
-				pick.item('Download Current Directory', ()=>this.downloadAll(task, path));
-				pick.item('Upload Current Directory', ()=>this.uploadAll(task, path));
-				pick.item('Delete Current Directory', ()=>this.ftpDelete(task, path));
+			pick.item('Current VFSDirectory Action', ()=>{
+				const pick = new QuickPick;
+				pick.item('Download Current VFSDirectory', ()=>this.downloadAll(task, path));
+				pick.item('Upload Current VFSDirectory', ()=>this.uploadAll(task, path));
+				pick.item('Delete Current VFSDirectory', ()=>this.ftpDelete(task, path));
 				pick.oncancel = ()=>this.list(task, path);
 				return pick.open();
 			});
 		}
 		
-		var files:f.State[] = [];
-		var dirs:f.State[] = [];
-		var links:f.State[] = [];
+		var files:VFSState[] = [];
+		var dirs:VFSState[] = [];
+		var links:VFSState[] = [];
 
 		for(const filename in dir.files)
 		{
@@ -583,7 +610,7 @@ export class FtpCacher implements ws.WorkspaceItem
 		await pick.open();
 	}
 	
-	private async _syncTestUpload(task:work.Task, path:File):Promise<TaskList>
+	private async _syncTestUpload(task:Task, path:File):Promise<TaskList>
 	{
 		const list = {};
 		await this._getUpdatedFile(this.fs.root, path, list)
@@ -602,24 +629,24 @@ export class FtpCacher implements ws.WorkspaceItem
 		return output;
 	}
 
-	private _syncTestDownload(task:work.Task, path:File):Promise<TaskList>
+	private _syncTestDownload(task:Task, path:File):Promise<TaskList>
 	{
 		return this._syncTestNotExists(task, path, true);
 	}
 
-	private _syncTestClean(task:work.Task):Promise<TaskList>
+	private _syncTestClean(task:Task):Promise<TaskList>
 	{
 		return this._syncTestNotExists(task, this.mainConfig.basePath, false);
 	}
 
-	private _syncTestNotExists(task:work.Task, path:File, download:boolean):Promise<TaskList>
+	private _syncTestNotExists(task:Task, path:File, download:boolean):Promise<TaskList>
 	{
 		const list:TaskList = {};
 		return this._listNotExists(task, path, list, download)
 		.then(() => list);
 	}
 
-	private async _listNotExists(task:work.Task, path:File, list:TaskList, download:boolean):Promise<void>
+	private async _listNotExists(task:Task, path:File, list:TaskList, download:boolean):Promise<void>
 	{
 		if (this.mainConfig.checkIgnorePath(path)) return;
 		const command = download ? "download" : "delete"; 
@@ -697,12 +724,12 @@ export class FtpCacher implements ws.WorkspaceItem
 		}
 	}
 
-	private _reserveSyncTask(task:work.Task, tasks: TaskList, taskname: string, options:BatchOptions): Promise<void>
+	private _reserveSyncTask(task:Task, tasks: TaskList, taskname: string, options:BatchOptions): Promise<void>
 	{
 		return this._reserveSyncTaskWith(task, tasks, taskname, options, () => vsutil.info("Review Operations to perform.", "OK"));
 	}
 
-	private async _reserveSyncTaskWith(task:work.Task, tasks: TaskList, taskname: string, options:BatchOptions, infocallback: () => Thenable<string|undefined>): Promise<void>
+	private async _reserveSyncTaskWith(task:Task, tasks: TaskList, taskname: string, options:BatchOptions, infocallback: () => Thenable<string|undefined>): Promise<void>
 	{
 		const taskFile = this.workspace.child(".vscode/ftp-kr.task.json");
 		
@@ -710,7 +737,7 @@ export class FtpCacher implements ws.WorkspaceItem
 		{
 			for (;;)
 			{
-				if (util.isEmptyObject(tasks)) 
+				if (isEmptyObject(tasks)) 
 				{
 					vsutil.info("Nothing to DO");
 					return;
@@ -759,12 +786,12 @@ export class FtpCacher implements ws.WorkspaceItem
 		}
 	}
 
-	private async _getUpdatedFileInDir(cmp:f.Directory|undefined, path:File, list:{[key:string]:Stats}):Promise<void>
+	private async _getUpdatedFileInDir(cmp:VFSDirectory|undefined, path:File, list:{[key:string]:Stats}):Promise<void>
 	{
 		const files = await path.children();
 		for (const child of files)
 		{
-			var childfile:f.State|undefined;
+			var childfile:VFSState|undefined;
 			if (cmp)
 			{
 				const file = cmp.files[child.basename()];
@@ -774,13 +801,13 @@ export class FtpCacher implements ws.WorkspaceItem
 		}
 	}
 	
-	private async _getUpdatedFile(cmp:f.State|undefined, path:File, list:{[key:string]:Stats}):Promise<void>
+	private async _getUpdatedFile(cmp:VFSState|undefined, path:File, list:{[key:string]:Stats}):Promise<void>
 	{
 		if (this.mainConfig.checkIgnorePath(path)) return;
 		try
 		{
 			const st = await path.lstat();
-			if (st.isDirectory()) await this._getUpdatedFileInDir(cmp instanceof f.Directory ? cmp : undefined, path, list);
+			if (st.isDirectory()) await this._getUpdatedFileInDir(cmp instanceof VFSDirectory ? cmp : undefined, path, list);
 			if (testLatest(cmp, st)) return;
 			list[this.ftppath(path)] = st;
 		}
@@ -789,13 +816,13 @@ export class FtpCacher implements ws.WorkspaceItem
 		}
 	}
 
-	private _deletedir(dir:f.Directory, path:string):void
+	private _deletedir(dir:VFSDirectory, path:string):void
 	{
 		if (!this.refreshed.delete(path)) return;
 		for(const filename in dir.files)
 		{
 			const childdir = dir.files[filename];
-			if (!(childdir instanceof f.Directory)) continue;
+			if (!(childdir instanceof VFSDirectory)) continue;
 			this._deletedir(childdir, path+'/'+filename);
 		}
 	}
@@ -807,7 +834,7 @@ export class FtpCacher implements ws.WorkspaceItem
 		this.fs.delete(path);
 	}
 	
-	private async _refeshForce(task:work.Task, ftppath:string):Promise<void>
+	private async _refeshForce(task:Task, ftppath:string):Promise<void>
 	{
 		const dir = await this.ftpList(task, ftppath);
 		for(const p in dir.files)
@@ -816,7 +843,7 @@ export class FtpCacher implements ws.WorkspaceItem
 			{
 			case '': case '.': case '..': break;
 			default:
-				if (dir.files[p] instanceof f.Directory)
+				if (dir.files[p] instanceof VFSDirectory)
 				{
 					await this._refeshForce(task, ftp_path.normalize(ftppath + '/' + p));
 				}
@@ -826,22 +853,28 @@ export class FtpCacher implements ws.WorkspaceItem
 	}
 }
 
-export class FtpSyncManager implements ws.WorkspaceItem
+export class AltFtpCacher extends FtpCacher
 {
-	private readonly logger:log.Logger;
-	private readonly config:cfg.Config;
+	public reference:number = 1;
+}
+
+export class FtpSyncManager implements WorkspaceItem
+{
+	private readonly logger:Logger;
+	private readonly config:Config;
 	private readonly ftpcacher:FtpCacher;
 	private readonly cacheFile:File;
+	private readonly altServers:Map<ServerConfig, AltFtpCacher>;
 	
-	constructor(public readonly workspace:ws.Workspace)
+	constructor(public readonly workspace:Workspace)
 	{
-		this.logger = workspace.query(log.Logger);
-		this.config = workspace.query(cfg.Config);
+		this.logger = workspace.query(Logger);
+		this.config = workspace.query(Config);
 		this.ftpcacher = workspace.query(FtpCacher);
 		this.cacheFile = this.workspace.child('.vscode/ftp-kr.sync.cache.json');
 	}
 
-	public async init(task:work.Task):Promise<void>
+	public async init(task:Task):Promise<void>
 	{
 		try
 		{
@@ -875,19 +908,39 @@ export class FtpSyncManager implements ws.WorkspaceItem
 	getServer(config:ServerConfig):FtpCacher
 	{
 		if (config === this.config) return this.ftpcacher;
-		return new FtpCacher(this.workspace, config);
+		var cacher = this.altServers.get(config);
+		if (cacher)
+		{
+			cacher.reference ++;
+			return cacher;
+		}
+		
+		cacher = new AltFtpCacher(this.workspace, config);
+		this.altServers.set(config, cacher);
+		return cacher;
+	}
+
+	releaseServer(cacher:FtpCacher):void
+	{
+		if (!(cacher instanceof AltFtpCacher)) return;
+		cacher.reference --;
+		if (cacher.reference === 0)
+		{
+			this.altServers.delete(cacher.config);
+			cacher.destroy();
+		}
 	}
 
 	async selectServer():Promise<FtpCacher|undefined>
 	{
 		var selected:FtpCacher|undefined = undefined;
-		const pick = new vsutil.QuickPick;
+		const pick = new QuickPick;
 		pick.item(this.config.name || 'Main Server', ()=>{ selected = this.ftpcacher;});
 		for (const server of this.config.getAltServers())
 		{
 			const name = server.name || server.host;
 			if (!name) continue;
-			pick.item(name, ()=>{ selected = new FtpCacher(this.workspace, server); });
+			pick.item(name, ()=>{ selected = this.getServer(server); });
 		}
 		if (pick.items.length === 1)
 		{
@@ -900,71 +953,71 @@ export class FtpSyncManager implements ws.WorkspaceItem
 		return selected;
 	}
 
-	public reconnect(task:work.Task):Promise<void>
+	public reconnect(task:Task):Promise<void>
 	{
 		this.ftpcacher.destroy();
 		return this.init(task);
 	}
 
-	public upload(task:work.Task, path:File, options?:BatchOptions):Promise<UploadReport>
+	public upload(task:Task, path:File, options?:BatchOptions):Promise<UploadReport>
 	{
 		return this.ftpcacher.ftpUpload(task, path, options);
 	}
 
-	public download(task:work.Task, path:File, doNotRefresh?:boolean):Promise<void>
+	public download(task:Task, path:File, doNotRefresh?:boolean):Promise<void>
 	{
 		return this.ftpcacher.ftpDownload(task, path, {doNotRefresh});
 	}
 
-	public diff(task:work.Task, path:File):Promise<void>
+	public diff(task:Task, path:File):Promise<void>
 	{
 		return this.ftpcacher.ftpDiff(task, path).then(()=>{});
 	}
 
-	public downloadWithCheck(task:work.Task, path:File):Promise<void>
+	public downloadWithCheck(task:Task, path:File):Promise<void>
 	{
 		return this.ftpcacher.ftpDownloadWithCheck(task, path);
 	}
 
-	public refreshForce(task:work.Task):Promise<void>
+	public refreshForce(task:Task):Promise<void>
 	{
 		return this.ftpcacher.ftpRefreshForce(task);
 	}
 
-	public remove(task:work.Task, path:File):Promise<void>
+	public remove(task:Task, path:File):Promise<void>
 	{
 		return this.ftpcacher.ftpDelete(task, path);
 	}
 
-	public async uploadAll(task:work.Task, path:File): Promise<void>
+	public async uploadAll(task:Task, path:File): Promise<void>
 	{
 		const selected = await this.selectServer();
 		if (selected === undefined) return;
 		await selected.uploadAll(task, path);
-		if (selected !== this.ftpcacher) selected.destroy();
+		this.releaseServer(selected);
 	}
 
-	public async downloadAll(task:work.Task, path:File): Promise<void>
+	public async downloadAll(task:Task, path:File): Promise<void>
 	{
 		const selected = await this.selectServer();
 		if (selected === undefined) return;
 		await selected.downloadAll(task, path);
-		if (selected !== this.ftpcacher) selected.destroy();
+		this.releaseServer(selected);
 	}
 
-	public async cleanAll(task:work.Task)
+	public async cleanAll(task:Task)
 	{
 		const selected = await this.selectServer();
 		if (selected === undefined) return;
 		await selected.cleanAll(task);
-		if (selected !== this.ftpcacher) selected.destroy();
+		this.releaseServer(selected);
 	}
 	
-	public async list(task:work.Task, path:File):Promise<void>
+	public async list(task:Task, path:File):Promise<void>
 	{
 		const selected = await this.selectServer();
 		if (selected === undefined) return;
 		await selected.list(task, path);
-		if (selected !== this.ftpcacher) selected.destroy();
-	}	
+		this.releaseServer(selected);
+	}
 }

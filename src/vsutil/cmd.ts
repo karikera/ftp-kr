@@ -1,63 +1,80 @@
 
-import {File} from '../util/file';
-import * as ws from './ws';
-import * as log from './log';
-import * as work from './work';
-import * as vsutil from './vsutil';
-import * as error from './error';
-import { commands, ExtensionContext } from 'vscode';
+import { commands, ExtensionContext, Uri } from 'vscode';
 
-export interface Args
+import { File } from '../util/file';
+import { VFSState } from '../util/filesystem';
+
+import { vsutil } from './vsutil';
+import { processError } from './error';
+import { defaultLogger, Logger } from './log';
+import { Workspace } from './ws';
+
+export interface CommandArgs
 {
 	file?:File;
-	workspace?:ws.Workspace;
+	ftpfile?:VFSState;
+	uri?:Uri;
+	workspace?:Workspace;
 }
 
-export type Command = {[key:string]:(args:Args)=>any};
+export type Command = {[key:string]:(args:CommandArgs)=>any};
 
 async function runCommand(commands:Command, name:string, ...args:any[]):Promise<void>
 {
-	var cmdargs:Args = {};
+	var cmdargs:CommandArgs = {};
 
 	try
 	{
 		try
 		{
+			const arg = args[0];
+			if (arg instanceof Uri)
+			{
+				cmdargs.uri = arg;
+			}
+			else if (arg instanceof VFSState)
+			{
+				cmdargs.ftpfile = arg;
+				arg.getPath();
+			}
 			cmdargs.file = await vsutil.fileOrEditorFile(args[0]);
-			cmdargs.workspace = ws.getFromFile(cmdargs.file);
+			cmdargs.workspace = Workspace.fromFile(cmdargs.file);
 		}
 		catch(e)
 		{
-			if (!cmdargs.workspace) cmdargs.workspace = ws.Workspace.one();
+			if (!cmdargs.workspace) cmdargs.workspace = Workspace.one();
 		}
 
-		const logger = cmdargs.workspace ? cmdargs.workspace.query(log.Logger) : log.defaultLogger;
+		const logger = cmdargs.workspace ? cmdargs.workspace.query(Logger) : defaultLogger;
 		logger.verbose(`[Command] ${name}`);
 		await commands[name](cmdargs);
 	}
 	catch(err)
 	{
-		const logger = cmdargs.workspace ? cmdargs.workspace.query(log.Logger) : log.defaultLogger;
+		const logger = cmdargs.workspace ? cmdargs.workspace.query(Logger) : defaultLogger;
 		switch (err)
 		{
 		case 'PASSWORD_CANCEL':
 			logger.verbose(`[Command:${name}]: cancelled by password input`);
 			break;
 		default:
-			error.processError(logger, err);
+			processError(logger, err);
 			break;
 		}
 	}
 }
 
-export function registerCommands(context:ExtensionContext, ...cmdlist:Command[])
-{
-	for(const cmds of cmdlist)
+export namespace Command {
+	export function register(context:ExtensionContext, ...cmdlist:Command[])
 	{
-		for (const name in cmds)
+		for(const cmds of cmdlist)
 		{
-			const disposable = commands.registerCommand(name, (...args) => runCommand(cmds, name, ...args));
-			context.subscriptions.push(disposable);
+			for (const name in cmds)
+			{
+				const disposable = commands.registerCommand(name, (...args) => runCommand(cmds, name, ...args));
+				context.subscriptions.push(disposable);
+			}
 		}
 	}
+	
 }

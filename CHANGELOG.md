@@ -1,3 +1,6 @@
+# 1.2.14
+* Fix linux error
+
 # 1.2.13
 * Conflict check and diff when auto upload
 * Reuse cache file

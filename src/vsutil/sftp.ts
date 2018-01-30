@@ -1,12 +1,12 @@
 
-import {Client, ConnectConfig, SFTPWrapper} from 'ssh2';
+import { Client, ConnectConfig, SFTPWrapper } from 'ssh2';
+
+import { File } from '../util/file';
+import { ServerConfig, FileInfo } from '../util/fileinfo';
+import { merge } from '../util/util';
 
 import { FileInterface, NOT_CREATED, DIRECTORY_NOT_FOUND, FILE_NOT_FOUND } from './fileinterface';
 import { Workspace } from './ws';
-import {File} from '../util/file';
-
-import * as util from '../util/util';
-import { ServerConfig, FileInfo } from '../util/fileinfo';
 
 
 export class SftpConnection extends FileInterface
@@ -49,7 +49,7 @@ export class SftpConnection extends FileInterface
 			options.username = config.username;
 			// options.hostVerifier = (keyHash:string) => false;
 			
-			options = util.merge(options, config.sftpOverride);
+			options = merge(options, config.sftpOverride);
 	
 			return await new Promise<void>((resolve, reject) => {
 				client.on('ready', () => {
@@ -262,7 +262,6 @@ export class SftpConnection extends FileInterface
 				{
 					const item = list[i];
 					const to = new FileInfo;
-					to.ftppath = ftppath + item.filename;
 					to.type = <any>item.longname.substr(0, 1);
 					to.name = item.filename;
 					to.date = item.attrs.mtime * 1000;

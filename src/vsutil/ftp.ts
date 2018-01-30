@@ -246,7 +246,7 @@ export class FtpConnection extends FileInterface
 
 	_readlink(fileinfo:FileInfo, ftppath:string):Promise<string>
 	{
-		if (fileinfo.link === undefined) return Promise.reject(fileinfo.ftppath + ' is not symlink');
+		if (fileinfo.link === undefined) return Promise.reject(ftppath + ' is not symlink');
 		return Promise.resolve(fileinfo.link);
 	}
 

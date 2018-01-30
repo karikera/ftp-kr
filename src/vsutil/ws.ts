@@ -1,7 +1,8 @@
 
-import {File} from '../util/file';
-import * as event from '../util/event';
 import { workspace, Uri, WorkspaceFolder, ParameterInformation, Disposable, ExtensionContext } from 'vscode';
+
+import { File } from '../util/file';
+import { Event } from '../util/event';
 
 export interface WorkspaceItem
 {
@@ -74,7 +75,7 @@ export class Workspace extends File
 		Workspace.wsloading.delete(workspacePath);
 		fsws = new Workspace(workspaceFolder, WorkspaceOpenState.CREATED);
 		Workspace.wsmap.set(workspacePath, fsws);
-		onNewWorkspace.fire(fsws);
+		Workspace.onNew.fire(fsws);
 		return fsws;
 	}
 
@@ -93,7 +94,7 @@ export class Workspace extends File
 		if (existed)
 		{
 			Workspace.wsmap.set(workspacePath, fsws);
-			onNewWorkspace.fire(fsws);
+			Workspace.onNew.fire(fsws);
 		}
 	}
 
@@ -178,17 +179,17 @@ export class Workspace extends File
 		if (Workspace.wsmap.size === 1) return Workspace.wsmap.values().next().value;
 		return undefined;
 	}
-}
-
-export function getFromFile(file:File)
-{
-	const workspaceFolder = workspace.getWorkspaceFolder(Uri.file(file.fsPath));
-	if (!workspaceFolder) throw Error(file.fsPath+" is not in workspace");
-	const fsworkspace = Workspace.getInstance(workspaceFolder);
-	if (!fsworkspace) throw Error(file.fsPath+" ftp-kr is not inited");
-	return fsworkspace;
+	
+	static fromFile(file:File):Workspace
+	{
+		const workspaceFolder = workspace.getWorkspaceFolder(Uri.file(file.fsPath));
+		if (!workspaceFolder) throw Error(file.fsPath+" is not in workspace");
+		const fsworkspace = Workspace.getInstance(workspaceFolder);
+		if (!fsworkspace) throw Error(file.fsPath+" ftp-kr is not inited");
+		return fsworkspace;
+	}
+	
+	static readonly onNew = Event.make<Workspace>();
 }
 
 var workspaceWatcher:Disposable|undefined;
-
-export const onNewWorkspace = event.make<Workspace>();

@@ -1,3 +1,6 @@
+# 1.2.17
+* `autoDelete` bug fix
+
 # 1.2.16
 * add `ignoreRemoteModification` option
 * add `ftp-kr: Run task.json` command

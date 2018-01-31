@@ -224,7 +224,7 @@ export class WorkspaceWatcher implements WorkspaceItem
 			logger.verbose('watcher.onDidDelete: '+uri.fsPath);
 			this.watcherQueue = this.watcherQueue.then(()=>{
 				return this.processWatcher(path, 
-					this.ftp.remove, 
+					(task, path)=>this.ftp.remove(task, path), 
 					'remove',
 					!!config.autoDelete);
 			}).catch(err=>logger.error(err));

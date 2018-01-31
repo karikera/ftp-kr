@@ -2,3 +2,16 @@
 Is it possible?
 Should I find other ftp module? (Chilkat?..  Can i use it?)
 Or implement all FTP spec directly?
+
+
+autoUploadOnSave
+
+tree
+	"views": {
+		"explorer": [
+			{
+				"id": "ftpExplorer",
+				"name": "FTP Explorer"
+			}
+		]
+	},

@@ -24,27 +24,39 @@ export namespace Event
 		{
 			if (firing) throw Error('Event is already firing');
 			firing = true;
-			list = list.filter(v=>v);
-			await Promise.resolve();
-			for(const func of list)
+			try
 			{
-				if (!func) continue;
-				await func(value);
+				list = list.filter(v=>v);
+				await Promise.resolve();
+				for(const func of list)
+				{
+					if (!func) continue;
+					await func(value);
+				}
 			}
-			firing = false;
+			finally
+			{
+				firing = false;
+			}
 		};
 		event.rfire = async function(value:T):Promise<void>
 		{
 			if (firing) throw Error('Event is already firing');
-			firing = true;list = list.filter(v=>v);
-			await Promise.resolve();
-			for(var i = list.length -1 ; i>= 0; i--)
+			try
 			{
-				const func = list[i];
-				if (!func) continue;
-				await func(value);
+				firing = true;list = list.filter(v=>v);
+				await Promise.resolve();
+				for(var i = list.length -1 ; i>= 0; i--)
+				{
+					const func = list[i];
+					if (!func) continue;
+					await func(value);
+				}
 			}
-			firing = false;
+			finally
+			{
+				firing = false;
+			}
 		};
 		event.remove = function(onfunc:(value:T)=>void|Promise<void>):boolean
 		{

@@ -1,3 +1,7 @@
+# 1.2.15
+* bug fix
+* remove FTP Explorer dummy view
+
 # 1.2.14
 * Fix linux error
 

@@ -37,7 +37,8 @@ const CONFIG_BASE:ConfigProperties = {
 	port: 0,
 	fileNameEncoding: "utf8", 
 	ignoreWrongFileEncoding: false,
-	autoUpload: true,
+	autoUploadOnSave: true,
+	autoUpload: false,
 	autoDelete: false,
 	autoDownload: false,
 	ignore:[
@@ -175,6 +176,7 @@ interface ConfigProperties extends ServerConfig
 	altServer?:ServerConfig[];
 	localBasePath?:string;
 	followLink?:boolean;
+	autoUploadOnSave?:boolean;
 	autoUpload?:boolean;
 	autoDelete?:boolean;
 	autoDownload?:boolean;
@@ -370,7 +372,11 @@ class ConfigClass extends ConfigContainer implements WorkspaceItem
 		if (config.localBasePath) this.basePath = this.workspace.child(config.localBasePath);
 		else this.basePath = this.workspace;
 
-		if (!config.altServer) return;
+		if (!config.altServer)
+		{
+			config.url = makeUrl(config);
+			return;
+		}
 
 		const dupPriority = ['name', 'host', 'protocol', 'port', 'remotePath', 'username'];
 		const servers = config.altServer;

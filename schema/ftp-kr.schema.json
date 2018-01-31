@@ -38,12 +38,17 @@
 		},
         "autoUpload": {
             "type": "boolean",
-            "description": "Upload file when save (default: false)",
+            "description": "Upload file by watcher (default: false)",
+			"default": false
+        },
+        "autoUploadOnSave": {
+            "type": "boolean",
+            "description": "Upload file on save (default: false)",
 			"default": false
         },
         "autoDelete": {
             "type": "boolean",
-            "description": "Delete FTP file when delete in workspace (default: false)",
+            "description": "Delete FTP file on delete in workspace (default: false)",
 			"default": false
         },
 		"autoDownload": {

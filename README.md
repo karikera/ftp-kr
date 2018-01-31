@@ -53,6 +53,7 @@ You can override ftp/sftp options by `ftpOverride`/`sftpOverride` field, It will
 * `ftp-kr: Clean All` - Cleaning remote files that not in workspace.
 * `ftp-kr: Refresh All` - Cleaning remote file list cache.
 * `ftp-kr: List` - Browse remote directory.
+* `ftp-kr: Run task.json` - Run batch task. It is auto generated and run in `* All` commands. You can use it with same syntax
 
 ## And...
 

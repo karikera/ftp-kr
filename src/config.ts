@@ -185,6 +185,7 @@ interface ConfigProperties extends ServerConfig
 	logLevel?:LogLevel;
 	viewSizeLimit?:number;
 	downloadTimeExtraThreshold?:number;
+	ignoreRemoteModification?:boolean;
 }
 
 function makeUrl(config:ServerConfig):string
@@ -576,7 +577,19 @@ class ConfigClass extends ConfigContainer implements WorkspaceItem
 				throw Error(`${file.fsPath} is not in workspace`);
 			}
 		}
-		return workpath;
+		return '/'+workpath;
+	}
+
+	public fromWorkpath(workpath:string, parent:File):File
+	{
+		if (workpath.startsWith('/'))
+		{
+			return this.basePath.child(workpath.substr(1));
+		}
+		else
+		{
+			return parent.child(workpath);
+		}
 	}
 
 	private loadWrap(name:string, onwork:(task:Task)=>Promise<void>):Promise<boolean>

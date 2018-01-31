@@ -71,6 +71,11 @@
 			"description": "Milliseconds. To avoid upload just downloaded file (default: 1000)",
 			"default": 1000
 		},
+		"ignoreRemoteModification": {
+			"type": "boolean",
+			"description": "Disable remote modification checker",
+			"default": false
+		},
 		"logLevel": {
 			"enum": [
 				"VERBOSE",

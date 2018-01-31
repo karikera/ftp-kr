@@ -191,7 +191,7 @@ export class FtpManager
 				const client = createClient(that.workspace, config);
 				try
 				{
-					that.logger.message(`Try connect to ${config.url} with user ${config.username}`);
+					that.logger.message(`Trying to connect to ${config.url} with user ${config.username}`);
 					await task.with(that.blockTestWith(client.connect(password)));
 					client.log('Connected');
 					that.client = client;

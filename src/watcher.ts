@@ -156,7 +156,7 @@ export class WorkspaceWatcher implements WorkspaceItem
 		const workspace = Workspace.fromFile(path);
 		const config = workspace.query(Config);
 
-		this.processWatcher(path, (task, path)=>this.ftp.upload(task, path, {ignoreNotExistFile: true}), 'upload', !!config.autoUpload);
+		this.processWatcher(path, (task, path)=>this.ftp.upload(task, path, {ignoreNotExistFile: true, cancelWhenLatest: true}), 'upload', !!config.autoUpload);
 		try
 		{
 			if (!(await path.isDirectory())) return;
@@ -202,7 +202,7 @@ export class WorkspaceWatcher implements WorkspaceItem
 			this.watcherQueue = this.watcherQueue.then(()=>{
 				const path = new File(uri.fsPath);
 				return this.processWatcher(path, 
-					(task, path) => this.ftp.upload(task, path, {doNotMakeDirectory: true, ignoreNotExistFile: true}), 
+					(task, path) => this.ftp.upload(task, path, {ignoreNotExistFile: true, cancelWhenLatest:true, whenRemoteModed: this.config.ignoreRemoteModification? 'upload' : 'diff'}),
 					'upload',
 					!!this.config.autoUpload);
 			}).catch(err=>this.logger.error(err));

@@ -35,7 +35,7 @@ export const commands:Command = {
 		await config.loadTest();
 
 		const path = args.file;
-		await scheduler.task('ftpkr.upload', PRIORITY_NORMAL, async(task) => {
+		await scheduler.task('ftpkr.upload', PRIORITY_NORMAL, async (task) => {
 			const isdir = await path.isDirectory();
 			if (isdir)
 			{
@@ -43,7 +43,7 @@ export const commands:Command = {
 			}
 			else
 			{
-				await taskTimer('Upload', ftp.upload(task, path, {doNotMakeDirectory:true, forceUpload:true}));
+				await taskTimer('Upload', ftp.upload(task, path, {whenRemoteModed:config.ignoreRemoteModification?'upload':'diff'}));
 			}
 		});
 	},
@@ -144,7 +144,7 @@ export const commands:Command = {
 
 		await config.loadTest();
 		await vscode.workspace.saveAll();
-		await scheduler.taskWithTimeout('ftpkr.cleanAll', PRIORITY_NORMAL, 1000, async (task) => ftp.cleanAll(task));
+		await scheduler.taskWithTimeout('ftpkr.cleanAll', PRIORITY_NORMAL, 1000, task => ftp.cleanAll(task));
 	},
 	async 'ftpkr.refreshAll' (args: CommandArgs)
 	{
@@ -209,4 +209,25 @@ export const commands:Command = {
 		scheduler.cancel();
 		await scheduler.task('ftpkr.reconnect', PRIORITY_NORMAL, task => ftp.reconnect(task));
 	},
+
+	async 'ftpkr.runtask'(args: CommandArgs)
+	{
+		if (!args.file) return vsutil.info('Please select task.json file');
+		if (!args.workspace) throw Error('workspace is not defined');
+		
+		if (args.file.ext() !== '.json')
+		{
+			return vsutil.info('Please select task.json file');
+		}
+		const workspace = args.workspace;
+		const config = workspace.query(Config);
+		const scheduler = workspace.query(Scheduler);
+		const ftp = workspace.query(FtpSyncManager);
+
+		await config.loadTest();
+		await vscode.workspace.saveAll();
+		
+		const path = args.file;
+		await scheduler.taskWithTimeout('ftpkr.runtask', PRIORITY_NORMAL, 1000, task => ftp.runTaskJson(task, path));
+	}
 };

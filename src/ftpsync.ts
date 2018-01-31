@@ -22,8 +22,9 @@ export interface BatchOptions
 	doNotRefresh?:boolean;
 	doNotMakeDirectory?:boolean;
 	ignoreNotExistFile?:boolean;
-	forceUpload?:boolean;
 	forceRefresh?:boolean;
+	cancelWhenLatest?:boolean;
+	whenRemoteModed?:"upload"|"diff"|"ignore";
 }
 
 function testLatest(file:VFSState|undefined, localStat:Stats):boolean
@@ -63,6 +64,7 @@ export class UploadReport
 {
 	directoryIgnored?:boolean;
 	latestIgnored?:boolean;
+	modifiedIgnore?:boolean;
 	noFileIgnored?:boolean;
 	file?:VFSState;
 }
@@ -70,6 +72,12 @@ export class UploadReport
 export interface TaskList
 {
 	[key:string]:string;
+}
+
+interface TaskJsonResult
+{
+	tasks:TaskList;
+	count:number;
 }
 
 export class FtpCacher implements WorkspaceItem
@@ -122,7 +130,7 @@ export class FtpCacher implements WorkspaceItem
 
 	public ftppath(path:File):string
 	{
-		return ftp_path.normalize(this.config.remotePath + '/' + this.mainConfig.workpath(path));
+		return ftp_path.normalize(this.config.remotePath + this.mainConfig.workpath(path));
 	}
 
 	public fromFtpPath(ftppath:string):File
@@ -167,6 +175,7 @@ export class FtpCacher implements WorkspaceItem
 
 	public async ftpUpload(task:Task, path:File, options?:BatchOptions):Promise<UploadReport>
 	{
+		const noptions = options || {};
 		const ftppath = this.ftppath(path);
 		const report = new UploadReport;
 	
@@ -179,7 +188,7 @@ export class FtpCacher implements WorkspaceItem
 		}
 		catch(e)
 		{
-			if (e.code === 'ENOENT' && options && options.ignoreNotExistFile)
+			if (e.code === 'ENOENT' && noptions.ignoreNotExistFile)
 			{
 				report.noFileIgnored = true;
 				return report;
@@ -190,7 +199,7 @@ export class FtpCacher implements WorkspaceItem
 		const next = async ():Promise<UploadReport>=>{
 			if (stats.isDirectory())
 			{
-				if (options && options.doNotMakeDirectory)
+				if (noptions.doNotMakeDirectory)
 				{
 					report.directoryIgnored = true;
 					return report;
@@ -226,7 +235,7 @@ export class FtpCacher implements WorkspaceItem
 				}
 				catch(e)
 				{
-					if (e.code === 'ENOENT' && options && options.ignoreNotExistFile)
+					if (e.code === 'ENOENT' && noptions.ignoreNotExistFile)
 					{
 						report.noFileIgnored = true;
 						return report;
@@ -242,7 +251,10 @@ export class FtpCacher implements WorkspaceItem
 			}
 		};
 
-		if (options && options.forceUpload) return await next();
+		if (!noptions.cancelWhenLatest && noptions.whenRemoteModed === 'ignore')
+		{
+			return await next();
+		}
 
 		const filedir = this.fs.get(this.ftppath(path.parent()));
 		if (!filedir) return await next();
@@ -251,47 +263,65 @@ export class FtpCacher implements WorkspaceItem
 
 		const mtime = +stats.mtime;
 		const isLatest = mtime === ftpfile.lmtime || mtime <= ftpfile.lmtimeWithThreshold;
+		
 		if (isLatest)
 		{
-			report.latestIgnored = true;
-			report.file = ftpfile;
-			return report;
+			if (noptions.cancelWhenLatest)
+			{
+				report.latestIgnored = true;
+				report.file = ftpfile;
+				return report;
+			}
 		}
-		else if (ftpfile.modified)
+
+		if (ftpfile.modified)
 		{
-			var diffFile:File;
-			try
+			switch (noptions.whenRemoteModed)
 			{
-				diffFile = await this.ftpDiff(task, path, true);
-			}
-			catch (err)
-			{
-				if (err === 'SAME')
-				{
-					report.file = ftpfile;
-					return report;
-				}
-				throw err;
-			}
-			const selected = await vsutil.info('Remote file modification detacted', 'Upload', 'Download');
-			try
-			{
-				await diffFile.unlink();
-			}
-			catch(err)
-			{
-			}
-			switch (selected)
-			{
-			case 'Upload':
+			case 'upload':
 				return await next();
-			case 'Download':
-				await this.ftpDownload(task, path);
-				throw 'IGNORE';
-			case undefined:
-				throw 'IGNORE';
+			case 'ignore':
+				report.modifiedIgnore = true;
+				report.file = ftpfile;
+				return report;
+			case 'diff':
+			default:
+				var diffFile:File;
+				try
+				{
+					diffFile = await this.ftpDiff(task, path, true);
+				}
+				catch (err)
+				{
+					if (err === 'SAME')
+					{
+						report.file = ftpfile;
+						return report;
+					}
+					throw err;
+				}
+				const selected = await vsutil.info('Remote file modification detected', 'Upload', 'Download');
+				try
+				{
+					await diffFile.unlink();
+				}
+				catch(err)
+				{
+				}
+				switch (selected)
+				{
+				case 'Upload':
+					return await next();
+				case 'Download':
+					await this.ftpDownload(task, path);
+					throw 'IGNORE';
+				case undefined:
+					throw 'IGNORE';
+				}
+				break;
 			}
 		}
+
 		return await next();
 	}
 
@@ -353,7 +383,11 @@ export class FtpCacher implements WorkspaceItem
 		{
 			if (this.mainConfig === this.config && this.mainConfig.autoUpload)
 			{
-				await this.ftpUpload(task, path);
+				await this.ftpUpload(task, path, {whenRemoteModed: this.mainConfig.ignoreRemoteModification?'ignore':'diff'});
+			}
+			else
+			{
+				// diff?
 			}
 			return;
 		}
@@ -470,15 +504,17 @@ export class FtpCacher implements WorkspaceItem
 		return this._refeshForce(task, ftp_path.normalize(this.mainConfig.remotePath + '.'));
 	}
 
-	public async exec(task:Task, tasklist:TaskList, options?:BatchOptions):Promise<{tasks:TaskList, count:number}|null>
+	public async runTaskJson(task:Task, parentDirectory:File, tasklist:TaskList):Promise<TaskJsonResult|null>
 	{
+		const options:BatchOptions = {doNotRefresh:true, whenRemoteModed:'upload'};
+
 		var errorCount = 0;
 		const failedTasks:TaskList = {};
 
-		for (const file in tasklist)
+		for (const workpath in tasklist)
 		{
-			const exec = tasklist[file];
-			const path = this.fromFtpPath(file);
+			const exec = tasklist[workpath];
+			const path = this.mainConfig.fromWorkpath(workpath, parentDirectory);
 			try
 			{
 				switch (exec)
@@ -490,9 +526,16 @@ export class FtpCacher implements WorkspaceItem
 			}
 			catch(err)
 			{
-				failedTasks[file] = exec;
-				console.error(err);
-				this.logger.message(err);
+				failedTasks[workpath] = exec;
+				if (err.code === 'ENOENT')
+				{
+					this.logger.message("Error: file not found: '"+workpath+"'");
+				}
+				else
+				{
+					console.error(err);
+					this.logger.message(err);
+				}
 				errorCount ++;
 			}
 		}
@@ -501,22 +544,77 @@ export class FtpCacher implements WorkspaceItem
 		else return null;
 	}
 
+	public async runTaskJsonWithConfirm(task:Task, tasks: TaskList, taskname: string, parentDirectory:File, confirmFirst:boolean): Promise<void>
+	{
+		var confirmer:(()=>Thenable<string|undefined>)|null = null;
+		
+		if (confirmFirst)
+		{
+			confirmer = ()=>vsutil.info("Review Operations to perform.", "OK");
+		}
+
+		for (;;)
+		{
+			if (isEmptyObject(tasks)) 
+			{
+				vsutil.info("Nothing to DO");
+				return;
+			}
+			if (confirmer)
+			{
+				const taskFile = this.workspace.child(".vscode/ftp-kr.task.json");
+				try
+				{
+					await taskFile.create(JSON.stringify(tasks, null, 1));
+					await vsutil.open(taskFile);
+					const res = await confirmer();
+					if (res === undefined) return;
+					const editor = await vsutil.open(taskFile);
+					if (editor) await editor.document.save();
+					const data = await taskFile.json();
+				}
+				finally
+				{
+					await taskFile.quietUnlink();
+				}
+			}
+
+			this.logger.show();
+			this.logger.message(taskname + ' started');
+			const startTime = Date.now();
+			const failed = await this.runTaskJson(task, parentDirectory, tasks);
+			if (!failed) 
+			{
+				const passedTime = Date.now() - startTime;
+				if (passedTime > 1000) {
+					vsutil.info(taskname + " completed");
+				}
+				this.logger.show();
+				this.logger.message(taskname + ' completed');
+				return;
+			}
+
+			tasks = failed.tasks;
+			confirmer = () => this.logger.errorConfirm("ftp-kr Task failed, more information in the output", "Retry");
+		}
+	}
+
 	public async uploadAll(task:Task, path: File): Promise<void>
 	{
 		const tasks = await this._syncTestUpload(task, path);
-		await this._reserveSyncTask(task, tasks, 'Upload All', {doNotRefresh:true});
+		await this.runTaskJsonWithConfirm(task, tasks, 'Upload All', this.mainConfig.basePath, true);
 	}
 
 	public async downloadAll(task:Task, path: File): Promise<void>
 	{
 		const tasks = await this._syncTestDownload(task, path)
-		await this._reserveSyncTask(task, tasks, 'Download All', {doNotRefresh:true});
+		await this.runTaskJsonWithConfirm(task, tasks, 'Download All', this.mainConfig.basePath, true);
 	}
 
 	public async cleanAll(task:Task):Promise<void>
 	{
 		const tasks = await this._syncTestClean(task);
-		return this._reserveSyncTask(task, tasks, 'ftpkr.Clean All', {doNotRefresh:true});
+		return this.runTaskJsonWithConfirm(task, tasks, 'ftpkr.Clean All', this.mainConfig.basePath, true);
 	}
 	
 	public async list(task:Task, path:File):Promise<void>
@@ -525,7 +623,7 @@ export class FtpCacher implements WorkspaceItem
 			const npath = path.child(file.name);
 			pick.clear();
 			pick.item('Download '+file.name, ()=>this.ftpDownload(task, npath));
-			pick.item('Upload '+file.name, ()=>this.ftpUpload(task, npath));
+			pick.item('Upload '+file.name, ()=>this.ftpUpload(task, npath, {whenRemoteModed: this.mainConfig.ignoreRemoteModification?'upload':'diff'}));
 			pick.item('Delete '+file.name, ()=>this.ftpDelete(task, npath));
 			pick.item('Diff '+file.name, ()=>this.ftpDiff(task, npath));
 			pick.oncancel = ()=>this.list(task, path);
@@ -616,14 +714,16 @@ export class FtpCacher implements WorkspaceItem
 		await this._getUpdatedFile(this.fs.root, path, list)
 		
 		const output = {};
-		for(const ftppath in list)
+		for(const workpath in list)
 		{
-			const path = this.fromFtpPath(ftppath);
-			const st = list[ftppath];
+			const path = this.mainConfig.fromWorkpath(workpath, this.mainConfig.basePath);
+			const ftppath = this.ftppath(path);
+			const st = list[workpath];
+			
 			const file = await this.ftpStat(task, ftppath);
 			if (!await testLatest(file, st))
 			{
-				output[ftppath] = "upload";
+				output[workpath] = "upload";
 			}
 		}
 		return output;
@@ -631,18 +731,15 @@ export class FtpCacher implements WorkspaceItem
 
 	private _syncTestDownload(task:Task, path:File):Promise<TaskList>
 	{
-		return this._syncTestNotExists(task, path, true);
+		const list:TaskList = {};
+		return this._listNotExists(task, path, list, true)
+		.then(() => list);
 	}
 
 	private _syncTestClean(task:Task):Promise<TaskList>
 	{
-		return this._syncTestNotExists(task, this.mainConfig.basePath, false);
-	}
-
-	private _syncTestNotExists(task:Task, path:File, download:boolean):Promise<TaskList>
-	{
 		const list:TaskList = {};
-		return this._listNotExists(task, path, list, download)
+		return this._listNotExists(task, this.mainConfig.basePath, list, false)
 		.then(() => list);
 	}
 
@@ -698,7 +795,7 @@ export class FtpCacher implements WorkspaceItem
 			const flushList = ()=>{
 				for (const p of targets)
 				{
-					list[this.ftppath(path.child(p))] = command;
+					list[this.mainConfig.workpath(path.child(p))] = command;
 				}
 			};
 			const processChild = async()=>{
@@ -720,68 +817,6 @@ export class FtpCacher implements WorkspaceItem
 		}
 		catch(err)
 		{
-			throw err;
-		}
-	}
-
-	private _reserveSyncTask(task:Task, tasks: TaskList, taskname: string, options:BatchOptions): Promise<void>
-	{
-		return this._reserveSyncTaskWith(task, tasks, taskname, options, () => vsutil.info("Review Operations to perform.", "OK"));
-	}
-
-	private async _reserveSyncTaskWith(task:Task, tasks: TaskList, taskname: string, options:BatchOptions, infocallback: () => Thenable<string|undefined>): Promise<void>
-	{
-		const taskFile = this.workspace.child(".vscode/ftp-kr.task.json");
-		
-		try
-		{
-			for (;;)
-			{
-				if (isEmptyObject(tasks)) 
-				{
-					vsutil.info("Nothing to DO");
-					return;
-				}
-				await taskFile.create(JSON.stringify(tasks, null, 1));
-				await vsutil.open(taskFile);
-				const res = await infocallback();
-				if (res !== "OK" && res !== "Retry") 
-				{
-					taskFile.unlink();
-					return;
-				}
-				this.logger.show();
-				this.logger.message(taskname + ' started');
-				const editor = await vsutil.open(taskFile);
-				if (editor) await editor.document.save();
-				const startTime = Date.now();
-				const data = await taskFile.json();
-				await taskFile.unlink();
-				const failed = await this.exec(task, data, options);
-				if (!failed) 
-				{
-					const passedTime = Date.now() - startTime;
-					if (passedTime > 1000) {
-						vsutil.info(taskname + " completed");
-					}
-					this.logger.show();
-					this.logger.message(taskname + ' completed');
-					return;
-				}
-
-				tasks = failed.tasks;
-				infocallback = () => this.logger.errorConfirm("ftp-kr Task failed, more information in the output", "Retry");
-			}
-		}
-		catch(err)
-		{
-			try
-			{
-				await taskFile.unlink();
-			}
-			catch(e)
-			{
-			}
 			throw err;
 		}
 	}
@@ -809,7 +844,7 @@ export class FtpCacher implements WorkspaceItem
 			const st = await path.lstat();
 			if (st.isDirectory()) await this._getUpdatedFileInDir(cmp instanceof VFSDirectory ? cmp : undefined, path, list);
 			if (testLatest(cmp, st)) return;
-			list[this.ftppath(path)] = st;
+			list[this.mainConfig.workpath(path)] = st;
 		}
 		catch(err)
 		{
@@ -1018,6 +1053,15 @@ export class FtpSyncManager implements WorkspaceItem
 		const selected = await this.selectServer();
 		if (selected === undefined) return;
 		await selected.list(task, path);
+		this.releaseServer(selected);
+	}
+
+	public async runTaskJson(task:Task, taskjson:File):Promise<void>
+	{
+		const selected = await this.selectServer();
+		if (selected === undefined) return;
+		const tasks = await taskjson.json();
+		await selected.runTaskJsonWithConfirm(task, tasks, taskjson.basename(), taskjson.parent(), false);
 		this.releaseServer(selected);
 	}
 }

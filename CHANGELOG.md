@@ -1,3 +1,7 @@
+# 1.2.16
+* add `ignoreRemoteModification` option
+* add `ftp-kr: Run task.json` command
+
 # 1.2.15
 * bug fix
 * remove FTP Explorer dummy view

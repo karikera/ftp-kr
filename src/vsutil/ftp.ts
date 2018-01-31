@@ -134,7 +134,10 @@ export class FtpConnection extends FileInterface
 					const oldwrite = socket.write;
 					socket.write = str=>oldwrite.call(socket, str, 'binary');
 					socket.setEncoding('binary');
-					resolve();
+					client.binary(err=>{
+						if (err) console.error(err);
+						resolve();
+					});
 				})
 				.on("error", reject)
 				.connect(options);

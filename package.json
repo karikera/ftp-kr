@@ -3,7 +3,7 @@
   "displayName": "ftp-kr",
   "description": "FTP/SFTP Sync Extension",
   "license": "MIT",
-  "version": "1.3.0",
+  "version": "1.3.2",
   "icon": "images/icon.png",
   "publisher": "ruakr",
   "repository": {

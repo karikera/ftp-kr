@@ -182,9 +182,9 @@ class ConfigClass extends ConfigContainer<ConfigProperties> implements Workspace
 
 	public basePath:File;
 	
-	public readonly onLoad = Event.make<Task>();
-	public readonly onInvalid = Event.make<void>();
-	public readonly onNotFound = Event.make<void>();
+	public readonly onLoad = Event.make<Task>('onLoad');
+	public readonly onInvalid = Event.make<void>('onInvalid');
+	public readonly onNotFound = Event.make<void>('onNotFound');
 	
 	private ignorePatterns:(RegExp[])|null = null;
 	private readonly logger:Logger;

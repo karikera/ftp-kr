@@ -1,8 +1,13 @@
+# 1.3.2
+* `task.json` extra command (`upload from 'path'` & `download to 'path'`)
+
+# 1.3.1
+* Connection auto canceling when save config
+
 # 1.3.0
 * FTP TREE VIEW!
 * `ftp-kr: Target` - Change the main server
 * `task.json` extra command (`upload to 'path'` & `download from 'path'`)
-* Connection auto canceling when save config(Need test)
 * Force disconnecting before reconnecting
 
 # 1.2.17

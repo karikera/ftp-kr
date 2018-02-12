@@ -255,7 +255,6 @@ export class Scheduler implements WorkspaceItem
 		task.cancel();
 
 		this.logger.message(`[${task.name}]task is cancelled`);
-		this.currentTask = null;
 
 		var next = task.next;
 		while (next)
@@ -264,6 +263,7 @@ export class Scheduler implements WorkspaceItem
 			next = next.next;
 		}
 
+		task.next = null;
 		this.nextTask = null;
 		this.lastTask = null;
 	}
@@ -274,7 +274,7 @@ export class Scheduler implements WorkspaceItem
 		this._addTask(task);
 		if (!this.currentTask)
 		{
-			this.logger.verbose(`[SCHEDULAR] busy`);
+			this.logger.verbose(`[SCHEDULAR] start`);
 			this.progress();
 		}
 		return task.promise;
@@ -287,7 +287,7 @@ export class Scheduler implements WorkspaceItem
 		this._addTask(task);
 		if (!this.currentTask)
 		{
-			this.logger.verbose(`[SCHEDULAR] busy`);
+			this.logger.verbose(`[SCHEDULAR] start`);
 			this.progress();
 		}
 		return task.promise;
@@ -298,7 +298,7 @@ export class Scheduler implements WorkspaceItem
 		const task = this.nextTask;
 		if (!task)
 		{
-			this.logger.verbose(`[SCHEDULAR] idle`);
+			this.logger.verbose(`[SCHEDULAR] end`);
 			this.currentTask = null;
 			return;
 		}

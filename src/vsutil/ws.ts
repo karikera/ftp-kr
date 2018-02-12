@@ -196,7 +196,7 @@ export class Workspace extends File
 		return fsworkspace;
 	}
 	
-	static readonly onNew = Event.make<Workspace>();
+	static readonly onNew = Event.make<Workspace>('onNew');
 }
 
 var workspaceWatcher:Disposable|undefined;

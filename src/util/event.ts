@@ -10,7 +10,7 @@ export interface Event<T>
 
 export namespace Event
 {
-	export function make<T>():Event<T>
+	export function make<T>(name:string):Event<T>
 	{
 		var list:(((value:T)=>void|Promise<void>) | undefined)[] = [];
 		var firing = false;
@@ -23,6 +23,7 @@ export namespace Event
 		event.fire = async function(value:T):Promise<void>
 		{
 			if (firing) throw Error('Event is already firing');
+			console.log(name);
 			firing = true;
 			try
 			{

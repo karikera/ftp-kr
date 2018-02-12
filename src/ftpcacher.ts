@@ -572,16 +572,41 @@ export class FtpCacher
 				case 'delete': await this.ftpDelete(task, path, options); break;
 				default:
 					const [cmd, preposition, relpath] = exec.split(/[ \t]+/g, 3);
-					const ftppath = ftp_path.normalize(this.toFtpPath(path.parent())+'/'+relpath);
 					switch (cmd)
 					{
 					case 'upload':
-						if (preposition !== 'to') throw Error(`Invalid command: ${exec}\nUse 'upload to path' instead`);
-						await this.ftpmgr.upload(task, ftppath, path);
+						switch (preposition){
+						case 'from':{
+							const ftppath = this.toFtpPath(path);
+							const localpath = path.parent().child(relpath);
+							await this.ftpmgr.upload(task, ftppath, localpath);
+							break;
+						}
+						case 'to':{
+							const ftppath = ftp_path.normalize(this.toFtpPath(path.parent())+'/'+relpath);
+							await this.ftpmgr.upload(task, ftppath, path);
+							break;
+						}
+						default:
+							throw Error(`Invalid command: ${exec}\n'upload from/to path'`);
+						}
 						break;
 					case 'download':
-						if (preposition !== 'from') throw Error(`Invalid command: ${exec}\nUse 'download from path' instead`);
-						await this.ftpmgr.download(task, path, ftppath);
+						switch (preposition){
+						case 'from':{
+							const ftppath = ftp_path.normalize(this.toFtpPath(path.parent())+'/'+relpath);
+							await this.ftpmgr.download(task, path, ftppath);
+							break;
+						}
+						case 'to':{
+							const ftppath = this.toFtpPath(path);
+							const localpath = path.parent().child(relpath);
+							await this.ftpmgr.download(task, localpath, ftppath);
+							break;
+						}
+						default:
+							throw Error(`Invalid command: ${exec}\n'download from/to path'`);
+						}
 						break;
 					default:
 						throw Error(`Invalid command: ${exec}\n'upload' or 'download' or 'upload to path' or 'download from path'`);

@@ -1,7 +1,7 @@
 
 import * as iconv from 'iconv-lite';
+import { File } from 'krfile';
 
-import {File} from '../util/file';
 import { ServerConfig, FileInfo } from '../util/fileinfo';
 import { ftp_path } from '../util/ftp_path';
 import { Logger } from './log';
@@ -20,7 +20,7 @@ declare global
 	}
 }
 
-function _errorWrap(err):Error
+function _errorWrap(err:any):Error
 {
 	if (err.code)
 	{
@@ -51,16 +51,18 @@ export abstract class FileInterface
 
 	abstract _connect(password?:string):Promise<void>;
 	abstract disconnect():void;
+	abstract terminate():void;
 	abstract connected():boolean;
+	abstract pwd():Promise<string>;
 
 	private bin2str(bin:string):string
 	{
 		var buf = iconv.encode(bin, 'binary');
-		return iconv.decode(buf, this.config.fileNameEncoding || 'utf-8');
+		return iconv.decode(buf, this.config.fileNameEncoding);
 	}
 	private str2bin(str:string):string
 	{
-		var buf = iconv.encode(str, this.config.fileNameEncoding || 'utf-8');
+		var buf = iconv.encode(str, this.config.fileNameEncoding);
 		return iconv.decode(buf, 'binary');
 	}
 
@@ -83,8 +85,7 @@ export abstract class FileInterface
 		return callback(this.str2bin(ftppath)).then(v=>{
 			this.state.close();
 			return v;
-		})
-		.catch((err):T=>{
+		}, (err):T=>{
 			this.state.close();
 			if (err.ftpCode === ignorecode) return defVal;
 			this.log(name+" fail: "+ftppath);
@@ -107,8 +108,7 @@ export abstract class FileInterface
 		})
 		.then(()=>{
 			this.state.close();
-		})
-		.catch((err)=>{
+		}, err=>{
 			this.state.close();
 			this.log("upload fail: "+ftppath);
 			throw _errorWrap(err);
@@ -121,15 +121,18 @@ export abstract class FileInterface
 
 		return this._get(this.str2bin(ftppath))
 		.then((stream)=>{
-			return new Promise<void>(resolve=>{
+			return new Promise<void>((resolve, reject)=>{
 				stream.once('close', ()=>{
 					this.state.close();
 					resolve();
 				});
+				stream.once('error', (err:any)=>{
+					this.state.close();
+					reject(err);
+				});
 				stream.pipe(localpath.createWriteStream());
 			});
-		})
-		.catch(err=>{
+		}, err=>{
 			this.state.close();
 			this.log("download fail: "+ftppath);
 			throw _errorWrap(err);
@@ -142,18 +145,21 @@ export abstract class FileInterface
 
 		return this._get(this.str2bin(ftppath))
 		.then((stream)=>{
-			return new Promise<string>(resolve=>{
+			return new Promise<string>((resolve, reject)=>{
 				var str = '';
 				stream.once('close', ()=>{
 					this.state.close();
 					resolve(str);
 				});
-				stream.on('data', data=>{
+				stream.once('error', (err:any)=>{
+					this.state.close();
+					reject(err);
+				});
+				stream.on('data', (data:any)=>{
 					str += data.toString('utf-8');
 				});
 			});
-		})
-		.catch(err=>{
+		}, err=>{
 			this.state.close();
 			this.log("view fail: "+ftppath);
 			throw _errorWrap(err);
@@ -165,7 +171,8 @@ export abstract class FileInterface
 		if (!ftppath) ftppath = ".";
 		this.logWithState('list '+ftppath);
 
-		return this._list(this.str2bin(ftppath)).then((list)=>{
+		return this._list(this.str2bin(ftppath))
+		.then((list)=>{
 			this.state.close();
 
 			const errfiles:string[] = [];
@@ -184,8 +191,7 @@ export abstract class FileInterface
 				setTimeout(()=>this.oninvalidencoding(errfiles), 0);
 			}
 			return list;
-		})
-		.catch(err=>{
+		}, err=>{
 			this.state.close();
 			this.log("list fail: "+ftppath);
 			throw _errorWrap(err);
@@ -211,13 +217,14 @@ export abstract class FileInterface
 	{
 		if (fileinfo.type !== 'l') throw Error(ftppath + ' is not symlink');
 		this.logWithState('readlink '+fileinfo.name);
-		return this._readlink(fileinfo, this.str2bin(ftppath)).then(v=>{
+		return this._readlink(fileinfo, this.str2bin(ftppath))
+		.then(v=>{
 			if (v.startsWith('/')) v = ftp_path.normalize(v);
 			else v = ftp_path.normalize(ftppath + '/../' + v);
 			fileinfo.link = v;
 			this.state.close();
 			return v;
-		}).catch((err)=>{
+		}, (err)=>{
 			this.state.close();
 			this.log("readlink fail: "+fileinfo.name);
 			throw _errorWrap(err);

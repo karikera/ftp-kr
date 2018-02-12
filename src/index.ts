@@ -1,10 +1,9 @@
 
-import { window, ExtensionContext } from 'vscode';
+import { window, ExtensionContext, workspace } from 'vscode';
 
 import { Command } from './vsutil/cmd';
 import { Workspace } from './vsutil/ws';
 
-import { FtpTree } from './ftptree';
 import { WorkspaceWatcher } from './watcher';
 import { Config } from './config';
 import { FtpDownloader } from './ftpdown';
@@ -12,6 +11,8 @@ import { FtpDownloader } from './ftpdown';
 import { commands as cfgcmd } from './cmd/config';
 import { commands as ftpcmd } from './cmd/ftpsync';
 import { defaultLogger } from './vsutil/log';
+import { vsutil } from './vsutil/vsutil';
+import { ftpTree } from './ftptree';
 
 Workspace.onNew(workspace=>{
 	workspace.query(WorkspaceWatcher);
@@ -26,7 +27,10 @@ export function activate(context:ExtensionContext) {
 	
 	Workspace.loadAll();
 
-	// window.registerTreeDataProvider('ftpExplorer', new FtpTree());
+	workspace.registerTextDocumentContentProvider('sftp', ftpTree);
+	workspace.registerTextDocumentContentProvider('ftp', ftpTree);
+	workspace.registerTextDocumentContentProvider('ftps', ftpTree);
+	window.registerTreeDataProvider('ftpkr.explorer', ftpTree);
 }
 export function deactivate() {
     try
@@ -36,6 +40,6 @@ export function deactivate() {
     }
     catch(err)
     {
-        defaultLogger.error(err);
+        console.error(err);
     }
 }

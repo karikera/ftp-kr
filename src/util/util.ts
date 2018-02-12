@@ -6,10 +6,17 @@ export class Deferred<T> implements Promise<T>
 	public resolve:((v:T)=>void);
 	public reject:((v:any)=>void);
 	public readonly [Symbol.toStringTag] = "Promise";
-	private promise:Promise<T> = new Promise<T>((res, rej)=>{
-		this.resolve = res;
-		this.reject = rej;
-	});
+	private promise:Promise<T>;
+
+	constructor()
+	{
+		this.resolve = <any>undefined;
+		this.reject = <any>undefined;
+		this.promise = new Promise<T>((res, rej)=>{
+			this.resolve = res;
+			this.reject = rej;
+		});
+	}
 	
 	public then<R1,R2>(onfulfilled:(v:T)=>R1|Promise<R1>, onreject?:(v:any)=>R2|Promise<R2>):Promise<R1|R2>
 	{
@@ -28,7 +35,7 @@ export function isEmptyObject(obj:Object):boolean
 	return true;
 }
 
-export function addOptions(args:string[], options:Object):void
+export function addOptions(args:string[], options:{[key:string]:any}):void
 {
 	for (const key in options)
 	{
@@ -90,7 +97,7 @@ export function merge<T>(original:T, overrider?:T, access?:T):T
             var varname = value.substring(j, k);
             if (varname in nex)
             {
-                var val = nex[varname];
+                var val = nex[<keyof T>varname];
                 if (val instanceof Array)
                 {
                     if (val.length === 1)
@@ -197,48 +204,6 @@ export function getFilePosition(content:string, index:number):{line:number,colum
 		line,
 		column:index - lastidx
 	};
-}
-
-export function parseJson(text:string):any
-{
-	try
-	{
-		return JSON.parse(stripJsonComments(text));
-	}
-	catch(err)
-	{
-		const regexp = /^(.+) JSON at position ([0-9]+)$/;
-		if (regexp.test(err.message))
-		{
-			const index = +RegExp.$2;
-			const {line, column} = getFilePosition(text, index);
-			err.line = line;
-			err.column = column;
-			err.message = `${RegExp.$1} JSON at line ${line}, column ${column}`;
-		}
-		throw err;
-	}
-}
-
-export function callbackToPromise<T>(call:(callback:(err:Error, value?:T)=>void)=>void):Promise<T>
-{
-	const savedStack = new Error('').stack || '';
-	
-    return new Promise<T>((resolve, reject)=>{
-        call((err, data)=>{
-			if (err)
-			{
-				var stackline = savedStack.indexOf('\n');
-				stackline = savedStack.indexOf('\n', stackline+1);
-				if (stackline !== -1)
-				{
-					err.stack = err.message + savedStack.substr(stackline);
-				}
-				reject(err);
-			}
-            else resolve(data);
-        });
-    });
 }
 
 export function clone<T>(value:T):T

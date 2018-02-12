@@ -1,19 +1,20 @@
 
-import { commands, ExtensionContext, Uri } from 'vscode';
+import { commands, ExtensionContext, Uri, window } from 'vscode';
+import { File } from 'krfile';
 
-import { File } from '../util/file';
 import { VFSState } from '../util/filesystem';
 
 import { vsutil } from './vsutil';
 import { processError } from './error';
 import { defaultLogger, Logger } from './log';
 import { Workspace } from './ws';
+import { FtpTreeItem } from './ftptreeitem';
 
 export interface CommandArgs
 {
 	file?:File;
-	ftpfile?:VFSState;
 	uri?:Uri;
+	treeItem?:FtpTreeItem;
 	workspace?:Workspace;
 }
 
@@ -28,17 +29,38 @@ async function runCommand(commands:Command, name:string, ...args:any[]):Promise<
 		try
 		{
 			const arg = args[0];
-			if (arg instanceof Uri)
+			if (arg instanceof FtpTreeItem)
 			{
-				cmdargs.uri = arg;
+				cmdargs.treeItem = arg;
 			}
-			else if (arg instanceof VFSState)
+			else
 			{
-				cmdargs.ftpfile = arg;
-				arg.getPath();
+				if (arg instanceof Uri)
+				{
+					if (arg.scheme === 'file')
+					{
+						cmdargs.file = new File(arg.fsPath);
+					}
+					else
+					{
+						cmdargs.uri = arg;
+					}
+				}
+				else
+				{
+					const editor = window.activeTextEditor;
+					if (editor)
+					{
+						const doc = editor.document;
+						cmdargs.file = new File(doc.uri.fsPath);
+						await doc.save();
+					}
+				}
+				if (cmdargs.file)
+				{
+					cmdargs.workspace = Workspace.fromFile(cmdargs.file);
+				}
 			}
-			cmdargs.file = await vsutil.fileOrEditorFile(args[0]);
-			cmdargs.workspace = Workspace.fromFile(cmdargs.file);
 		}
 		catch(e)
 		{

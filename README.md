@@ -43,20 +43,28 @@ You can override ftp/sftp options by `ftpOverride`/`sftpOverride` field, It will
 
 ## Available functions & commands
 * Real-Time FTP/SFTP synchronization(You can off it!)
-* This extension check modification with file size
-* `ftp-kr: Init` - Create ftp-kr.json.
-* `ftp-kr: Upload All` - Upload all without same size file
-* `ftp-kr: Download All` - Download all without exists file
+* `ftp-kr: Init` - Starts up extension and generates `ftp-kr.json`.
+* `ftp-kr: Upload All` - Upload all without same size files
+* `ftp-kr: Download All` - Download all without existed files
 * `ftp-kr: Upload This` - Upload this file.
 * `ftp-kr: Download This` - Download this file.
-* `ftp-kr: Refresh All` - Rescan remote files.
+* `ftp-kr: Delete This` - Delete file in remote server.
+
+## Advanced commands
+* `ftp-kr: Diff This` - Diff this file.
+* `ftp-kr: Refresh` - Rescan remote files.
 * `ftp-kr: Clean All` - Cleaning remote files that not in workspace.
-* `ftp-kr: Refresh All` - Cleaning remote file list cache.
-* `ftp-kr: List` - Browse remote directory.
-* `ftp-kr: Run task.json` - Run batch task. It is auto generated and run in `* All` commands. You can use it with same syntax
+* `ftp-kr: Run task.json` - Run a batch task. It is auto generated and run by `* All` commands. You can use it with same syntax
+* `ftp-kr: Reconnect` - Reconnect the server.
+* `ftp-kr: Cancel` - Cancel current tasks
+* `ftp-kr: Target` - Swaps the main server. For using with alternate servers
+* `ftp-kr: List` - Browse remote directories. 
+* `ftp-kr: View` - View a remote file. used internally
+
 
 ## And...
 
+Bug Report & Feature Request: https://github.com/karikera/ftp-kr/issues  
 Wiki: https://github.com/karikera/ftp-kr/wiki  
 I'm not good at english, Sorry for my bad english ㅠㅠ  
 

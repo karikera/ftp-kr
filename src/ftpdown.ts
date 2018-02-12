@@ -1,17 +1,19 @@
 
-import { File } from './util/file';
+import { File } from 'krfile';
+
 import { PRIORITY_IDLE, Scheduler } from './vsutil/work';
 import { WorkspaceItem, Workspace } from './vsutil/ws';
-import { Config } from './config';
-import { FtpCacher } from './ftpsync';
 import { Logger } from './vsutil/log';
+
+import { Config } from './config';
+import { FtpSyncManager } from './ftpsync';
 
 export class FtpDownloader implements WorkspaceItem
 {
-	private config:Config;
-	private logger:Logger;
-	private ftp:FtpCacher;
-	private scheduler:Scheduler;
+	private readonly config:Config;
+	private readonly logger:Logger;
+	private readonly ftpmgr:FtpSyncManager;
+	private readonly scheduler:Scheduler;
 
 	private timer:NodeJS.Timer|null = null;
 	private enabled:boolean = false;
@@ -19,7 +21,8 @@ export class FtpDownloader implements WorkspaceItem
 	constructor(workspace:Workspace)
 	{
 		this.config = workspace.query(Config);
-		this.ftp = workspace.query(FtpCacher);
+		this.logger = workspace.query(Logger);
+		this.ftpmgr = workspace.query(FtpSyncManager);
 		this.scheduler = workspace.query(Scheduler);
 		this.config.onLoad(()=>this._resetTimer());
 	}
@@ -71,8 +74,8 @@ export class FtpDownloader implements WorkspaceItem
 
 	private async _downloadDir(dir:File):Promise<void>
 	{
-		const ftppath = this.ftp.ftppath(dir);
-		const list = await this.scheduler.task(`autoDownloadAlways.list`, PRIORITY_IDLE, task=>this.ftp.ftpList(task, ftppath));
+		const ftppath = this.ftpmgr.targetServer.toFtpPath(dir);
+		const list = await this.scheduler.task(`autoDownloadAlways.list`, PRIORITY_IDLE, task=>this.ftpmgr.targetServer.ftpList(task, ftppath));
 		if (!this.enabled) throw 'IGNORE';
 		for (const childName in list.files)
 		{
@@ -91,7 +94,7 @@ export class FtpDownloader implements WorkspaceItem
 				if (child.type === 'l')
 				{
 					if (!this.config.followLink) continue;
-					const stats = await this.scheduler.task(`autoDownloadAlways.download`, PRIORITY_IDLE, task=>this.ftp.ftpTargetStat(task, child));
+					const stats = await this.scheduler.task(`autoDownloadAlways.download`, PRIORITY_IDLE, task=>this.ftpmgr.targetServer.ftpTargetStat(task, child));
 					if (!stats) continue;
 					child = stats;
 				}
@@ -101,7 +104,7 @@ export class FtpDownloader implements WorkspaceItem
 				}
 				else
 				{
-					await this.scheduler.task(`autoDownloadAlways.download`, PRIORITY_IDLE, task=>this.ftp.ftpDownloadWithCheck(task, childFile));
+					await this.scheduler.task(`autoDownloadAlways.download`, PRIORITY_IDLE, task=>this.ftpmgr.targetServer.ftpDownloadWithCheck(task, childFile));
 					if (!this.enabled) throw 'IGNORE';
 				}
 			}

@@ -2,6 +2,7 @@
 import {Stats as FSStats} from 'fs';
 import {ListingElement as FTPStats} from 'ftp';
 import { FileInfo, FileType } from './fileinfo';
+import { File } from 'krfile';
 
 interface FileNameSet
 {
@@ -16,7 +17,11 @@ interface SerializedState
 	size?:number;
 	lmtime?:number;
 	modified?:boolean;
-	
+}
+
+interface SerializedStateRoot extends SerializedState
+{
+	$version?:number;
 }
 
 export function splitFileName(path:string):FileNameSet
@@ -32,7 +37,6 @@ export function splitFileName(path:string):FileNameSet
 export abstract class VFSState extends FileInfo
 {
 	type:FileType = '';
-	name:string = '';
 	size:number = 0;
 	date:number = 0;
 	linkType:FileType|undefined = undefined;
@@ -40,28 +44,37 @@ export abstract class VFSState extends FileInfo
 	lmtimeWithThreshold:number = 0;
 	modified:boolean = false;
 	
-	constructor(public fs:FileSystem, public parent:VFSDirectory|undefined, name:string)
+	constructor(
+		public readonly parent:VFSDirectory|undefined, 
+		public readonly name:string)
 	{
 		super();
-
-		this.name = name;
 	}
 
 	getPath():string
 	{
+		const list:string[] = [];
+		var file:VFSState|undefined = this;
+		while (file && !(file instanceof VFSServer))
+		{
+			list.push(file.name);
+			file = file.parent;
+		}
+		list.push('');
+		if (list.length === 1) return '/.';
+		return list.reverse().join('/');
+	}
+
+	getUrl():string
+	{
 		const list:string[] = [this.name];
 		var parent = this.parent;
-		while (parent)
+		while (parent && !(parent instanceof VirtualFileSystem))
 		{
 			list.push(parent.name);
 			parent = parent.parent;
 		}
 		return list.reverse().join('/');
-	}
-
-	getUri():string
-	{
-		return this.fs.uri + this.getPath();
 	}
 
 	abstract serialize():SerializedState;
@@ -72,9 +85,9 @@ export abstract class VFSState extends FileInfo
 
 export abstract class VFSFileCommon extends VFSState
 {
-	constructor(fs:FileSystem, parent:VFSDirectory|undefined, name:string)
+	constructor(parent:VFSDirectory|undefined, name:string)
 	{
-		super(fs, parent, name);
+		super(parent, name);
 	}
 	
 	setByStat(st:FSStats):void
@@ -95,9 +108,9 @@ export class VFSDirectory extends VFSFileCommon
 {
 	files:{[key:string]:VFSState|undefined} = {};
 
-	constructor(fs:FileSystem, parent:VFSDirectory|undefined, name:string)
+	constructor(parent:VFSDirectory|undefined, name:string)
 	{
-		super(fs, parent, name);
+		super(parent, name);
 		
 		this.type = "d";
 
@@ -121,6 +134,25 @@ export class VFSDirectory extends VFSFileCommon
 		return files;
 	}
 
+	deserializeTo(filename:string, data:SerializedState):void
+	{
+		var file:VFSState;
+		switch (data.type)
+		{
+		case '-':
+			file = new VFSFile(this, filename);
+			break;
+		case 'l':
+			file = new VFSSymLink(this, filename);
+			break;
+		default:
+			file = new VFSDirectory(this, filename);
+			break;
+		}
+		file.deserialize(data);
+		this.files[filename] = file;
+	}
+
 	deserialize(data:SerializedState):void
 	{
 		if (typeof data !== 'object') return;
@@ -129,28 +161,13 @@ export class VFSDirectory extends VFSFileCommon
 			const sfile = data[filename];
 			if (!sfile) continue;
 			if (typeof sfile !== 'object') continue;
-
-			var file:VFSState;
-			switch (sfile.type)
-			{
-			case '-':
-				file = new VFSFile(this.fs, this, filename);
-				break;
-			case 'l':
-				file = new VFSSymLink(this.fs, this, filename);
-				break;
-			default:
-				file = new VFSDirectory(this.fs, this, filename);
-				break;
-			}
-			file.deserialize(sfile);
-			this.files[filename] = file;
+			this.deserializeTo(filename, sfile);
 		}
 	}
 
 	setByInfos(list:FileInfo[]):void
 	{
-		var nfiles = {};
+		var nfiles:{[key:string]:(VFSState|undefined)} = {};
 		nfiles["."] = nfiles[""] = this;
 		nfiles[".."] = this.parent;
 
@@ -169,12 +186,12 @@ export class VFSDirectory extends VFSFileCommon
 				{ 
 					switch (ftpfile.type)
 					{
-					case 'd': file = new VFSDirectory(this.fs, this, ftpfile.name); break;
+					case 'd': file = new VFSDirectory(this, ftpfile.name); break;
 					case '-': 
-						file = new VFSFile(this.fs, this, ftpfile.name);
+						file = new VFSFile(this, ftpfile.name);
 						break;
 					case 'l':
-						file = new VFSSymLink(this.fs, this, ftpfile.name);
+						file = new VFSSymLink(this, ftpfile.name);
 						break;
 					default: break _nofile;
 					}
@@ -197,14 +214,91 @@ export class VFSDirectory extends VFSFileCommon
 		}
 		this.files = nfiles;
 	}
+	
+
+	putBySerialized(path:string, data:SerializedState):void
+	{
+		var fn = splitFileName(path);
+		var dir = <VFSDirectory>this.get(fn.dir, true);
+		dir.deserializeTo(fn.name, data);
+	}
+	
+	putByStat(path:string, st:FSStats):void
+	{
+		var file:VFSFileCommon;
+		var fn = splitFileName(path);
+		var dir = <VFSDirectory>this.get(fn.dir, true);
+
+		if (st.isSymbolicLink()) file = new VFSSymLink(dir, fn.name);
+		else if(st.isDirectory()) file = new VFSDirectory(dir, fn.name);
+		else if(st.isFile()) file = new VFSFile(dir, fn.name);
+		else throw Error('invalid file');
+		file.setByStat(st);
+		dir.files[fn.name] = file;
+	}
+
+	get(path:string, make?:boolean):VFSDirectory|undefined
+	{
+		const dirs = path.split("/");
+		var dir:VFSDirectory = this;
+		for (const cd of dirs)
+		{
+			const ndir = dir.files[cd];
+			if(ndir)
+			{
+				if (ndir instanceof VFSDirectory)
+				{
+					dir = ndir;
+					continue;
+				}
+			}
+			if (!make) return undefined;
+			dir = dir.files[cd] = new VFSDirectory(dir, cd);
+		}
+		return dir;
+	}
+	
+	create(path:string):VFSFile
+	{
+		const fn = splitFileName(path);
+		const dir = <VFSDirectory>this.get(fn.dir, true);
+		const file = dir.files[fn.name] = new VFSFile(dir, fn.name);
+		return file;
+	}
+
+	delete(path:string):void
+	{
+		const fn = splitFileName(path);
+		const dir = this.get(fn.dir);
+		if (dir) delete dir.files[fn.name];
+	}
+
+	mkdir(path:string):VFSDirectory
+	{
+		return <VFSDirectory>this.get(path, true);
+	}
+
+	refresh(path:string, list:FileInfo[]):VFSDirectory
+	{
+		const dir = <VFSDirectory>this.get(path, true);
+		dir.setByInfos(list);
+		return dir;
+	}
 }
 
+export class VFSServer extends VFSDirectory
+{
+	constructor(public readonly fs:VirtualFileSystem, parent:VFSDirectory|undefined, name:string)
+	{
+		super(parent, name);
+	}
+}
 
 export class VFSSymLink extends VFSFileCommon
 {
-	constructor(fs:FileSystem, parent:VFSDirectory, name:string)
+	constructor(parent:VFSDirectory, name:string)
 	{
-		super(fs, parent, name);
+		super(parent, name);
 		this.type = 'l';
 	}
 
@@ -228,9 +322,9 @@ export class VFSSymLink extends VFSFileCommon
 
 export class VFSFile extends VFSFileCommon
 {
-	constructor(fs:FileSystem, parent:VFSDirectory, name:string)
+	constructor(parent:VFSDirectory, name:string)
 	{
-		super(fs, parent, name);
+		super(parent, name);
 		this.type = "-";
 	}
 
@@ -251,84 +345,63 @@ export class VFSFile extends VFSFileCommon
 	}
 }
 
-export class FileSystem
+export class VirtualFileSystem extends VFSDirectory
 {
-	public readonly root:VFSDirectory = new VFSDirectory(this, undefined, "");
-	public uri:string = '';
-
 	constructor()
 	{
+		super(undefined, '');
 	}
 
-	serialize():any
+	save(file:File, extra:SerializedStateRoot):void
 	{
-		return this.root.serialize();
+		const obj:SerializedStateRoot = Object.assign(this.serialize(), extra);
+		obj.$version = 1;
+		file.createSync(JSON.stringify(obj, null, 2));
 	}
 
-	deserialize(data:SerializedState):void
+	async load(file:File, defaultRootUrl:string):Promise<{[key:string]:any}>
 	{
-		this.root.deserialize(data);
-	}
-	
-	putByStat(path:string, st:FSStats):void
-	{
-		var file:VFSFileCommon;
-		var fn = splitFileName(path);
-		var dir = <VFSDirectory>this.get(fn.dir, true);
-
-		if (st.isSymbolicLink()) file = new VFSSymLink(this, dir, fn.name);
-		else if(st.isDirectory()) file = new VFSDirectory(this, dir, fn.name);
-		else if(st.isFile()) file = new VFSFile(this, dir, fn.name);
-		else throw Error('invalid file');
-		file.setByStat(st);
-		dir.files[fn.name] = file;
-	}
-
-	get(path:string, make?:boolean):VFSDirectory|undefined
-	{
-		const dirs = path.split("/");
-		var dir:VFSDirectory = this.root;
-		for (const cd of dirs)
+		const extra:{[key:string]:any} = {};
+		const datatext = await file.open();
+		const data = JSON.parse(datatext);
+		if (typeof data.$version !== 'object')
 		{
-			const ndir = dir.files[cd];
-			if(ndir)
+			const version = data.$version;
+			delete data.$version;
+			switch (version)
 			{
-				if (ndir instanceof VFSDirectory)
+			case 1:
+				for (const hostUrl in data)
 				{
-					dir = ndir;
-					continue;
+					if (hostUrl.startsWith('$'))
+					{
+						extra[hostUrl] = data[hostUrl];
+						continue;
+					}
+					const obj = data[hostUrl];
+					if (typeof obj !== 'object') continue;
+					this.putServer(hostUrl, obj);
 				}
+				return extra;
 			}
-			if (!make) return undefined;
-			dir = dir.files[cd] = new VFSDirectory(this, dir, cd);
 		}
-		return dir;
+		this.putServer(defaultRootUrl, data);
+		return extra;
 	}
 
-	refresh(path:string, list:FileInfo[]):VFSDirectory
+	getServer(hostUrl:string):VFSServer
 	{
-		const dir = <VFSDirectory>this.get(path, true);
-		dir.setByInfos(list);
-		return dir;
+		var server = <VFSServer | undefined>this.files[hostUrl];
+		if (!server)
+		{
+			this.files[hostUrl] = server = new VFSServer(this, this, hostUrl);
+		}
+		return server;
 	}
-
-	create(path:string):VFSFile
+	putServer(hostUrl:string, data:SerializedState):VFSServer
 	{
-		const fn = splitFileName(path);
-		const dir = <VFSDirectory>this.get(fn.dir, true);
-		const file = dir.files[fn.name] = new VFSFile(this, dir, fn.name);
-		return file;
-	}
-
-	delete(path:string):void
-	{
-		const fn = splitFileName(path);
-		const dir = this.get(fn.dir);
-		if (dir) delete dir.files[fn.name];
-	}
-
-	mkdir(path:string):VFSDirectory
-	{
-		return <VFSDirectory>this.get(path, true);
+		const server = this.getServer(hostUrl);
+		server.deserialize(data);
+		return server;
 	}
 }

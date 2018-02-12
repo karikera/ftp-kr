@@ -15,30 +15,36 @@ export class FileInfo
 
 export interface ServerConfig
 {
-	name?:string;
-	remotePath?:string;
-	protocol?:string;
-	fileNameEncoding?:string;
-	url?:string;
+	remotePath:string;
+	protocol:string;
 
-	host?:string;
-	username?:string;
-	password?:string;
-	keepPasswordInMemory?:boolean;
+	fileNameEncoding:string;
+	
+	host:string;
+	username:string;
+	
 	port?:number;
-	ignoreWrongFileEncoding?:boolean;
-	createSyncCache?:boolean;
+	ignoreWrongFileEncoding:boolean;
+	
+	name:string;
+
+	password?:string;
+	keepPasswordInMemory:boolean;
 	
 	passphrase?:string;
-	connectionTimeout?:number;
-	autoDownloadRefreshTime?:number;
-	blockDetectingDuration?:number;
-	refreshTime?:number;
+	connectionTimeout:number;
+	autoDownloadRefreshTime:number;
+	refreshTime:number;
+	blockDetectingDuration:number;
 	privateKey?:string;
-	showGreeting?:boolean;
+	showGreeting:boolean;
 	
 	ftpOverride?:FtpOptions;
 	sftpOverride?:SftpOptions;
-	
-	passwordInMemory?:string;
+
+	// generateds
+	index:number; // 0 is the main server, 1 or more are alt servers
+	url:string; // For visibility
+	hostUrl:string; // It uses like the id
+	passwordInMemory?:string; // temp password
 }

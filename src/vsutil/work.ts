@@ -41,10 +41,9 @@ class TaskImpl<T> implements Task
 	public previous:TaskImpl<any>|null = null;
 	public cancelled:boolean = false;
 
-	private resolve:()=>void;
 	private state:TaskState = TaskState.WAIT;
 	private cancelListeners:Array<()=>any> = [];
-	private timeout:NodeJS.Timer;
+	private timeout:NodeJS.Timer|undefined;
 	public promise:Promise<T>;
 	public readonly logger:Logger;
 	private run:()=>void;
@@ -55,6 +54,7 @@ class TaskImpl<T> implements Task
 		public readonly priority:number, 
 		public readonly task:(task:Task)=>Promise<T>)
 	{
+		this.run = <any>undefined;
 		this.logger = scheduler.logger;
 		this.promise = new Promise<T>((resolve, reject)=>{
 			this.run = ()=>{
@@ -63,8 +63,7 @@ class TaskImpl<T> implements Task
 				prom.then(v=>{	
 					this.logger.verbose(`[TASK:${this.name}] done`);
 					resolve(v);
-				});
-				prom.catch(err=>{
+				}, err=>{
 					if (err === 'CANCELLED')
 					{
 						this.logger.verbose(`[TASK:${this.name}] cancelled`);
@@ -137,8 +136,7 @@ class TaskImpl<T> implements Task
 				if (this.cancelled) return;
 				this.removeCancelListener(reject);
 				resolve(v);
-			});
-			waitWith.catch(err=>{
+			}, err=>{
 				if (this.cancelled) return;
 				this.removeCancelListener(reject);
 				reject(err);
@@ -316,8 +314,7 @@ export class Scheduler implements WorkspaceItem
 			this.nextTask = next;
 		}
 		const prom = task.play();
-		prom.then(()=>this.progress());
-		prom.catch(()=>this.progress());
+		prom.then(()=>this.progress(), ()=>this.progress());
 	}
 }
 

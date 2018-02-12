@@ -1,13 +1,12 @@
 
 import FtpClientO = require('ftp');
 import * as stream from 'stream';
+import { File } from 'krfile';
 
-import {File} from '../util/file';
 import * as util from '../util/util';
-
-import { FileInterface, NOT_CREATED, FILE_NOT_FOUND, DIRECTORY_NOT_FOUND } from "./fileinterface";
 import { FileInfo } from '../util/fileinfo';
 
+import { FileInterface, NOT_CREATED, FILE_NOT_FOUND, DIRECTORY_NOT_FOUND } from "./fileinterface";
 
 
 class FtpClient extends FtpClientO
@@ -17,7 +16,10 @@ class FtpClient extends FtpClientO
     // list(useCompression: boolean, callback: (error: Error, listing: Client.ListingElement[]) => void): void;
     // list(callback: (error: Error, listing: Client.ListingElement[]) => void): void;
 
-	public list(path:string|boolean|((error:Error|null, list?:FtpClientO.ListingElement[])=>void), zcomp?:boolean|((error:Error|null, list?:FtpClientO.ListingElement[])=>void), cb?:(error:Error|null, list?:FtpClientO.ListingElement[])=>void):void
+	public list(
+		path:string|boolean|((error:Error, listing:FtpClientO.ListingElement[])=>void), 
+		zcomp?:boolean|((error:Error, listing:FtpClientO.ListingElement[])=>void),
+		cb?:(error:Error, listing:FtpClientO.ListingElement[])=>void):void
 	{
 		var pathcmd:string;
 		if (typeof path === 'string')
@@ -64,21 +66,39 @@ class FtpClient extends FtpClientO
 
 		// store current path
 		this.pwd((err, origpath) => {
-			if (err) return callback(err);
+			if (err) return callback(err, []);
 			// change to destination path
 			this.cwd(path_, err => {
-				if (err) return callback(err);
+				if (err) return callback(err, []);
 				// get dir listing
 				super.list('-al', false, (err, list) => {
 					// change back to original path
-					if (err) return this.cwd(origpath, () => callback(err));
+					if (err) return this.cwd(origpath, () => callback(err, []));
 					this.cwd(origpath, err => {
-						if (err) return callback(err);
+						if (err) return callback(err, []);
 						callback(err, list);
 					});
 				});
 			});
 		});
+	}
+
+	public terminate()
+	{
+		const anythis = (<any>this);
+		if (anythis._pasvSock)
+		{
+			if (anythis._pasvSock.writable)
+			  	anythis._pasvSock.destroy();
+			anythis._pasvSock = undefined;
+		}
+		if (anythis._socket)
+		{
+			if (anythis._socket.writable)
+				anythis._socket.destroy();
+				anythis._socket = undefined;
+		}
+		anythis._reset();
 	}
 }
 
@@ -99,7 +119,7 @@ export class FtpConnection extends FileInterface
 			const client = this.client = new FtpClient;
 			if (this.config.showGreeting)
 			{
-				client.on('greeting', msg=>this.log(msg));
+				client.on('greeting', (msg:string)=>this.log(msg));
 			}
 
 			var options:FtpClientO.Options;
@@ -130,9 +150,9 @@ export class FtpConnection extends FileInterface
 				client.on("ready", ()=>{
 					if (!client) return reject(Error(NOT_CREATED));
 					
-					const socket:stream.Duplex = client['_socket'];
+					const socket:stream.Duplex = (<any>client)._socket;
 					const oldwrite = socket.write;
-					socket.write = str=>oldwrite.call(socket, str, 'binary');
+					socket.write = (str:string)=>oldwrite.call(socket, str, 'binary');
 					socket.setEncoding('binary');
 					client.binary(err=>{
 						if (err) console.error(err);
@@ -154,13 +174,35 @@ export class FtpConnection extends FileInterface
 		}
 	}
 
-	disconnect()
+	disconnect():void
 	{
 		if (this.client)
 		{
 			this.client.end();
 			this.client = null;
 		}
+	}
+
+	terminate():void
+	{
+		if (this.client)
+		{
+			this.client.terminate();
+			this.client = null;
+		}
+	}
+
+	pwd():Promise<string>
+	{
+		const client = this.client;
+		if (!client) return Promise.reject(Error(NOT_CREATED));
+
+		return new Promise((resolve, reject)=>{
+			client.pwd((err, path)=>{
+				if (err) reject(err);
+				else resolve(path);
+			});
+		});
 	}
 
 	static wrapToPromise<T>(callback:(cb:(err:Error, val?:T)=>void)=>void):Promise<T>
@@ -240,8 +282,7 @@ export class FtpConnection extends FileInterface
 			to.size = +from.size;
 			to.link = from.target;
 			return to;
-		}))
-		.catch(e=>{
+		}), e=>{
 			if (e.code === 550) return [];
 			throw e;
 		});

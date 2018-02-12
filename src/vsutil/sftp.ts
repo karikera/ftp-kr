@@ -1,7 +1,7 @@
 
 import { Client, ConnectConfig, SFTPWrapper } from 'ssh2';
+import { File } from 'krfile';
 
-import { File } from '../util/file';
 import { ServerConfig, FileInfo } from '../util/fileinfo';
 import { merge } from '../util/util';
 
@@ -84,6 +84,42 @@ export class SftpConnection extends FileInterface
 			this.client = null;
 			this.sftp = null;
 		}
+	}
+
+	terminate():void
+	{
+		if (this.client)
+		{
+			this.client.destroy();
+			this.client = null;
+			this.sftp = null;
+		}
+	}
+
+	exec(command:string):Promise<string>
+	{
+		const client = this.client;
+		if (!client) return Promise.reject(Error(NOT_CREATED));
+
+		return new Promise((resolve, reject)=>{
+			client.exec(command, (err, stream)=>{
+				if (err) return reject(err);
+				var data = '';
+				var errs = '';
+				stream.on('data', (stdout:string|undefined, stderr:string|undefined)=>{
+					if (stdout) data += stdout;
+					if (stderr) errs += stderr;
+				}).on('exit', (code, signal)=>{
+					if (errs) reject(Error(errs));
+					else resolve(data.trim());
+				});
+			});
+		});
+	}
+
+	pwd():Promise<string>
+	{
+		return this.exec('pwd');
 	}
 
 	private _readLink(ftppath:string):Promise<string>
@@ -173,8 +209,14 @@ export class SftpConnection extends FileInterface
 			const sftp = this.sftp;
 			if (!sftp) return reject(Error(NOT_CREATED));
 			sftp.mkdir(ftppath, (err) => {
-				if (err) reject(err);
-				else resolve();
+				if (err)
+				{
+					if (err.code !== 3 && err.code !== 4 && err.code !== 5)
+					{
+						return reject(err);
+					}
+				}
+				resolve();
 			});
 		});
 	}
@@ -184,22 +226,12 @@ export class SftpConnection extends FileInterface
 		var idx = 0;
 		for (;;)
 		{
-			try
-			{
-				const find = ftppath.indexOf('/', idx);
-				if (find === -1) break;
-				idx = find+1;
-				const parentpath = ftppath.substr(0, find);
-				if (!parentpath) continue;
-				await this._mkdirSingle(parentpath);
-			}
-			catch(err)
-			{
-				if (err.code !== 3 && err.code !== 4 && err.code !== 5)
-				{
-					throw err;
-				}
-			}
+			const find = ftppath.indexOf('/', idx);
+			if (find === -1) break;
+			idx = find+1;
+			const parentpath = ftppath.substr(0, find);
+			if (!parentpath) continue;
+			await this._mkdirSingle(parentpath);
 		}
 		await this._mkdirSingle(ftppath);
 	}

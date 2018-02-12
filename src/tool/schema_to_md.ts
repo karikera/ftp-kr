@@ -1,5 +1,5 @@
 
-import {File} from '../util/file';
+import { File } from 'krfile';
 
 
 function mergeType(obj:any, other:any):void
@@ -116,7 +116,7 @@ async function main():Promise<void>
 {
 	const arg = process.argv[2];
 	if (!arg) return;
-	const file = File.parse(arg);
+	const file = new File(arg);
 	const obj = await readSchema(file);
 	const writer = new MdWriter;
 	writer.object(obj);

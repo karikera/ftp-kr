@@ -3,8 +3,8 @@ import * as ssh2 from 'ssh2';
 import * as path from 'path';
 import * as stream from 'stream';
 import { window } from 'vscode';
+import { File } from 'krfile';
 
-import { File } from './util/file';
 import { ServerConfig, FileInfo } from './util/fileinfo';
 
 import { FileInterface } from './vsutil/fileinterface';
@@ -16,6 +16,7 @@ import { Workspace } from './vsutil/ws';
 import { Task } from './vsutil/work';
 
 import { Config } from './config';
+import { ftp_path } from './util/ftp_path';
 
 function createClient(workspace:Workspace, config:ServerConfig):FileInterface
 {
@@ -37,6 +38,7 @@ export class FtpManager
 	private destroyTimeout:NodeJS.Timer|null = null;
 	private cancelBlockedCommand:(()=>void)|null = null;
 	private connected:boolean = false;
+	public home:string = '';
 	
 	private readonly logger:Logger;
 
@@ -45,7 +47,7 @@ export class FtpManager
 		this.logger = workspace.query(Logger);
 	}
 
-	private cancelDestroyTimeout():void
+	private _cancelDestroyTimeout():void
 	{
 		if (!this.destroyTimeout)
 			return;
@@ -54,33 +56,23 @@ export class FtpManager
 		this.destroyTimeout = null;
 	}
 
-	private updateDestroyTimeout():void
+	private _updateDestroyTimeout():void
 	{
-		this.cancelDestroyTimeout();
-		this.destroyTimeout = setTimeout(()=>this.destroy(), this.config.connectionTimeout || 60000);
+		this._cancelDestroyTimeout();
+		this.destroyTimeout = setTimeout(()=>this.disconnect(), this.config.connectionTimeout);
 	}
 
-	public destroy():void
+	private _cancels():void
 	{
-		this.cancelDestroyTimeout();
+		this._cancelDestroyTimeout();
 		if (this.cancelBlockedCommand)
 		{
 			this.cancelBlockedCommand();
 			this.cancelBlockedCommand = null;
 		}
-		if (this.client)
-		{
-			if (this.connected)
-			{
-				this.client.log('Disconnected');
-				this.connected = false;
-			}
-			this.client.disconnect();
-			this.client = null;
-		}
 	}
 
-	private makeConnectionInfo():string
+	private _makeConnectionInfo():string
 	{
 		const config = this.config;
 		const usepk = config.protocol === 'sftp' && !!config.privateKey;
@@ -98,7 +90,7 @@ export class FtpManager
 		return JSON.stringify(datas);
 	}
 
-	private blockTestWith<T>(task:Promise<T>):Promise<T>
+	private _blockTestWith<T>(task:Promise<T>):Promise<T>
 	{
 		return new Promise<T>((resolve, reject)=>{
 			if (this.cancelBlockedCommand)
@@ -112,71 +104,96 @@ export class FtpManager
 					blockTimeout = null;
 					reject('BLOCKED');
 				}
-			}, this.config.blockDetectingDuration || 8000);
-			this.cancelBlockedCommand = ()=>{
+			}, this.config.blockDetectingDuration);
+			const stopTimeout = ()=>{
 				if (blockTimeout)
 				{
 					this.cancelBlockedCommand = null;
 					clearTimeout(blockTimeout);
 					blockTimeout = null;
-					reject('CANCELLED');
+					return true;
 				}
+				return false;
 			};
+			this.cancelBlockedCommand = ()=>{
+				if (stopTimeout()) reject('CANCELLED');
+			};
+			
 			task.then(t=>{
-				if (blockTimeout)
-				{
-					this.cancelBlockedCommand = null;
-					clearTimeout(blockTimeout);
-					blockTimeout = null;
-					resolve(t);
-				}
-			}).catch(err=>{
-				if (blockTimeout)
-				{
-					this.cancelBlockedCommand = null;
-					clearTimeout(blockTimeout);
-					blockTimeout = null;
-					reject(err);
-				}
+				if (stopTimeout()) resolve(t);
+			}, err=>{
+				if (stopTimeout()) reject(err);
 			});
 		});
 	}
 	
-	private blockTestWrap<T>(task:Task, callback:(client:FileInterface)=>Promise<T>)
+	private _blockTestWrap<T>(task:Task, callback:(client:FileInterface)=>Promise<T>)
 	{
 		return this.init(task).then(async(client)=>{
 			for (;;)
 			{
-				this.cancelDestroyTimeout();
+				this._cancelDestroyTimeout();
 				try
 				{
-					const t = await task.with(this.blockTestWith(callback(client)));
-					this.updateDestroyTimeout();
+					const t = await task.with(this._blockTestWith(callback(client)));
+					this._updateDestroyTimeout();
 					return t;
 				}
 				catch(err)
 				{
-					this.updateDestroyTimeout();
+					this._updateDestroyTimeout();
 					if (err !== 'BLOCKED') throw err;
-					this.destroy();
+					this.terminate();
 					client = await this.init(task);
 				}
 			}
 		});
 	}
 
+	public disconnect():void
+	{
+		this._cancels();
+
+		if (this.client)
+		{
+			if (this.connected)
+			{
+				this.client.log('Disconnected');
+				this.connected = false;
+			}
+			this.client.disconnect();
+			this.client = null;
+		}
+	}
+
+	public terminate():void
+	{
+		this._cancels();
+
+		if (this.client)
+		{
+			if (this.connected)
+			{
+				this.client.log('Disconnected');
+				this.connected = false;
+			}
+			this.client.terminate();
+			this.client = null;
+		}
+	}
+
 	public async init(task:Task):Promise<FileInterface>
 	{
 		const that = this;
-		const coninfo = this.makeConnectionInfo();
+		const coninfo = this._makeConnectionInfo();
 		if (this.client)
 		{
 			if (coninfo === this.connectionInfo)
 			{
-				this.updateDestroyTimeout();
+				this._updateDestroyTimeout();
 				return Promise.resolve(this.client);
 			}
-			this.destroy();
+			this.terminate();
 			this.config.passwordInMemory = undefined;
 		}
 		this.connectionInfo = coninfo;
@@ -192,7 +209,7 @@ export class FtpManager
 				try
 				{
 					that.logger.message(`Trying to connect to ${config.url} with user ${config.username}`);
-					await task.with(that.blockTestWith(client.connect(password)));
+					await task.with(that._blockTestWith(client.connect(password)));
 					client.log('Connected');
 					that.client = client;
 					return;
@@ -200,7 +217,7 @@ export class FtpManager
 				catch (err)
 				{
 					if (err !== 'BLOCKED') throw err;
-					client.disconnect();
+					client.terminate();
 				}
 			}
 		}
@@ -228,7 +245,7 @@ export class FtpManager
 						error = 'Authentication failed';
 						break;
 					default:
-						that.destroy();
+						that.terminate();
 						throw err;
 					}
 					break;
@@ -238,13 +255,13 @@ export class FtpManager
 			}
 		}
 	
-		_ok:if (!usepk && config.password === undefined)
+		if (!usepk && config.password === undefined)
 		{
 			var errorMessage:string|undefined;
 			if (this.config.passwordInMemory !== undefined)
 			{
 				errorMessage = await tryToConnectOrErrorMessage(this.config.passwordInMemory);
-				if (errorMessage === undefined) break _ok;
+				if (errorMessage !== undefined) throw Error(errorMessage);
 			}
 			else for (;;)
 			{
@@ -256,13 +273,13 @@ export class FtpManager
 				});
 				if (promptedPassword === undefined)
 				{
-					this.destroy();
+					this.terminate();
 					throw 'PASSWORD_CANCEL';
 				}
 				errorMessage = await tryToConnectOrErrorMessage(promptedPassword);
 				if (errorMessage === undefined)
 				{
-					if (config.keepPasswordInMemory !== false)
+					if (config.keepPasswordInMemory)
 					{
 						this.config.passwordInMemory = promptedPassword;
 					}
@@ -277,7 +294,7 @@ export class FtpManager
 				await tryToConnect(config.password);
 			}
 			catch (err) {
-				this.destroy();
+				this.terminate();
 				throw err;
 			}
 		}
@@ -293,47 +310,49 @@ export class FtpManager
 				}
 			});
 		};
-		this.updateDestroyTimeout();
+		this.home = await this.client.pwd();
+
+		this._updateDestroyTimeout();
 		return this.client;
 	}
 	
 	public rmdir(task:Task, ftppath:string):Promise<void>
 	{
-		return this.blockTestWrap(task, client=>client.rmdir(ftppath));
+		return this._blockTestWrap(task, client=>client.rmdir(ftppath));
 	}
 	
 	public remove(task:Task, ftppath:string):Promise<void>
 	{
-		return this.blockTestWrap(task, client=>client.delete(ftppath));
+		return this._blockTestWrap(task, client=>client.delete(ftppath));
 	}
 	
 	public mkdir(task:Task, ftppath:string):Promise<void>
 	{
-		return this.blockTestWrap(task, client=>client.mkdir(ftppath));
+		return this._blockTestWrap(task, client=>client.mkdir(ftppath));
 	}
 	
 	public upload(task:Task, ftppath:string, localpath:File):Promise<void>
 	{
-		return this.blockTestWrap(task, client=>client.upload(ftppath, localpath));
+		return this._blockTestWrap(task, client=>client.upload(ftppath, localpath));
 	}
 	
 	public download(task:Task, localpath:File, ftppath:string):Promise<void>
 	{
-		return this.blockTestWrap(task, client=>client.download(localpath, ftppath));
+		return this._blockTestWrap(task, client=>client.download(localpath, ftppath));
 	}
 	
 	public view(task:Task, ftppath:string):Promise<string>
 	{
-		return this.blockTestWrap(task, client=>client.view(ftppath));
+		return this._blockTestWrap(task, client=>client.view(ftppath));
 	}
 	
 	public list(task:Task, ftppath:string):Promise<FileInfo[]>
 	{
-		return this.blockTestWrap(task, client=>client.list(ftppath));
+		return this._blockTestWrap(task, client=>client.list(ftppath));
 	}
 
 	public readlink(task:Task, fileinfo:FileInfo, ftppath:string):Promise<string>
 	{
-		return this.blockTestWrap(task, client=>client.readlink(fileinfo, ftppath));
+		return this._blockTestWrap(task, client=>client.readlink(fileinfo, ftppath));
 	}
 }

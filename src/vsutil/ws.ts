@@ -1,8 +1,8 @@
 
-import { workspace, Uri, WorkspaceFolder, ParameterInformation, Disposable, ExtensionContext } from 'vscode';
-
-import { File } from '../util/file';
 import { Event } from '../util/event';
+import { workspace, Uri, WorkspaceFolder, ParameterInformation, Disposable, ExtensionContext } from 'vscode';
+import { File } from 'krfile';
+
 
 export interface WorkspaceItem
 {
@@ -17,8 +17,8 @@ interface WorkspaceItemConstructor<T extends WorkspaceItem>
 interface ItemMap
 {
 	values():Iterable<WorkspaceItem>;
-	get<T extends WorkspaceItem>(item:WorkspaceItemConstructor<T>):T|undefined;
-	set<T extends WorkspaceItem>(item:WorkspaceItemConstructor<T>, T):void;
+	get<T extends WorkspaceItem>(ctr:WorkspaceItemConstructor<T>):T|undefined;
+	set<T extends WorkspaceItem>(ctr:WorkspaceItemConstructor<T>, item:T):void;
 	clear():void;
 }
 
@@ -81,20 +81,27 @@ export class Workspace extends File
 
 	static async load(workspaceFolder:WorkspaceFolder):Promise<void>
 	{
-		const fsws = new Workspace(workspaceFolder, WorkspaceOpenState.OPENED);
-		const workspacePath = workspaceFolder.uri.fsPath;
-		if (Workspace.wsloading.has(workspacePath)) return;
-	
-		Workspace.wsloading.set(workspacePath, fsws);
-		const existed = await fsws.child('.vscode/ftp-kr.json').exists();
-		
-		if (!Workspace.wsloading.has(workspacePath)) return;
-		Workspace.wsloading.delete(workspacePath);
-
-		if (existed)
+		try
 		{
-			Workspace.wsmap.set(workspacePath, fsws);
-			Workspace.onNew.fire(fsws);
+			const fsws = new Workspace(workspaceFolder, WorkspaceOpenState.OPENED);
+			const workspacePath = workspaceFolder.uri.fsPath;
+			if (Workspace.wsloading.has(workspacePath)) return;
+		
+			Workspace.wsloading.set(workspacePath, fsws);
+			const existed = await fsws.child('.vscode/ftp-kr.json').exists();
+			
+			if (!Workspace.wsloading.has(workspacePath)) return;
+			Workspace.wsloading.delete(workspacePath);
+	
+			if (existed)
+			{
+				Workspace.wsmap.set(workspacePath, fsws);
+				await Workspace.onNew.fire(fsws);
+			}
+		}
+		catch(err)
+		{
+			console.error(err);
 		}
 	}
 

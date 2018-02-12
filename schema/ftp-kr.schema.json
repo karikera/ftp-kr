@@ -41,11 +41,6 @@
             "description": "Upload file by watcher (default: false)",
 			"default": false
         },
-        "autoUploadOnSave": {
-            "type": "boolean",
-            "description": "Upload file on save (default: false)",
-			"default": false
-        },
         "autoDelete": {
             "type": "boolean",
             "description": "Delete FTP file on delete in workspace (default: false)",

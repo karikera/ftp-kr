@@ -1,15 +1,18 @@
 
 import { commands, StatusBarItem, window, workspace, Uri, TextEditor, TextDocument, Position, Selection, Range, TextDocumentShowOptions, ExtensionContext } from 'vscode';
+import { File } from 'krfile';
 
-import { File } from '../util/file';
-import * as ws from './ws';
+import { Workspace, WorkspaceItem } from './ws';
 
-export class StateBar implements ws.WorkspaceItem
+
+var context:ExtensionContext|null = null;
+
+export class StateBar implements WorkspaceItem
 {
 	private statebar:StatusBarItem|undefined;
 	private disposed:boolean = false;
 	
-	constructor(workspace:ws.Workspace)
+	constructor(workspace:Workspace)
 	{
 	}
 
@@ -40,10 +43,10 @@ export class StateBar implements ws.WorkspaceItem
 
 export class QuickPickItem implements QuickPickItem
 {
-	public label: string;
+	public label: string = '';
 	public description: string = '';
 	public detail?: string;
-	public onselect:()=>any;
+	public onselect:()=>any = ()=>{};
 }
 
 export class QuickPick
@@ -86,9 +89,9 @@ export class QuickPick
 
 export const vsutil = {
 
-	createWorkspace():Promise<ws.Workspace|undefined>
+	createWorkspace():Promise<Workspace|undefined>
 	{
-		return new Promise<ws.Workspace|undefined>((resolve, reject)=>{
+		return new Promise<Workspace|undefined>((resolve, reject)=>{
 			const pick = new QuickPick;
 			if (!workspace.workspaceFolders)
 			{
@@ -97,26 +100,26 @@ export const vsutil = {
 			}
 			if (workspace.workspaceFolders.length === 1)
 			{
-				resolve(ws.Workspace.createInstance(workspace.workspaceFolders[0]));
+				resolve(Workspace.createInstance(workspace.workspaceFolders[0]));
 				return;
 			}
 			for(const workspaceFolder of workspace.workspaceFolders)
 			{
-				const fsws = ws.Workspace.getInstance(workspaceFolder);
+				const fsws = Workspace.getInstance(workspaceFolder);
 				var name = workspaceFolder.name;
 				if (fsws) name += ' [inited]';
-				pick.item(name, ()=>resolve(ws.Workspace.createInstance(workspaceFolder)));
+				pick.item(name, ()=>resolve(Workspace.createInstance(workspaceFolder)));
 			}
 			pick.oncancel = ()=>resolve(undefined);
 			pick.open("Select Workspace");
 		});
 	},
 
-	selectWorkspace():Promise<ws.Workspace|undefined>
+	selectWorkspace():Promise<Workspace|undefined>
 	{
-		return new Promise<ws.Workspace|undefined>((resolve, reject)=>{
+		return new Promise<Workspace|undefined>((resolve, reject)=>{
 			const pick = new QuickPick;
-			for(const workspaceFolder of ws.Workspace.all())
+			for(const workspaceFolder of Workspace.all())
 			{
 				pick.item(workspaceFolder.name, ()=>resolve(workspaceFolder));
 			}
@@ -135,27 +138,6 @@ export const vsutil = {
 		});
 	},
 
-	fileOrEditorFile(uri: any): Promise<File> {
-		try
-		{
-			if (uri instanceof Uri) {
-				const path = new File(uri.fsPath);
-				return Promise.resolve(path);
-			}
-			else {
-				const editor = window.activeTextEditor;
-				if (!editor) throw Error('No file selected');
-				const doc = editor.document;
-				const path = new File(doc.uri.fsPath);
-				return Promise.resolve().then(()=>doc.save()).then(()=>path);
-			}
-		}
-		catch(e)
-		{
-			return Promise.reject(e);
-		}
-	},
-
 	info(info:string, ...items:string[]):Thenable<string|undefined>
 	{
 		return window.showInformationMessage(info, ...items);
@@ -165,6 +147,13 @@ export const vsutil = {
 	{
 		window.showErrorMessage(path + ": " + message);
 		return vsutil.open(path, line, column);
+	},
+
+	async openUri(uri:Uri|string):Promise<void>
+	{
+		if (typeof uri === 'string') uri = Uri.parse(uri);
+		const doc = await workspace.openTextDocument(uri);
+		await window.showTextDocument(doc);
 	},
 
 	async open(path:File, line?:number, column?:number):Promise<TextEditor>

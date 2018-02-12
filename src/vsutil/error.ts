@@ -1,5 +1,4 @@
 
-import { File } from '../util/file';
 import { vsutil } from './vsutil';
 import { Logger } from './log';
 
@@ -8,14 +7,11 @@ declare global
 	interface Error
 	{
 		suppress?:boolean;
-		file?:File;
-		line?:number;
-		column?:number;
 		task?:string;
 	}
 }
 
-export function processError(logger:Logger, err)
+export function processError(logger:Logger, err:any):void
 {
 	if (err instanceof Error)
 	{

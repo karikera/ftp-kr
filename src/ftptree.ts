@@ -1,143 +1,140 @@
 
-import { TreeDataProvider, TextDocumentContentProvider, TreeItem, TreeItemCollapsibleState, Uri, CancellationToken, ProviderResult } from "vscode";
+import { TreeDataProvider, TextDocumentContentProvider, TreeItem, TreeItemCollapsibleState, Uri, CancellationToken, ProviderResult, EventEmitter, Event } from "vscode";
+import { File } from 'krfile';
 
-import { VFSState, VFSDirectory, FileSystem } from "./util/filesystem";
+import { VFSState, VFSDirectory, VirtualFileSystem, VFSServer, VFSSymLink } from "./util/filesystem";
 import { ServerConfig } from "./util/fileinfo";
-import { File } from "./util/file";
 
 import { Workspace } from "./vsutil/ws";
 import { Scheduler, PRIORITY_NORMAL } from "./vsutil/work";
 import { processError } from "./vsutil/error";
-import { Logger } from "./vsutil/log";
+import { Logger, defaultLogger } from "./vsutil/log";
+import { FtpCacher } from "./ftpcacher";
+import { vsutil } from "./vsutil/vsutil";
+import { FtpTreeItem, FtpTreeServer } from "./vsutil/ftptreeitem";
 
-import { FtpCacher } from "./ftpsync";
-
-class FtpServerFolder
+export class FtpTree implements TreeDataProvider<FtpTreeItem>, TextDocumentContentProvider
 {
-	private readonly logger:Logger;
-	private readonly scheduler:Scheduler;
-	private readonly config:ServerConfig;
-
-	constructor(private readonly workspace:Workspace, private readonly ftpcacher:FtpCacher)
-	{
-		this.logger = this.workspace.query(Logger);
-		this.scheduler = this.workspace.query(Scheduler);
-		this.config = this.ftpcacher.config;
-	}
-
-	get name():string
-	{
-		return this.config.name || '';
-	}
-
-	isDirectory():boolean
-	{
-		return true;
-	}
-
-	dispose():void
-	{
-	}
-}
-
-export class FtpTree implements TreeDataProvider<VFSState | FtpServerFolder>, TextDocumentContentProvider
-{
-	private readonly map:WeakMap<FileSystem, FtpServerFolder> = new WeakMap;
+	private _onDidChangeTreeData: EventEmitter<FtpTreeItem> = new EventEmitter<FtpTreeItem>();
+	private _onDidChange: EventEmitter<Uri> = new EventEmitter<Uri>();
+	readonly onDidChangeTreeData: Event<FtpTreeItem> = this._onDidChangeTreeData.event;
+	readonly onDidChange: Event<Uri> = this._onDidChange.event;
+	
+	private readonly map:Map<FtpCacher, FtpTreeServer> = new Map;
 
 	constructor()
 	{
 	}
 
-	public getTreeItem(element: VFSState | FtpServerFolder): TreeItem
+	public refreshContent():void
 	{
-		if (element instanceof FtpServerFolder)
+		this._onDidChange.fire();
+	}
+
+	public refresh(target?:VFSState):void
+	{
+		if (!target)
 		{
-			return {
-				label: element.name,
-				collapsibleState: TreeItemCollapsibleState.Collapsed,
-				command: {
-					command: 'ftpkr.downloadAll',
-					title: 'Download All'
-				}
-			};
+			FtpTreeItem.clear();
+			this._onDidChangeTreeData.fire();
+			this._onDidChange.fire();
+			for (const server of this.map.values())
+			{
+				server.children = undefined;
+				server.ftpFile = undefined;
+			}
+			return;
 		}
-		else
+		
+		this._onDidChange.fire(Uri.parse(target.getUrl()));
+		for (const item of FtpTreeItem.get(target))
 		{
-			if (element.type)
-			return {
-				label: element.name,
-				collapsibleState: TreeItemCollapsibleState.Collapsed,
-				command: {
-					command: 'ftpkr.download',
-					title: 'Download This'
-				}
-			};
-			return {
-				label: element.name,
-				collapsibleState: TreeItemCollapsibleState.None,
-				command: {
-					command: 'ftpkr.view',
-					title: 'View This'
-				}
-			};
+			FtpTreeItem.delete(item);
+			this._onDidChangeTreeData.fire(item);
+			if (item.server === item)
+			{
+				item.children = undefined;
+				item.ftpFile = undefined;
+			}
 		}
 	}
 
-	public async getChildren(element?: VFSState | FtpServerFolder): Promise<(VFSState | FtpServerFolder)[]>
+	public getServerFromUri(uri:Uri):FtpTreeServer
 	{
+		for (const server of this.map.values())
+		{
+			if (uri.scheme + '://' + uri.authority === server.config.hostUrl)
+			{
+				if (uri.path === server.ftp.remotePath || uri.path.startsWith(server.ftp.remotePath + '/'))
+				{
+					return server;
+				}
+			}
+		}
+		throw Error('Server not found: '+uri);
+	}
+
+	public addServer(server:FtpCacher):void
+	{
+		const folder = new FtpTreeServer(server.workspace, server);
+		this.map.set(server, folder);
+	}
+
+	public removeServer(server:FtpCacher):void
+	{
+		const folder = this.map.get(server);
+		if (folder)
+		{
+			this.map.delete(server);
+			folder.dispose();
+		}
+	}
+
+	public getTreeItem(element: FtpTreeItem): TreeItem
+	{
+		return element;
+	}
+
+	public async getChildren(element?: FtpTreeItem): Promise<FtpTreeItem[]>
+	{
+		var logger = defaultLogger;
 		try
 		{
-			if (element instanceof VFSState)
+			if (!element)
 			{
-				// var path:string = element ? element.getPath() : (this.config.remotePath || '.');
-				
-				// const dir = await this.scheduler.taskWithTimeout('ftpkr.list', PRIORITY_NORMAL, 1000, 
-				// 	task => this.ftpcacher.ftpList(task, path));
-		
-				// const files:VFSState[] = [];
-				// for (const filename in dir.files)
-				// {
-				// 	switch (filename)
-				// 	{
-				// 	case '': case '.': case '..': continue;
-				// 	}
-				// 	const file = dir.files[filename];
-				// 	if (!file) continue;
-				// 	files.push(file);
-				// }
-				// files.sort((a,b)=>{
-				// 	return -a.type.localeCompare(b.type) || a.name.localeCompare(b.name);
-				// });
-				// return files;
+				return [...this.map.values()];
 			}
 			else
 			{
+				logger = element.server.logger;
+				return await element.getChildren();
 			}
-			return [];
 		}
 		catch (err)
 		{
-			// processError(this.logger, err);
+			processError(logger, err);
 			return [];
 		}
 	}
 
 	public async provideTextDocumentContent(uri: Uri, token: CancellationToken): Promise<string | null>
 	{
-		// try
-		// {
-		// 	const file:File = File.parse(uri.fsPath);
-		// 	const ftppath = this.ftpcacher.ftppath(file);
-			
-		// 	return await this.scheduler.taskWithTimeout('ftpkr.view', PRIORITY_NORMAL, 3000, 
-		// 		task=>this.ftpcacher.ftpView(task, ftppath));
-		// }
-		// catch(err)
-		// {
-		// 	processError(this.logger, err);
-		// 	return '<Error>\n'+err ? (err.stack || err.message || err) : '';
-		// }
-		return null;
+		var logger = defaultLogger;
+		try
+		{
+			const server = this.getServerFromUri(uri);
+			logger = server.logger;
+
+			const ftppath = uri.path;
+			return await server.downloadAsText(ftppath);
+		}
+		catch(err)
+		{
+			processError(logger, err);
+			return '<Error>\n'+err ? (err.stack || err.message || err) : '';
+		}
 	}
 
 }
+
+export const ftpTree = new FtpTree;

@@ -1,11 +1,12 @@
 
 
 import minimatch = require('minimatch');
+import { File } from 'krfile';
+import 'krjson';
 
 import * as util from "./util/util";
 import * as event from "./util/event";
 
-import { File } from "./util/file";
 import { ConfigContainer } from './util/config';
 import { ServerConfig } from './util/fileinfo';
 import { ftp_path } from './util/ftp_path';
@@ -15,43 +16,22 @@ import { processError } from './vsutil/error';
 import { Logger, LogLevel } from './vsutil/log';
 import { WorkspaceItem, Workspace } from './vsutil/ws';
 import { Event } from './util/event';
+import { parseJson } from 'krjson';
+import { keys } from './util/keys';
 
 var initTimeForVSBug:number = 0;
 
+const DEFAULT_IGNORE_LIST = [
+	".git",
+	"/.vscode/chrome",
+	"/.vscode/.key",
+	"/.vscode/ftp-kr.task.json",
+	"/.vscode/ftp-kr.error.log",
+	"/.vscode/ftp-kr.sync.*.json",
+	"/.vscode/ftp-kr.diff.*"
+];
 
-const SERVER_CONFIG_BASE:ServerConfig = {
-	host: "",
-	username: "",
-	remotePath: "",
-	protocol: "ftp",
-	port: 0,
-	fileNameEncoding: "utf8", 
-	ignoreWrongFileEncoding: false,
-};
-
-const CONFIG_BASE:ConfigProperties = {
-	host: "",
-	username: "",
-	remotePath: "",
-	protocol: "ftp",
-	port: 0,
-	fileNameEncoding: "utf8", 
-	ignoreWrongFileEncoding: false,
-	autoUploadOnSave: true,
-	autoUpload: false,
-	autoDelete: false,
-	autoDownload: false,
-	ignore:[
-		".git",
-		"/.vscode/chrome",
-		"/.vscode/.key",
-		"/.vscode/ftp-kr.task.json",
-		"/.vscode/ftp-kr.error.log",
-		"/.vscode/ftp-kr.sync.*.json",
-		"/.vscode/ftp-kr.diff.*"
-	],
-};
-const CONFIG_INIT:ConfigProperties = {
+const CONFIG_INIT:ConfigProperties = <any>{
 	host: "",
 	username: "",
 	password: "",
@@ -59,21 +39,12 @@ const CONFIG_INIT:ConfigProperties = {
 	protocol: "ftp",
 	port: 0,
 	fileNameEncoding: "utf8", 
-	ignoreWrongFileEncoding: false,
 	autoUpload: true,
 	autoDelete: false,
 	autoDownload: false,
-	ignore:[
-		".git",
-		"/.vscode/chrome",
-		"/.vscode/.key",
-		"/.vscode/ftp-kr.task.json",
-		"/.vscode/ftp-kr.error.log",
-		"/.vscode/ftp-kr.sync.*.json",
-		"/.vscode/ftp-kr.diff.*"
-	],
+	ignore:DEFAULT_IGNORE_LIST,
 };
-const REGEXP_MAP = {
+const REGEXP_MAP:{[key:string]:string} = {
 	".": "\\.", 
 	"+": "\\+", 
 	"?": "\\?", 
@@ -85,7 +56,7 @@ const REGEXP_MAP = {
 	"**": ".*"
 };
 
-export enum VFSState
+export enum ConfigState
 {
 	NOTFOUND,
 	INVALID,
@@ -121,9 +92,9 @@ function patternToRegExp(pattern:string):RegExp
 	return new RegExp(regexp);
 }
 
-function findUndupplicatedSet<T>(dupPriority:string[], obj:T, objs:T[]):string[]
+function findUndupplicatedSet<T>(dupPriority:(keyof T)[], obj:T, objs:T[]):string[]
 {
-	const dupmap:{[key:string]:Set<ServerConfig>} = {};
+	const dupmap:{[key:string]:Set<T>} = {};
 	for (const prop of dupPriority)
 	{
 		const set = new Set;
@@ -172,37 +143,20 @@ function findUndupplicatedSet<T>(dupPriority:string[], obj:T, objs:T[]):string[]
 
 interface ConfigProperties extends ServerConfig
 {
-	ignore?:(string|RegExp)[];
-	altServer?:ServerConfig[];
+	ignore:string[];
+	autoUpload:boolean;
+	autoDelete:boolean;
+	autoDownload:boolean;
+	
+	altServer:ServerConfig[];
 	localBasePath?:string;
-	followLink?:boolean;
-	autoUploadOnSave?:boolean;
-	autoUpload?:boolean;
-	autoDelete?:boolean;
-	autoDownload?:boolean;
-	autoDownloadAlways?:number;
-	createSyncCache?:boolean;
-	logLevel?:LogLevel;
-	viewSizeLimit?:number;
-	downloadTimeExtraThreshold?:number;
-	ignoreRemoteModification?:boolean;
-}
-
-function makeUrl(config:ServerConfig):string
-{
-	var url = '';
-	url += config.protocol;
-	url += '://';
-	url += config.host;
-	if (config.port)
-	{
-		url += ':';
-		url += config.port;
-	}
-	url += '/';
-	url += config.remotePath;
-
-	return url;
+	followLink:boolean;
+	autoDownloadAlways:number;
+	createSyncCache:boolean;
+	logLevel:LogLevel;
+	viewSizeLimit:number;
+	downloadTimeExtraThreshold:number;
+	ignoreRemoteModification:boolean;
 }
 
 export function testInitTimeBiasForVSBug():boolean
@@ -219,11 +173,11 @@ export function testInitTimeBiasForVSBug():boolean
 	return false;
 }
 
-class ConfigClass extends ConfigContainer implements WorkspaceItem
+class ConfigClass extends ConfigContainer<ConfigProperties> implements WorkspaceItem
 {
 	public readonly path:File;
 
-	public state:VFSState = VFSState.NOTFOUND;
+	public state:ConfigState = ConfigState.NOTFOUND;
 	public lastError:Error|string|null = null;
 
 	public basePath:File;
@@ -232,60 +186,162 @@ class ConfigClass extends ConfigContainer implements WorkspaceItem
 	public readonly onInvalid = Event.make<void>();
 	public readonly onNotFound = Event.make<void>();
 	
+	private ignorePatterns:(RegExp[])|null = null;
 	private readonly logger:Logger;
 	private readonly scheduler:Scheduler;
+	private readonly config:Config = <Config><any>this;
 	
 	constructor(private workspace:Workspace)
 	{
-		super();
+		super(keys<ConfigProperties>());
 
 		this.path = workspace.child('./.vscode/ftp-kr.json');
 
-		this.appendConfig(CONFIG_BASE);
 		this.logger = workspace.query(Logger);
 		this.scheduler = workspace.query(Scheduler);
+		this._configTypeClearing();
+
+		this.basePath = <any>undefined;
 	}
 
 	dispose()
 	{
 	}
 
+	private _serverTypeClearing(config:ServerConfig, index:number):void
+	{
+		if (typeof config.remotePath !== 'string') config.remotePath = '.';
+		else if (!config.remotePath) config.remotePath = '.';
+		else if (config.remotePath.endsWith("/"))
+			config.remotePath = ftp_path.normalize(config.remotePath.substr(0, config.remotePath.length-1));
+
+		if (typeof config.protocol !== 'string') config.protocol = "ftp";
+		if (typeof config.fileNameEncoding !== 'string') config.fileNameEncoding = 'utf8';
+	
+		if (typeof config.host !== 'string') config.host = config.host+'';
+		if (typeof config.username !== 'string') config.username = config.username+'';
+		if ("port" in config) config.port = (config.port || 0)|0;
+		config.ignoreWrongFileEncoding = config.ignoreWrongFileEncoding === true;
+		config.name = config.name+'';
+
+		if ("password" in config) config.password = config.password+'';
+		config.keepPasswordInMemory = config.keepPasswordInMemory !== false;
+		
+		if ("passphrase" in config) config.passphrase = config.passphrase +'';
+		config.connectionTimeout = Number(config.connectionTimeout || 60000);
+		config.autoDownloadRefreshTime = config.refreshTime = Number(config.refreshTime || config.autoDownloadRefreshTime || 1000);
+		config.blockDetectingDuration = Number(config.blockDetectingDuration || 8000);
+		if ("privateKey" in config) config.privateKey = config.privateKey+'';
+		config.showGreeting = config.showGreeting === true;
+		if (typeof config.ftpOverride !== 'object') delete config.ftpOverride;
+		if (typeof config.sftpOverride !== 'object') delete config.sftpOverride;
+			
+		// generate field
+		config.index = index;
+		var url = config.protocol;
+		url += '://';
+		url += config.host;
+		if (config.port)
+		{
+			url += ':';
+			url += config.port;
+		}
+		url += '/';
+		url += config.remotePath;
+		config.url = url;
+		
+		var hostUrl = config.protocol;
+		hostUrl += '://';
+		hostUrl += config.host;
+		if (config.port)
+		{
+			hostUrl += ':';
+			hostUrl += config.port;
+		}
+		hostUrl += '@';
+		hostUrl += config.username;
+		config.hostUrl = hostUrl;
+
+		delete config.passwordInMemory;
+	}
+
+	private _configTypeClearing():void
+	{
+		// x !== false : default is true
+		// x === true : default is false
+
+		const config = this.config;
+		if (!(config.ignore instanceof Array)) config.ignore = DEFAULT_IGNORE_LIST;
+		config.autoUpload = config.autoUpload === true;
+		config.autoDelete = config.autoDelete === true;
+		config.autoDownload = config.autoDownload === true;
+		if (!(config.altServer instanceof Array)) config.altServer = [];
+		if ((typeof config.localBasePath === 'string') && config.localBasePath)
+		{
+			this.basePath = this.workspace.child(config.localBasePath);
+		}
+		else
+		{
+			this.basePath = this.workspace;
+			delete config.localBasePath;
+		}
+		config.followLink = config.followLink === true;
+		if ('autoDownloadAlways' in config) config.autoDownloadAlways = Number(config.autoDownloadAlways || 0);
+		config.createSyncCache = config.createSyncCache !== false;
+		switch (config.logLevel)
+		{
+		case 'VERBOSE':
+		case 'NORMAL':
+		case 'ERROR':
+			this.logger.setLogLevel(config.logLevel);
+			break;
+		default:
+			this.logger.setLogLevel('NORMAL');
+			config.logLevel = 'NORMAL';
+			break;
+		}
+		config.viewSizeLimit = Number(config.viewSizeLimit || 1024*1024*4)
+		config.downloadTimeExtraThreshold = Number(config.downloadTimeExtraThreshold || 1000);
+		config.ignoreRemoteModification = config.ignoreRemoteModification === true;
+		config.name = 'Main Server';
+
+		this._serverTypeClearing(config, 0);
+		for (var i=0;i<config.altServer.length;)
+		{
+			if (typeof config.altServer[i] !== 'object')
+			{
+				config.altServer.splice(i, 1);
+			}
+			else
+			{
+				const altcfg = config.altServer[i++];
+				this._serverTypeClearing(altcfg, i);
+			}
+		}
+	}
+
 	public checkIgnorePath(path:File):boolean
 	{
-		const config:Config = this;
+		if (!this.ignorePatterns)
+		{
+			this.ignorePatterns = this.config.ignore.map(patternToRegExp);
+		}
+
 
 		const pathFromWorkspace = '/'+path.relativeFrom(this.workspace);
-		const check = config.ignore;
-		if (check)
+		for (const pattern of this.ignorePatterns)
 		{
-			for (var i=0;i<check.length;i++)
+			if (pattern.test(pathFromWorkspace))
 			{
-				var pattern = check[i];
-				if (typeof pattern === "string")
-				{
-					pattern = patternToRegExp(pattern);
-				}
-				if (pattern.test(pathFromWorkspace))
-				{
-					return true;
-				}
+				return true;
 			}
 		}
 		return false;
 	}
 
-	* getAltServers():Iterable<ServerConfig>
+	public init():void
 	{
-		const options:Config&ConfigProperties = this;
-		if (options.altServer)
-		{
-			yield * options.altServer;
-		}
-	}
-
-	public init():Promise<boolean>
-	{
-		return this.loadWrap('ftp-kr.init', async(task)=>{
+		this.loadWrap('ftp-kr.init', async(task)=>{
 			initTimeForVSBug = Date.now();
 
 			var obj;
@@ -294,13 +350,14 @@ class ConfigClass extends ConfigContainer implements WorkspaceItem
 			try
 			{
 				data = await this.path.open();
-				obj = util.parseJson(data);
-				for (var p in CONFIG_INIT)
+				obj = parseJson(data);
+				for (const p in CONFIG_INIT)
 				{
 					if (p in obj) continue;
-					obj[p] = CONFIG_INIT[p];
 					changed = true;
+					break;
 				}
+				Object.assign(obj, CONFIG_INIT);
 			}
 			catch (err)
 			{
@@ -322,7 +379,7 @@ class ConfigClass extends ConfigContainer implements WorkspaceItem
 		var obj:ConfigProperties;
 		try
 		{
-			obj = util.parseJson(data);
+			obj = parseJson(data);
 		}
 		catch(err)
 		{
@@ -352,9 +409,6 @@ class ConfigClass extends ConfigContainer implements WorkspaceItem
 			throwJsonError(data, /\"username\"[ \t\r\n]*\:/, 'username field must be string');
 		}
 		
-		if (!obj.remotePath) obj.remotePath = '.';
-		else if (obj.remotePath.endsWith("/"))
-			obj.remotePath = ftp_path.normalize(obj.remotePath.substr(0, obj.remotePath.length-1));
 		switch (obj.protocol)
 		{
 		case 'ftps':
@@ -363,24 +417,19 @@ class ConfigClass extends ConfigContainer implements WorkspaceItem
 		default:
 			throwJsonError(data, /\"username\"[ \t\r\n]*\:/, `Unsupported protocol "${obj.protocol}"`);
 		}
-		
-		this.logger.setLogLevel(obj.logLevel || 'NORMAL');
 		this.clearConfig();
-		this.appendConfig(CONFIG_BASE);
 		this.appendConfig(obj);
-		const config:Config = this;
+		const config = this.config;
 
-		if (config.localBasePath) this.basePath = this.workspace.child(config.localBasePath);
-		else this.basePath = this.workspace;
-
-		if (!config.altServer)
+		if (!config.altServer || config.altServer.length === 0)
 		{
-			config.url = makeUrl(config);
+			this._configTypeClearing();
 			return;
 		}
 
-		const dupPriority = ['name', 'host', 'protocol', 'port', 'remotePath', 'username'];
+		const dupPriority:(keyof ServerConfig)[] = ['name', 'host', 'protocol', 'port', 'remotePath', 'username'];
 		const servers = config.altServer;
+		
 		function removeFullDupped():void
 		{
 			const fulldupped = new Set<string>();
@@ -411,11 +460,11 @@ class ConfigClass extends ConfigContainer implements WorkspaceItem
 		for (const server of servers)
 		{
 			// copy main config
-			for(const p of this.settedProperties)
+			for(const p of this.properties)
 			{
 				if (!(p in server))
 				{
-					server[p] = util.clone(this[p]);
+					(<any>server)[p] = util.clone(config[p]);
 				}
 			}
 
@@ -456,24 +505,22 @@ class ConfigClass extends ConfigContainer implements WorkspaceItem
 			{
 				if (!server.name) server.name = server.host || '';
 			}
-
-			server.url = makeUrl(server);
 		}
 
-		config.url = makeUrl(config);
+		this._configTypeClearing();
 	}
 
-	public setState(newState:VFSState, newLastError:Error|string|null):void
+	public setState(newState:ConfigState, newLastError:Error|string|null):void
 	{
 		if (this.state === newState) return;
 		this.state = newState;
 		this.lastError = newLastError;
-		this.logger.verbose(`${this.workspace.name}.state = ${VFSState[newState]}`);
+		this.logger.verbose(`${this.workspace.name}.state = ${ConfigState[newState]}`);
 	}
 
-	public load():Promise<boolean>
+	public load():void
 	{
-		return this.loadWrap('config loading', async(task)=>{
+		this.loadWrap('config loading', async(task)=>{
 			try
 			{
 				var data = await this.path.open();
@@ -488,19 +535,19 @@ class ConfigClass extends ConfigContainer implements WorkspaceItem
 
 	private fireNotFound():Promise<void>
 	{
-		if (this.state === VFSState.NOTFOUND)
+		if (this.state === ConfigState.NOTFOUND)
 			return Promise.resolve();
 
-		this.setState(VFSState.NOTFOUND, 'NOTFOUND');
+		this.setState(ConfigState.NOTFOUND, 'NOTFOUND');
 		return this.onNotFound.rfire();
 	}
 
 	private fireInvalid(err:Error|string):Promise<void>
 	{
-		if (this.state === VFSState.INVALID)
+		if (this.state === ConfigState.INVALID)
 			return Promise.resolve();
 
-		this.setState(VFSState.INVALID, err);
+		this.setState(ConfigState.INVALID, err);
 		return this.onInvalid.fire();
 	}
 
@@ -508,15 +555,15 @@ class ConfigClass extends ConfigContainer implements WorkspaceItem
 	{
 		return this.onLoad.fire(task).then(()=>{
 			this.logger.message("ftp-kr.json: loaded");
-			if (this.state !== VFSState.LOADED)
+			if (this.state !== ConfigState.LOADED)
 			{
 				vsutil.info('');
 			}
-			this.setState(VFSState.LOADED, null);
+			this.setState(ConfigState.LOADED, null);
 		});
 	}
 
-	private async onLoadError(err):Promise<void>
+	private async onLoadError(err:any):Promise<void>
 	{
 		switch (err)
 		{
@@ -528,14 +575,7 @@ class ConfigClass extends ConfigContainer implements WorkspaceItem
 			vsutil.info('ftp-kr Login Request', 'Login').then(confirm=>{
 				if (confirm === 'Login')
 				{
-					try
-					{
-						this.loadWrap('login', task=>Promise.resolve());
-					}
-					catch (err)
-					{
-						processError(this.logger, err);
-					}
+					this.loadWrap('login', task=>Promise.resolve());
 				}
 			});
 			await this.fireInvalid(err);
@@ -549,9 +589,9 @@ class ConfigClass extends ConfigContainer implements WorkspaceItem
 
 	public loadTest():Promise<void>
 	{
-		if (this.state !== VFSState.LOADED)
+		if (this.state !== ConfigState.LOADED)
 		{
-			if (this.state === VFSState.NOTFOUND)
+			if (this.state === ConfigState.NOTFOUND)
 			{
 				return Promise.reject('Config is not loaded. Retry it after load');
 			}
@@ -592,28 +632,26 @@ class ConfigClass extends ConfigContainer implements WorkspaceItem
 		}
 	}
 
-	private loadWrap(name:string, onwork:(task:Task)=>Promise<void>):Promise<boolean>
+	private loadWrap(name:string, onwork:(task:Task)=>Promise<void>):void
 	{
 		this.scheduler.cancel();
-		var res:boolean = false;
-		return this.scheduler.task(name,
+		this.scheduler.task(name,
 			PRIORITY_NORMAL,
 			async(task)=>{
 				try
 				{
 					await onwork(task);
 					await this.fireLoad(task);
-					res = true;
 				}
 				catch (err)
 				{
 					await this.onLoadError(err);
 				}
 			}
-		).then(()=>res);
+		)
+		.catch(err=>processError(this.logger, err));
 	}
-
 }
 
-export const Config:{new(workspace:Workspace):ConfigClass&ConfigProperties} = ConfigClass;
+export const Config:{new(workspace:Workspace):ConfigClass&ConfigProperties} = <any>ConfigClass;
 export type Config = ConfigClass & ConfigProperties;

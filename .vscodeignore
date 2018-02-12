@@ -9,3 +9,4 @@ node_modules/.bin/**
 /out/**/*.js.map
 /out/tool/
 /images/*.psd
+/compile.js

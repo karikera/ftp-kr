@@ -26,7 +26,7 @@ export interface ServerConfig
 	port?:number;
 	ignoreWrongFileEncoding:boolean;
 	
-	name:string;
+	name?:string;
 
 	password?:string;
 	keepPasswordInMemory:boolean;

@@ -135,7 +135,9 @@ export class FtpSyncManager implements WorkspaceItem
 		for (const server of this.servers.values())
 		{
 			const config = server.config;
-			var name = config.name || config.host;
+			var name:string;
+			if (server.config === this.config) name = 'Main Server';
+			else name = config.name || config.host;
 			if (server === this.targetServer) name += ' *';
 			pick.item(name, ()=>{ selected = this.servers.get(config); });
 		}

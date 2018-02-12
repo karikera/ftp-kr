@@ -222,7 +222,7 @@ class ConfigClass extends ConfigContainer<ConfigProperties> implements Workspace
 		if (typeof config.username !== 'string') config.username = config.username+'';
 		if ("port" in config) config.port = (config.port || 0)|0;
 		config.ignoreWrongFileEncoding = config.ignoreWrongFileEncoding === true;
-		config.name = config.name+'';
+		if ('name' in config) config.name = config.name+'';
 
 		if ("password" in config) config.password = config.password+'';
 		config.keepPasswordInMemory = config.keepPasswordInMemory !== false;
@@ -303,7 +303,7 @@ class ConfigClass extends ConfigContainer<ConfigProperties> implements Workspace
 		config.viewSizeLimit = Number(config.viewSizeLimit || 1024*1024*4)
 		config.downloadTimeExtraThreshold = Number(config.downloadTimeExtraThreshold || 1000);
 		config.ignoreRemoteModification = config.ignoreRemoteModification === true;
-		config.name = 'Main Server';
+		delete config.name;
 
 		this._serverTypeClearing(config, 0);
 		for (var i=0;i<config.altServer.length;)

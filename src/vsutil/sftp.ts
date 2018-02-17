@@ -2,8 +2,9 @@
 import { Client, ConnectConfig, SFTPWrapper } from 'ssh2';
 import { File } from 'krfile';
 
-import { ServerConfig, FileInfo } from '../util/fileinfo';
+import { FileInfo } from '../util/fileinfo';
 import { merge } from '../util/util';
+import { ServerConfig } from '../util/serverinfo';
 
 import { FileInterface, NOT_CREATED, DIRECTORY_NOT_FOUND, FILE_NOT_FOUND } from './fileinterface';
 import { Workspace } from './ws';
@@ -30,6 +31,10 @@ export class SftpConnection extends FileInterface
 		{
 			if (this.client) throw Error('Already created');
 			const client = this.client = new Client;
+			if (this.config.showGreeting)
+			{
+				client.on('banner', (msg:string)=>this.log(msg));
+			}
 
 			var options:ConnectConfig = {};
 			const config = this.config;

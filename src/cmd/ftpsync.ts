@@ -14,6 +14,7 @@ import { ftpTree } from '../ftptree';
 import { FtpSyncManager } from '../ftpsync';
 import { Config } from '../config';
 import { FtpCacher } from '../ftpcacher';
+import { openSshTerminal } from '../sshmgr';
 
 function taskTimer<T>(taskname: string, taskpromise: Promise<T>): Promise<T> {
 	const startTime = Date.now();
@@ -172,8 +173,11 @@ export const commands:Command = {
 
 		await config.loadTest();
 		await vscode.workspace.saveAll();
-		const server = await scheduler.taskWithTimeout('ftpkr.uploadAll', PRIORITY_NORMAL, 1000, 
-			task => ftp.uploadAll(task, config.basePath));
+
+		const server = await ftp.selectServer();
+		if (server === undefined) return;
+		await scheduler.taskWithTimeout('ftpkr.uploadAll', PRIORITY_NORMAL, 1000, 
+			task => server.uploadAll(task, config.basePath));
 		ftpTree.refreshContent();
 		if (server) ftpTree.refresh(server.fs);
 	},
@@ -192,8 +196,11 @@ export const commands:Command = {
 
 		await config.loadTest();
 		await vscode.workspace.saveAll();
+
+		const server = await ftp.selectServer();
+		if (server === undefined) return;
 		await scheduler.taskWithTimeout('ftpkr.downloadAll', PRIORITY_NORMAL, 1000, 
-			task => ftp.downloadAll(task, config.basePath));
+			task => server.downloadAll(task, config.basePath));
 	},
 	async 'ftpkr.cleanAll' (args: CommandArgs)
 	{
@@ -210,8 +217,10 @@ export const commands:Command = {
 
 		await config.loadTest();
 		await vscode.workspace.saveAll();
-		const server = await scheduler.taskWithTimeout('ftpkr.cleanAll', PRIORITY_NORMAL, 1000, 
-			task => ftp.cleanAll(task));
+		const server = await ftp.selectServer();
+		if (server === undefined) return;
+		await scheduler.taskWithTimeout('ftpkr.cleanAll', PRIORITY_NORMAL, 1000, 
+			task => server.cleanAll(task));
 		if (server) ftpTree.refresh(server.fs);
 	},
 	async 'ftpkr.refresh' (args: CommandArgs)
@@ -259,9 +268,11 @@ export const commands:Command = {
 		const config = workspace.query(Config);
 		const scheduler = workspace.query(Scheduler);
 		const ftp = workspace.query(FtpSyncManager);
-
+		const selected = await ftp.selectServer();
+		if (selected === undefined) return;
+		
 		await config.loadTest();
-		await scheduler.taskWithTimeout('ftpkr.list', PRIORITY_NORMAL, 1000, task => ftp.list(task, config.basePath));
+		await scheduler.taskWithTimeout('ftpkr.list', PRIORITY_NORMAL, 1000, task => selected.list(task, config.basePath));
 	},
 
 	async 'ftpkr.view' (args: CommandArgs)
@@ -329,6 +340,23 @@ export const commands:Command = {
 		}
 
 		const ftp = args.workspace.query(FtpSyncManager);
-		await ftp.selectTarget();
+		const server = await ftp.selectServer();
+		if (!server) return;
+		ftp.targetServer = server;
+	},
+	
+	async 'ftpkr.ssh'(args: CommandArgs)
+	{
+		if (!args.workspace)
+		{
+			args.workspace = await vsutil.selectWorkspace();
+			if (!args.workspace) return;
+		}
+
+		const ftp = args.workspace.query(FtpSyncManager);
+		const server = await ftp.selectServer();
+		if (!server) return;
+
+		openSshTerminal(server);
 	}
 };

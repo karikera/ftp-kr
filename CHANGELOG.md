@@ -1,3 +1,7 @@
+# 1.3.3
+* SSH Terminal Support!
+* Suppress error when file not found in tree view
+
 # 1.3.2
 * `task.json` extra command (`upload from 'path'` & `download to 'path'`)
 

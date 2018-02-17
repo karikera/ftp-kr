@@ -2,7 +2,7 @@
 import { TreeItemCollapsibleState, TreeItem, Uri } from "vscode";
 
 import { VFSSymLink, VFSState } from "../util/filesystem";
-import { ServerConfig } from "../util/fileinfo";
+import { ServerConfig } from "../util/serverinfo";
 
 import { PRIORITY_NORMAL, Scheduler } from "./work";
 import { Workspace } from "./ws";
@@ -119,16 +119,9 @@ export class FtpTreeServer extends FtpTreeItem
 	public readonly config:ServerConfig;
 	private readonly scheduler:Scheduler;
 
-	private static _getLabel(workspace:Workspace, config:ServerConfig):string
-	{
-		var label = workspace.name;
-		if (config.name) label += '/' + config.name;
-		return label;
-	}
-
 	constructor(public readonly workspace:Workspace, public readonly ftp:FtpCacher)
 	{
-		super(FtpTreeServer._getLabel(workspace, ftp.config), undefined);
+		super(ftp.getName(), undefined);
 
 		this.logger = this.workspace.query(Logger);
 		this.scheduler = this.workspace.query(Scheduler);

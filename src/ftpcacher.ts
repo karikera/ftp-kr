@@ -2,7 +2,7 @@
 import { window, workspace } from 'vscode';
 import { File, Stats } from 'krfile';
 
-import { ServerConfig } from './util/fileinfo';
+import { ServerConfig } from './util/serverinfo';
 import { ftp_path } from './util/ftp_path';
 import { VFSState, VirtualFileSystem, VFSFile, VFSDirectory, VFSFileCommon, VFSServer } from './util/filesystem';
 import { Deferred, isEmptyObject } from './util/util';
@@ -86,7 +86,7 @@ export class FtpCacher
 	private readonly ftpmgr:FtpManager;
 
 	private readonly refreshed:Map<string, RefreshedData> = new Map;
-	private readonly logger:Logger;
+	public readonly logger:Logger;
 
 	public readonly fs:VFSServer;
 	public home:VFSDirectory;
@@ -103,6 +103,13 @@ export class FtpCacher
 		
 		this.home = <any>undefined;
 		this.remotePath = <any>undefined;
+	}
+
+	public getName():string
+	{
+		var name = this.workspace.name;
+		if (this.config.name) name += '/' + this.config.name;
+		return name;
 	}
 	
 	public async init(task:Task):Promise<void>
@@ -389,7 +396,7 @@ export class FtpCacher
 			file = await this.ftpStat(task, ftppath);
 			if (!file)
 			{
-				throw Error(`Not found in remote: ${ftppath}`);
+				return '< File not found >\n'+ftppath;
 			}
 		}
 		if (file.size > this.mainConfig.viewSizeLimit) return '< File is too large >\nYou can change file size limit with "viewSizeLimit" option in ftp-kr.json';

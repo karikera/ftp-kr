@@ -3,7 +3,7 @@
   "displayName": "ftp-kr",
   "description": "FTP/SFTP Sync Extension",
   "license": "MIT",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "icon": "images/icon.png",
   "publisher": "ruakr",
   "repository": {
@@ -98,6 +98,11 @@
         "command": "ftpkr.target",
         "title": "Target",
         "category": "ftp-kr"
+      },
+      {
+        "command": "ftpkr.ssh",
+        "title": "SSH",
+        "category": "ftp-kr"
       }
     ],
     "jsonValidation": [
@@ -114,19 +119,19 @@
       "explorer/context": [
         {
           "command": "ftpkr.upload",
-		  "group": "ftp-kr.action"
+          "group": "ftp-kr.action"
         },
         {
           "command": "ftpkr.download",
-		  "group": "ftp-kr.action"
+          "group": "ftp-kr.action"
         },
         {
           "command": "ftpkr.delete",
-		  "group": "ftp-kr.action"
+          "group": "ftp-kr.action"
         },
         {
           "command": "ftpkr.diff",
-		  "group": "ftp-kr.navigation"
+          "group": "ftp-kr.navigation"
         }
       ],
       "view/title": [
@@ -135,66 +140,66 @@
           "when": "view == ftpkr.explorer",
           "group": "navigation"
         }
-	  ],
-	  "editor/context": [
+      ],
+      "editor/context": [
         {
           "command": "ftpkr.upload",
-		  "group": "ftp-kr.action"
+          "group": "ftp-kr.action"
         },
         {
           "command": "ftpkr.download",
-		  "group": "ftp-kr.action"
+          "group": "ftp-kr.action"
         },
         {
           "command": "ftpkr.delete",
-		  "group": "ftp-kr.action"
+          "group": "ftp-kr.action"
         },
         {
           "command": "ftpkr.diff",
-		  "group": "ftp-kr.navigation"
+          "group": "ftp-kr.navigation"
         },
-		  {
-			  "command": "ftpkr.refresh",
-			  "when": "resourceScheme == sftp",
-			  "group": "ftp-kr.navigation"
-		  },
-			{
-				"command": "ftpkr.refresh",
-				"when": "resourceScheme == ftp",
-				"group": "ftp-kr.navigation"
-			},
-			  {
-				  "command": "ftpkr.refresh",
-				  "when": "resourceScheme == ftps",
-				  "group": "ftp-kr.navigation"
-			  }
-	  ],
+        {
+          "command": "ftpkr.refresh",
+          "when": "resourceScheme == sftp",
+          "group": "ftp-kr.navigation"
+        },
+        {
+          "command": "ftpkr.refresh",
+          "when": "resourceScheme == ftp",
+          "group": "ftp-kr.navigation"
+        },
+        {
+          "command": "ftpkr.refresh",
+          "when": "resourceScheme == ftps",
+          "group": "ftp-kr.navigation"
+        }
+      ],
       "view/item/context": [
         {
           "command": "ftpkr.upload",
-		  "when": "view == ftpkr.explorer",
-		  "group": "ftp-kr.action"
+          "when": "view == ftpkr.explorer",
+          "group": "ftp-kr.action"
         },
         {
           "command": "ftpkr.download",
           "when": "view == ftpkr.explorer",
-		  "group": "ftp-kr.action"
+          "group": "ftp-kr.action"
         },
         {
           "command": "ftpkr.delete",
           "when": "view == ftpkr.explorer",
-		  "group": "ftp-kr.action"
+          "group": "ftp-kr.action"
         },
         {
           "command": "ftpkr.diff",
           "when": "view == ftpkr.explorer",
-		  "group": "ftp-kr.navigation"
+          "group": "ftp-kr.navigation"
         },
-		{
-			"command": "ftpkr.refresh",
-			"when": "view == ftpkr.explorer",
-			"group": "ftp-kr.navigation"
-		}
+        {
+          "command": "ftpkr.refresh",
+          "when": "view == ftpkr.explorer",
+          "group": "ftp-kr.navigation"
+        }
       ]
     },
     "views": {
@@ -216,6 +221,8 @@
     "iconv-lite": "0.4.13",
     "krfile": "^1.0.3",
     "krjson": "^1.0.3",
+    "node-ipc": "^9.1.1",
+    "read": "^1.0.7",
     "ssh2": "^0.5.5",
     "strip-json-comments": "2.0.1"
   },
@@ -225,6 +232,8 @@
     "@types/iconv-lite": "0.0.1",
     "@types/mocha": "^2.2.48",
     "@types/node": "^6.0.100",
+    "@types/node-ipc": "^9.1.0",
+    "@types/read": "0.0.28",
     "@types/ssh2": "^0.5.35",
     "@types/strip-json-comments": "0.0.28",
     "mocha": "^2.3.3",

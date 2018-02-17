@@ -1,11 +1,9 @@
 
-import * as ssh2 from 'ssh2';
-import * as path from 'path';
-import * as stream from 'stream';
 import { window } from 'vscode';
 import { File } from 'krfile';
 
-import { ServerConfig, FileInfo } from './util/fileinfo';
+import { FileInfo } from './util/fileinfo';
+import { ServerConfig } from './util/serverinfo';
 
 import { FileInterface } from './vsutil/fileinterface';
 import { SftpConnection } from './vsutil/sftp';

@@ -23,7 +23,6 @@ export namespace Event
 		event.fire = async function(value:T):Promise<void>
 		{
 			if (firing) throw Error('Event is already firing');
-			console.log(name);
 			firing = true;
 			try
 			{

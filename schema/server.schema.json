@@ -229,7 +229,7 @@
 		},
 		"showGreeting": {
 			"type": "boolean",
-			"description": "Show FTP Greeting message. SFTP is not supported"
+			"description": "Show greeting message of Remote Server"
 		},
 		"ftpOverride": {
 			"$ref": "ftp.schema.json",

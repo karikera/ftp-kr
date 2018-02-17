@@ -2,8 +2,8 @@
 import { OutputChannel, window } from 'vscode';
 import { WorkspaceItem, Workspace } from './ws';
 import { vsutil } from './vsutil';
+import { LogLevel } from '../util/serverinfo';
 
-export type LogLevel = 'VERBOSE' | 'NORMAL' | 'ERROR';
 enum LogLevelEnum
 {
 	VERBOSE,

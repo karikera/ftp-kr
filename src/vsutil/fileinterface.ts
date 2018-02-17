@@ -2,11 +2,12 @@
 import * as iconv from 'iconv-lite';
 import { File } from 'krfile';
 
-import { ServerConfig, FileInfo } from '../util/fileinfo';
+import { FileInfo } from '../util/fileinfo';
 import { ftp_path } from '../util/ftp_path';
 import { Logger } from './log';
 import { StateBar } from './vsutil';
 import { Workspace } from './ws';
+import { ServerConfig } from '../util/serverinfo';
 
 export const NOT_CREATED = 'not created connection access';
 export const DIRECTORY_NOT_FOUND = 1;

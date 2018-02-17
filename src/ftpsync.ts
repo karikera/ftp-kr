@@ -1,5 +1,8 @@
 
+import { File } from "krfile";
+
 import { VirtualFileSystem } from "./util/filesystem";
+import { ServerConfig } from "./util/serverinfo";
 
 import { WorkspaceItem, Workspace } from "./vsutil/ws";
 import { Logger } from "./vsutil/log";
@@ -7,10 +10,8 @@ import { QuickPick } from "./vsutil/vsutil";
 import { Task } from "./vsutil/work";
 
 import { Config } from "./config";
-import { File } from "krfile";
 import { FtpCacher, BatchOptions, UploadReport } from "./ftpcacher";
 import { ftpTree } from "./ftptree";
-import { ServerConfig } from "./util/fileinfo";
 
 
 export class FtpSyncManager implements WorkspaceItem
@@ -121,13 +122,6 @@ export class FtpSyncManager implements WorkspaceItem
 		}
 	}
 
-	public async selectTarget():Promise<void>
-	{
-		const server = await this.selectServer();
-		if (!server) return;
-		this.targetServer = server;
-	}
-
 	public async selectServer():Promise<FtpCacher|undefined>
 	{
 		var selected:FtpCacher|undefined = undefined;
@@ -156,37 +150,6 @@ export class FtpSyncManager implements WorkspaceItem
 	{
 		this.targetServer.terminate();
 		return this.targetServer.init(task);
-	}
-
-	public async uploadAll(task:Task, path:File): Promise<FtpCacher|undefined>
-	{
-		const selected = await this.selectServer();
-		if (selected === undefined) return undefined;
-		await selected.uploadAll(task, path);
-		return selected;
-	}
-
-	public async downloadAll(task:Task, path:File): Promise<FtpCacher|undefined>
-	{
-		const selected = await this.selectServer();
-		if (selected === undefined) return undefined;
-		await selected.downloadAll(task, path);
-		return selected;
-	}
-
-	public async cleanAll(task:Task): Promise<FtpCacher|undefined>
-	{
-		const selected = await this.selectServer();
-		if (selected === undefined) return undefined;
-		await selected.cleanAll(task);
-		return selected;
-	}
-	
-	public async list(task:Task, path:File):Promise<void>
-	{
-		const selected = await this.selectServer();
-		if (selected === undefined) return;
-		await selected.list(task, path);
 	}
 
 	public async runTaskJson(task:Task, taskjson:File):Promise<void>

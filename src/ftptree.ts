@@ -3,7 +3,6 @@ import { TreeDataProvider, TextDocumentContentProvider, TreeItem, TreeItemCollap
 import { File } from 'krfile';
 
 import { VFSState, VFSDirectory, VirtualFileSystem, VFSServer, VFSSymLink } from "./util/filesystem";
-import { ServerConfig } from "./util/fileinfo";
 
 import { Workspace } from "./vsutil/ws";
 import { Scheduler, PRIORITY_NORMAL } from "./vsutil/work";

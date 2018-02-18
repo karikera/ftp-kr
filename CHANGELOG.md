@@ -1,3 +1,7 @@
+# 1.3.4
+* "ignore" field bug fix
+* Reduce reconnection when modify ftp-kr.json
+
 # 1.3.3
 * SSH Terminal Support!
 * Suppress error when file not found in tree view

@@ -80,7 +80,6 @@ export class FtpManager
 			config.password,
 			config.host,
 			config.port,
-			config.remotePath,
 			usepk,
 			usepk ? config.privateKey : undefined,
 			usepk ? config.passphrase : undefined

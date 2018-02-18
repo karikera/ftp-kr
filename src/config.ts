@@ -244,6 +244,7 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 				{
 					await onwork(task);
 
+					this.ignorePatterns = null;
 					if (this.localBasePath)
 					{
 						this.basePath = this.workspace.child(this.localBasePath);

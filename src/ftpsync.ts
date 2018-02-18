@@ -32,16 +32,6 @@ export class FtpSyncManager implements WorkspaceItem
 		this.targetServer = <any>undefined;
 	}
 
-	private _clearServer()
-	{
-		for (const server of this.servers.values())
-		{
-			ftpTree.removeServer(server);
-			server.terminate();
-		}
-		this.servers.clear();
-	}
-
 	private _getServerFromIndex(index:number):FtpCacher
 	{
 		if (index > 0 && index <= this.config.altServer.length)
@@ -69,11 +59,25 @@ export class FtpSyncManager implements WorkspaceItem
 		{
 		}
 		
-		this._clearServer();
+		var mainServer:FtpCacher|undefined;
+		for (const server of this.servers.values())
+		{
+			ftpTree.removeServer(server);
+			if (server.config === this.config)
+			{
+				mainServer = server;
+				continue;
+			}
+			server.terminate();
+		}
+		this.servers.clear();
 
-
-		const mainServer = new FtpCacher(this.workspace, this.config, this.fs);
+		if (!mainServer)
+		{
+			mainServer = new FtpCacher(this.workspace, this.config, this.fs);
+		}
 		this.servers.set(this.config, mainServer);
+		mainServer.refresh();
 		ftpTree.addServer(mainServer);
 		await mainServer.init(task);
 
@@ -113,7 +117,12 @@ export class FtpSyncManager implements WorkspaceItem
 				}
 				this.fs.save(this.cacheFile, extra);
 			}
-			this._clearServer();
+			for (const server of this.servers.values())
+			{
+				ftpTree.removeServer(server);
+				server.terminate();
+			}
+			this.servers.clear();
 			ftpTree.refresh();
 		}
 		catch(err)

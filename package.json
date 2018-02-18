@@ -3,7 +3,7 @@
   "displayName": "ftp-kr",
   "description": "FTP/SFTP Sync Extension",
   "license": "MIT",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "icon": "images/icon.png",
   "publisher": "ruakr",
   "repository": {
@@ -206,7 +206,7 @@
       "explorer": [
         {
           "id": "ftpkr.explorer",
-          "name": "ftp-kr: Explorer"
+		  "name": "ftp-kr: Explorer"
         }
       ]
     }

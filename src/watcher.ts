@@ -9,12 +9,34 @@ import { processError } from './vsutil/error';
 
 import { FtpSyncManager } from './ftpsync';
 import { Config, testInitTimeBiasForVSBug } from './config';
+import { ConfigProperties } from './util/ftpkr_config';
 
 enum WatcherMode
 {
 	NONE,
 	CONFIG,
 	FULL,
+}
+
+function ignoreVsCodeDir(config:ConfigProperties):void
+{
+	for (var i=0;i<config.ignore.length;)
+	{
+		const ignore = config.ignore[i];
+		if (ignore === '/.vscode')
+		{
+			config.ignore.splice(i, 1);
+		}
+		else if(ignore.startsWith('/.vscode/'))
+		{
+			config.ignore.splice(i, 1);
+		}
+		else
+		{
+			i++;
+		}
+	}
+	config.ignore.push('/.vscode/');
 }
 
 export class WorkspaceWatcher implements WorkspaceItem
@@ -42,6 +64,26 @@ export class WorkspaceWatcher implements WorkspaceItem
 			await this.ftp.onLoadConfig(task);
 			this.attachWatcher(this.config.autoUpload || this.config.autoDelete ? WatcherMode.FULL : WatcherMode.CONFIG);
 			this.attachOpenWatcher(this.config.autoDownload);
+			
+			if (!this.config.ignoreJsonUploadCaution && !this.config.checkIgnorePath(this.config.path))
+			{
+				this.logger.errorConfirm("ftp-kr CAUTION: ftp-kr.json is uploaded to remote. Are you sure?", "Delete and Ignore /.vscode/ path", "It's OK").then(async(selected)=>{
+					switch (selected)
+					{
+					case "Delete and Ignore /.vscode/ path":
+						this.config.updateIgnorePath();
+						for(const server of this.ftp.servers.values())
+						{
+							await server.ftpDelete(task, this.config.basePath.child('.vscode'));
+						}
+						await this.config.modifySave(cfg=>ignoreVsCodeDir(cfg));
+						break;
+					case "It's OK":
+						await this.config.modifySave(cfg=>cfg.ignoreJsonUploadCaution = true);
+						break;
+					}
+				});
+			}
 		});
 		this.config.onInvalid(() => {
 			this.attachOpenWatcher(false);

@@ -1,3 +1,6 @@
+# 1.3.5
+* Show warning if ftp-kr.json is uploaded
+
 # 1.3.4
 * "ignore" field bug fix
 * Reduce reconnection when modify ftp-kr.json

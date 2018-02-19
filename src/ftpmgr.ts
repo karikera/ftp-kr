@@ -303,7 +303,8 @@ export class FtpManager
 				switch(res)
 				{
 				case 'Open config': vsutil.open(this.workspace.query(Config).path); break; 
-				case 'Ignore after': this.config.ignoreWrongFileEncoding = true; break;
+				case 'Ignore after':
+					return this.workspace.query(Config).modifySave(cfg=>cfg.ignoreWrongFileEncoding=true);
 				}
 			});
 		};

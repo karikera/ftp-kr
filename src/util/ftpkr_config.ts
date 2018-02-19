@@ -11,12 +11,7 @@ import * as util from "./util";
 
 export const DEFAULT_IGNORE_LIST = [
 	".git",
-	"/.vscode/chrome",
-	"/.vscode/.key",
-	"/.vscode/ftp-kr.task.json",
-	"/.vscode/ftp-kr.error.log",
-	"/.vscode/ftp-kr.sync.*.json",
-	"/.vscode/ftp-kr.diff.*"
+	"/.vscode/",
 ];
 
 export interface ConfigProperties extends ServerConfig
@@ -35,6 +30,7 @@ export interface ConfigProperties extends ServerConfig
 	viewSizeLimit:number;
 	downloadTimeExtraThreshold:number;
 	ignoreRemoteModification:boolean;
+	ignoreJsonUploadCaution:boolean;
 }
 
 const CONFIG_INIT:ConfigProperties = <any>{

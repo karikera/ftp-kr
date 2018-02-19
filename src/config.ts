@@ -17,7 +17,7 @@ import { WorkspaceItem, Workspace } from './vsutil/ws';
 import { Event } from './util/event';
 import { parseJson } from 'krjson';
 import { keys } from './util/keys';
-import { DEFAULT_IGNORE_LIST, FtpKrConfig } from './util/ftpkr_config';
+import { DEFAULT_IGNORE_LIST, FtpKrConfig, ConfigProperties } from './util/ftpkr_config';
 
 var initTimeForVSBug:number = 0;
 
@@ -95,6 +95,23 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 	{
 	}
 
+	public async modifySave(cb:(cfg:ConfigProperties)=>void):Promise<void>
+	{
+		const json = await this.path.json();
+		cb(json);
+		cb(this);
+		await this.path.create(JSON.stringify(json, null, 4));
+	}
+
+
+	public updateIgnorePath():void
+	{
+		this.ignorePatterns = null;
+	}
+
+	/**
+	 * if true, path needs to ignore
+	 */
 	public checkIgnorePath(path:File):boolean
 	{
 		if (!this.ignorePatterns)
@@ -253,7 +270,7 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 					{
 						this.basePath = this.workspace;
 					}
-					
+
 					this.logger.setLogLevel(this.logLevel);
 
 					await this.fireLoad(task);

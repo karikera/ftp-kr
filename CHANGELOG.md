@@ -1,3 +1,6 @@
+# 1.3.6
+* minor bug fix
+
 # 1.3.5
 * Show warning if ftp-kr.json is uploaded
 

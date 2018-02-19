@@ -167,7 +167,7 @@ export class FtpConnection extends FileInterface
 		{
 			if (this.client)
 			{
-				this.client.end();
+				this.client.terminate();
 				this.client = null;
 			}
 			throw err;

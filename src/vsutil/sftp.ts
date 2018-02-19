@@ -72,9 +72,14 @@ export class SftpConnection extends FileInterface
 		}
 		catch(err)
 		{
+			if (this.sftp)
+			{
+				this.sftp.end();
+				this.sftp = null;
+			}
 			if (this.client)
 			{
-				this.client.end();
+				this.client.destroy();
 				this.client = null;
 			}
 			throw err;
@@ -83,21 +88,29 @@ export class SftpConnection extends FileInterface
 	
 	disconnect():void
 	{
+		if (this.sftp)
+		{
+			this.sftp.end();
+			this.sftp = null;
+		}
 		if (this.client)
 		{
 			this.client.end();
 			this.client = null;
-			this.sftp = null;
 		}
 	}
 
 	terminate():void
 	{
+		if (this.sftp)
+		{
+			this.sftp.end();
+			this.sftp = null;
+		}
 		if (this.client)
 		{
 			this.client.destroy();
 			this.client = null;
-			this.sftp = null;
 		}
 	}
 

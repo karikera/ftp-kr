@@ -1,3 +1,6 @@
+# 1.3.7
+* minor bug fix
+
 # 1.3.6
 * minor bug fix
 

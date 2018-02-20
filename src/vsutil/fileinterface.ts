@@ -8,6 +8,7 @@ import { Logger } from './log';
 import { StateBar } from './vsutil';
 import { Workspace } from './ws';
 import { ServerConfig } from '../util/serverinfo';
+import { errorWrap } from '../util/util';
 
 export const NOT_CREATED = 'not created connection access';
 export const DIRECTORY_NOT_FOUND = 1;
@@ -19,18 +20,6 @@ declare global
 	{
 		ftpCode?:number;
 	}
-}
-
-function _errorWrap(err:any):Error
-{
-	if (err.code)
-	{
-		err.message = err.message + "[" + err.code + "]";
-	}
-	const nstack = Error(err.message).stack || '';
-	nstack.substr(nstack.indexOf('\n'));
-	err.stack = nstack;
-	return err;
 }
 
 export abstract class FileInterface
@@ -47,7 +36,7 @@ export abstract class FileInterface
 
 	public connect(password?:string):Promise<void>
 	{
-		return this._connect(password).catch(err=>{throw _errorWrap(err);});
+		return this._connect(password).catch(err=>{throw errorWrap(err);});
 	}
 
 	abstract _connect(password?:string):Promise<void>;
@@ -90,7 +79,7 @@ export abstract class FileInterface
 			this.state.close();
 			if (err.ftpCode === ignorecode) return defVal;
 			this.log(name+" fail: "+ftppath);
-			throw _errorWrap(err);
+			throw errorWrap(err);
 		});
 	}
 
@@ -112,7 +101,7 @@ export abstract class FileInterface
 		}, err=>{
 			this.state.close();
 			this.log("upload fail: "+ftppath);
-			throw _errorWrap(err);
+			throw errorWrap(err);
 		});
 	}
 
@@ -136,7 +125,7 @@ export abstract class FileInterface
 		}, err=>{
 			this.state.close();
 			this.log("download fail: "+ftppath);
-			throw _errorWrap(err);
+			throw errorWrap(err);
 		});
 	}
 
@@ -163,7 +152,7 @@ export abstract class FileInterface
 		}, err=>{
 			this.state.close();
 			this.log("view fail: "+ftppath);
-			throw _errorWrap(err);
+			throw errorWrap(err);
 		});
 	}
 
@@ -195,7 +184,7 @@ export abstract class FileInterface
 		}, err=>{
 			this.state.close();
 			this.log("list fail: "+ftppath);
-			throw _errorWrap(err);
+			throw errorWrap(err);
 		});
 	}
 
@@ -228,7 +217,7 @@ export abstract class FileInterface
 		}, (err)=>{
 			this.state.close();
 			this.log("readlink fail: "+fileinfo.name);
-			throw _errorWrap(err);
+			throw errorWrap(err);
 		});
 	}
 

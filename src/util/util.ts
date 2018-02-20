@@ -241,3 +241,22 @@ export function clone<T>(value:T):T
 	}
 	return <any>nobj;
 }
+
+export function errorWrap(err:any):any
+{
+	if (err && err.stack)
+	{
+		if (err.code)
+		{
+			err.message = err.message + "[" + err.code + "]";
+		}
+		const nstack = Error(err.message).stack || '';
+		nstack.substr(nstack.indexOf('\n'));
+		err.stack = nstack;
+		return err;
+	}
+	else
+	{
+		return err;
+	}
+}

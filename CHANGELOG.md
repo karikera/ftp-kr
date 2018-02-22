@@ -1,3 +1,6 @@
+# 1.3.8
+* Crash bug fix
+
 # 1.3.7
 * minor bug fix
 

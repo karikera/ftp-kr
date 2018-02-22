@@ -36,7 +36,7 @@ function ignoreVsCodeDir(config:ConfigProperties):void
 			i++;
 		}
 	}
-	config.ignore.push('/.vscode/');
+	config.ignore.push('/.vscode');
 }
 
 export class WorkspaceWatcher implements WorkspaceItem
@@ -67,10 +67,10 @@ export class WorkspaceWatcher implements WorkspaceItem
 			
 			if (!this.config.ignoreJsonUploadCaution && !this.config.checkIgnorePath(this.config.path))
 			{
-				this.logger.errorConfirm("ftp-kr CAUTION: ftp-kr.json is uploaded to remote. Are you sure?", "Delete and Ignore /.vscode/ path", "It's OK").then(async(selected)=>{
+				this.logger.errorConfirm("ftp-kr CAUTION: ftp-kr.json is uploaded to remote. Are you sure?", "Delete and Ignore /.vscode path", "It's OK").then(async(selected)=>{
 					switch (selected)
 					{
-					case "Delete and Ignore /.vscode/ path":
+					case "Delete and Ignore /.vscode path":
 						this.config.updateIgnorePath();
 						for(const server of this.ftp.servers.values())
 						{

@@ -1,6 +1,7 @@
 
 import { Logger } from './log';
 import { WorkspaceItem, Workspace } from './ws';
+import { Deferred } from '../util/util';
 
 const resolvedPromise:Promise<void> = Promise.resolve();
 
@@ -29,6 +30,7 @@ export interface Task
 {
 	readonly cancelled:boolean;
 	readonly logger:Logger;
+	readonly name:string;
 	
 	oncancel(oncancel:()=>any):OnCancel;
 	checkCanceled():void;
@@ -44,9 +46,11 @@ class TaskImpl<T> implements Task
 	private state:TaskState = TaskState.WAIT;
 	private cancelListeners:Array<()=>any> = [];
 	private timeout:NodeJS.Timer|undefined;
-	public promise:Promise<T>;
+	public readonly promise:Promise<T>;
 	public readonly logger:Logger;
-	private run:()=>void;
+	
+	private resolve:(value:T)=>void;
+	private reject:(err:any)=>void;
 
 	constructor(
 		public readonly scheduler:Scheduler,
@@ -54,33 +58,12 @@ class TaskImpl<T> implements Task
 		public readonly priority:number, 
 		public readonly task:(task:Task)=>Promise<T>)
 	{
-		this.run = <any>undefined;
 		this.logger = scheduler.logger;
-		this.promise = new Promise<T>((resolve, reject)=>{
-			this.run = ()=>{
-				this.logger.verbose(`[TASK:${this.name}] started`);
-				const prom = this.task(this);
-				prom.then(v=>{	
-					this.logger.verbose(`[TASK:${this.name}] done`);
-					resolve(v);
-				}, err=>{
-					if (err === 'CANCELLED')
-					{
-						this.logger.verbose(`[TASK:${this.name}] cancelled`);
-						reject('IGNORE');
-					}
-					else
-					{
-						if (err instanceof Error)
-						{
-							err.task = name;
-						}
-
-						this.logger.verbose(`[TASK:${this.name}] errored`);
-						reject(err);
-					}
-				});
-			};
+		this.resolve = <any>undefined;
+		this.reject = <any>undefined;
+		this.promise = new Promise((resolve, reject)=>{
+			this.resolve = resolve;
+			this.reject = reject;
 		});
 	}
 
@@ -90,11 +73,10 @@ class TaskImpl<T> implements Task
 		if (this.state >= TaskState.STARTED) return;
 
 		this.timeout = setTimeout(()=>{
-			this.cancelled = true;
-
 			const task = this.scheduler.currentTask;
 			if (task === null) this.logger.error(Error(`ftp-kr is busy: [null...?] is being proceesed. Cannot run [${this.name}]`));
 			else this.logger.error(Error(`ftp-kr is busy: [${task.name}] is being proceesed. Cannot run [${this.name}]`));
+			this.cancel();
 		}, timeout);
 	}
 
@@ -111,7 +93,30 @@ class TaskImpl<T> implements Task
 		}
 		
 		if (this.cancelled) throw 'CANCELLED';
-		this.run();
+
+		this.logger.verbose(`[TASK:${this.name}] started`);
+		const prom = this.task(this);
+		prom.then(v=>{	
+			this.logger.verbose(`[TASK:${this.name}] done`);
+			this.resolve(v);
+		}, err=>{
+			if (err === 'CANCELLED')
+			{
+				this.logger.verbose(`[TASK:${this.name}] cancelled`);
+				this.reject('IGNORE');
+			}
+			else
+			{
+				if (err instanceof Error)
+				{
+					err.task = this.name;
+				}
+
+				this.logger.verbose(`[TASK:${this.name}] errored`);
+				this.reject(err);
+			}
+		});
+
 		return await this.promise;
 	}
 
@@ -119,6 +124,10 @@ class TaskImpl<T> implements Task
 	{
 		if (this.cancelled) return;
 		this.cancelled = true;
+		if (this.state === TaskState.WAIT)
+		{
+			this.reject('CANCELLED');
+		}
 		this.fireCancel();
 	}
 	

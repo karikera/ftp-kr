@@ -11,7 +11,7 @@ import * as util from "./util";
 
 export const DEFAULT_IGNORE_LIST = [
 	".git",
-	"/.vscode/",
+	"/.vscode",
 ];
 
 export interface ConfigProperties extends ServerConfig

@@ -25,35 +25,34 @@ export class FtpTree implements TreeDataProvider<FtpTreeItem>, TextDocumentConte
 	{
 	}
 
-	public refreshContent():void
+	public refreshContent(target:VFSState):void
 	{
-		this._onDidChange.fire();
+		this._onDidChange.fire(Uri.parse(target.getUrl()));
 	}
 
-	public refresh(target?:VFSState):void
+	public refreshTree(target?:VFSState):void
 	{
 		if (!target)
 		{
 			FtpTreeItem.clear();
 			this._onDidChangeTreeData.fire();
-			this._onDidChange.fire();
 			for (const server of this.map.values())
 			{
 				server.children = undefined;
 				server.ftpFile = undefined;
 			}
-			return;
 		}
-		
-		this._onDidChange.fire(Uri.parse(target.getUrl()));
-		for (const item of FtpTreeItem.get(target))
+		else
 		{
-			FtpTreeItem.delete(item);
-			this._onDidChangeTreeData.fire(item);
-			if (item.server === item)
+			for (const item of FtpTreeItem.get(target))
 			{
-				item.children = undefined;
-				item.ftpFile = undefined;
+				FtpTreeItem.delete(item);
+				this._onDidChangeTreeData.fire(item);
+				if (item.server === item)
+				{
+					item.children = undefined;
+					item.ftpFile = undefined;
+				}
 			}
 		}
 	}

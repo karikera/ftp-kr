@@ -80,8 +80,6 @@ export const commands:Command = {
 
 		await config.loadTest();
 
-		const ftpFile = server.toFtpFile(file);
-		const parentFtpFile = server.toFtpFile(file.parent());
 		await scheduler.task('ftpkr.upload', PRIORITY_NORMAL, async (task) => {
 			const isdir = await file.isDirectory();
 			if (isdir)
@@ -93,8 +91,6 @@ export const commands:Command = {
 				await taskTimer('Upload', server.ftpUpload(task, file, {whenRemoteModed:config.ignoreRemoteModification?'upload':'diff'}));
 			}
 		});
-		if (ftpFile) ftpTree.refresh(ftpFile);
-		if (parentFtpFile) ftpTree.refresh(parentFtpFile);
 	},
 	async 'ftpkr.download' (args: CommandArgs)
 	{
@@ -132,12 +128,8 @@ export const commands:Command = {
 		
 		await config.loadTest();
 
-		const ftpFile = server.toFtpFile(file);
-		const parentFtpFile = server.toFtpFile(file.parent());
 		await scheduler.task('ftpkr.delete', PRIORITY_NORMAL, 
 			task => taskTimer('Delete', server.ftpDelete(task, file)));
-		if (ftpFile) ftpTree.refresh(ftpFile);
-		if (parentFtpFile) ftpTree.refresh(parentFtpFile);
 	},
 	async 'ftpkr.diff' (args: CommandArgs)
 	{
@@ -178,8 +170,6 @@ export const commands:Command = {
 		if (server === undefined) return;
 		await scheduler.taskWithTimeout('ftpkr.uploadAll', PRIORITY_NORMAL, 1000, 
 			task => server.uploadAll(task, config.basePath));
-		ftpTree.refreshContent();
-		if (server) ftpTree.refresh(server.fs);
 	},
 	async 'ftpkr.downloadAll' (args: CommandArgs)
 	{
@@ -221,7 +211,6 @@ export const commands:Command = {
 		if (server === undefined) return;
 		await scheduler.taskWithTimeout('ftpkr.cleanAll', PRIORITY_NORMAL, 1000, 
 			task => server.cleanAll(task));
-		if (server) ftpTree.refresh(server.fs);
 	},
 	async 'ftpkr.refresh' (args: CommandArgs)
 	{
@@ -231,17 +220,19 @@ export const commands:Command = {
 			const ftpFile = server.toFtpFileFromFtpPath(args.uri.path);
 			if (ftpFile)
 			{
-				ftpTree.refresh(ftpFile);
+				ftpFile.refreshContent();
+				ftpTree.refreshTree(ftpFile);
 			}
 		}
-		if (args.treeItem && args.treeItem.ftpFile)
+		else if (args.treeItem && args.treeItem.ftpFile)
 		{
 			const tree = args.treeItem.server;
 			const workspace = tree.workspace;
 			await workspace.query(Config).loadTest();
 
 			tree.ftp.refresh(args.treeItem.ftpFile);
-			ftpTree.refresh(args.treeItem.ftpFile);
+			args.treeItem.ftpFile.refreshContent();
+			ftpTree.refreshTree(args.treeItem.ftpFile);
 		}
 		else for(const workspace of Workspace.all())
 		{
@@ -250,9 +241,10 @@ export const commands:Command = {
 			const ftp = workspace.query(FtpSyncManager);
 			for (const server of ftp.servers.values())
 			{
-				server.refresh(server.home);
-				ftpTree.refresh(server.home);
+				server.fs.refreshContent();
+				server.refresh();
 			}
+			ftpTree.refreshTree();
 		}
 	},
 
@@ -328,7 +320,7 @@ export const commands:Command = {
 		await vscode.workspace.saveAll();
 		
 		const path = args.file;
-		await scheduler.taskWithTimeout('ftpkr.runtask', PRIORITY_NORMAL, 1000, task => ftp.runTaskJson(task, path));
+		ftp.runTaskJson('ftpkr.runtask', path);
 	},
 	
 	async 'ftpkr.target'(args: CommandArgs)

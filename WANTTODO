@@ -1,20 +1,10 @@
- Active FTP Connection!
-Is it possible?
-Should I find other ftp module? (Chilkat?..  Can i use it?)
-Or implement all FTP spec directly?
-
-
-autoUploadOnSave
-
-tree
-	"views": {
-		"explorer": [
-			{
-				"id": "ftpExplorer",
-				"name": "FTP Explorer"
-			}
-		]
-	},
+active FTP Connection
 
 auto diff
-main server select
+SSH Shell in current directory
+Tree view save
+
+set target server
+ssh
+menu
+upload all refresh

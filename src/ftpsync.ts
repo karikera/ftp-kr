@@ -30,6 +30,9 @@ export class FtpSyncManager implements WorkspaceItem
 		this.cacheFile = this.workspace.child('.vscode/ftp-kr.sync.cache.json');
 
 		this.targetServer = <any>undefined;
+
+		this.fs.onRefreshContent(file=>ftpTree.refreshContent(file));
+		this.fs.onRefreshTree(file=>ftpTree.refreshTree(file));
 	}
 
 	private _getServerFromIndex(index:number):FtpCacher
@@ -89,7 +92,6 @@ export class FtpSyncManager implements WorkspaceItem
 		}
 
 		this.targetServer = this._getServerFromIndex(targetServerIndex) || mainServer;
-		ftpTree.refresh();
 	}
 
 	public dispose():void
@@ -103,10 +105,10 @@ export class FtpSyncManager implements WorkspaceItem
 				{
 					using.add(config.hostUrl);
 				}
-				for (const hostUrl in this.fs.files)
+				for (const server of this.fs.children())
 				{
-					if (using.has(hostUrl)) continue;
-					delete this.fs.files[hostUrl];
+					if (using.has(server.name)) continue;
+					this.fs.deleteItem(server.name);
 				}
 
 				var extra:any = {};
@@ -123,7 +125,6 @@ export class FtpSyncManager implements WorkspaceItem
 				server.terminate();
 			}
 			this.servers.clear();
-			ftpTree.refresh();
 		}
 		catch(err)
 		{
@@ -161,11 +162,11 @@ export class FtpSyncManager implements WorkspaceItem
 		return this.targetServer.init(task);
 	}
 
-	public async runTaskJson(task:Task, taskjson:File):Promise<void>
+	public async runTaskJson(taskName:string, taskjson:File):Promise<void>
 	{
 		const selected = await this.selectServer();
 		if (selected === undefined) return;
 		const tasks = await taskjson.json();
-		await selected.runTaskJsonWithConfirm(task, tasks, taskjson.basename(), taskjson.parent(), false);
+		await selected.runTaskJsonWithConfirm(taskName, tasks, taskjson.basename(), taskjson.parent(), false);
 	}
 }

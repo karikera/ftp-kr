@@ -77,16 +77,9 @@ export class FtpDownloader implements WorkspaceItem
 		const ftppath = this.ftpmgr.targetServer.toFtpPath(dir);
 		const list = await this.scheduler.task(`autoDownloadAlways.list`, PRIORITY_IDLE, task=>this.ftpmgr.targetServer.ftpList(task, ftppath));
 		if (!this.enabled) throw 'IGNORE';
-		for (const childName in list.files)
+		for (var child of list.children())
 		{
-			switch(childName)
-			{
-			case '': case '.': case '..': continue;
-			}
-			const _child = list.files[childName];
-			if (!_child) continue;
-			var child = _child;
-			const childFile = dir.child(childName);
+			const childFile = dir.child(child.name);
 			if (this.config.checkIgnorePath(dir)) continue;
 
 			try

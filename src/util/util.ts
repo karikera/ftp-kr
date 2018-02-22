@@ -3,8 +3,8 @@ import stripJsonComments = require('strip-json-comments');
 
 export class Deferred<T> implements Promise<T>
 {
-	public resolve:((v:T)=>void);
-	public reject:((v:any)=>void);
+	public resolve:((v?:T)=>void);
+	public reject:((v?:any)=>void);
 	public readonly [Symbol.toStringTag] = "Promise";
 	private promise:Promise<T>;
 

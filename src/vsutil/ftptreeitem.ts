@@ -148,21 +148,15 @@ export class FtpTreeServer extends FtpTreeItem
 		const dir = await this.scheduler.taskWithTimeout('ftpkr.treeview', PRIORITY_NORMAL, 1000, 
 			task => this.ftp.ftpList(task, path));
 
-		for (const filename in dir.files)
-		{
-			switch (filename)
-			{
-			case '': case '.': case '..': continue;
-			}
-			var childfile = dir.files[filename];
-			if (!childfile) continue;
-				
+		for (var childfile of dir.children())
+		{				
 			while (childfile instanceof VFSSymLink)
 			{
 				const putfile:VFSSymLink = childfile;
-				childfile = await this.scheduler.taskWithTimeout('ftpkr.treeview', PRIORITY_NORMAL, 1000, 
+				const nchildfile = await this.scheduler.taskWithTimeout('ftpkr.treeview', PRIORITY_NORMAL, 1000, 
 					task => this.ftp.ftpTargetStat(task, putfile));
-				if (!childfile) return [];
+				if (!nchildfile) return [];
+				childfile = nchildfile;
 			}
 
 			files.push(FtpTreeItem.create(childfile, this));

@@ -73,9 +73,9 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 
 	public basePath:File;
 	
-	public readonly onLoad = Event.make<Task>('onLoad');
-	public readonly onInvalid = Event.make<void>('onInvalid');
-	public readonly onNotFound = Event.make<void>('onNotFound');
+	public readonly onLoad = Event.make<Task>('onLoad', false);
+	public readonly onInvalid = Event.make<void>('onInvalid', false);
+	public readonly onNotFound = Event.make<void>('onNotFound', true);
 	
 	private ignorePatterns:(RegExp[])|null = null;
 	private readonly logger:Logger;
@@ -158,7 +158,7 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 			return Promise.resolve();
 
 		this.setState(ConfigState.NOTFOUND, 'NOTFOUND');
-		return this.onNotFound.rfire();
+		return this.onNotFound.fire();
 	}
 
 	private fireInvalid(err:Error|string):Promise<void>

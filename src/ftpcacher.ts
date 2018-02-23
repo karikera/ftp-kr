@@ -188,7 +188,7 @@ export class FtpCacher
 
 	public ftpDelete(path:File, task?:Task|null, options?:BatchOptions):Promise<void>
 	{
-		return this.scheduler.task('ftpkr.delete', async(task)=>{
+		return this.scheduler.task('Delete', async(task)=>{
 			await this.initForRemotePath(task);
 			const ftppath = this.toFtpPath(path);
 	
@@ -376,7 +376,7 @@ export class FtpCacher
 
 	public async ftpDownload(path:File, task?:Task|null, options?:BatchOptions):Promise<void>
 	{
-		await this.scheduler.task('ftpkr.download', async (task) => {
+		await this.scheduler.task('Download', async (task) => {
 			await this.initForRemotePath(task);
 			const ftppath = this.toFtpPath(path);
 			var file:VFSState|undefined = this.fs.getFromPath(ftppath);

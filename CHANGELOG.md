@@ -1,3 +1,6 @@
+# 1.3.11
+* Fix diff
+
 # 1.3.10
 * Bugfix about cache
 

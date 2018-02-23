@@ -141,7 +141,7 @@ export const commands:Command = {
 		const isdir = await file.isDirectory();
 		if (isdir) throw Error('Diff only supported for file');
 	
-		await scheduler.task('ftpkr.diff', task => taskTimer('Diff', server.ftpDiff(file)));
+		await server.ftpDiff(file);
 	},
 
 	async 'ftpkr.uploadAll' (args: CommandArgs)
@@ -268,7 +268,7 @@ export const commands:Command = {
 			const file = args.file;
 			const ftp = args.workspace.query(FtpSyncManager);
 			const scheduler = args.workspace.query(Scheduler);
-			await scheduler.task('ftpkr.view', task => ftp.targetServer.initForRemotePath(task));
+			await ftp.targetServer.initForRemotePath();
 			const ftppath = ftp.targetServer.toFtpUrl(file);
 			args.uri = Uri.parse(ftppath);
 		}

@@ -44,6 +44,10 @@ export abstract class VFSState extends FileInfo
 	public lmtime:number = 0;
 	public lmtimeWithThreshold:number = 0;
 	public modified:boolean = false;
+
+	public contentCached:boolean = false; // If it is set, fire refresh in next modification
+	public treeCached:boolean = false; // If it is set, fire refresh in next modification
+
 	public readonly fs:VirtualFileSystem;
 	
 	constructor(
@@ -94,6 +98,8 @@ export abstract class VFSState extends FileInfo
 
 	public refreshContent():Promise<void>
 	{
+		if (!this.contentCached) return Promise.resolve();
+		this.contentCached = false;
 		return this.fs.onRefreshContent.fire(this);
 	}
 
@@ -237,7 +243,11 @@ export class VFSDirectory extends VFSFileCommon
 		this.files = nfiles;
 
 		this.refreshContent();
-		this.fs.onRefreshTree.fire(this);
+		if (this.treeCached)
+		{
+			this.treeCached = false;
+			this.fs.onRefreshTree.fire(this);
+		}
 	}
 	
 	public putBySerialized(path:string, data:SerializedState):void
@@ -286,7 +296,11 @@ export class VFSDirectory extends VFSFileCommon
 		const old = this.files[name];
 		this.files[name] = item;
 		if (old) old.refreshContent();
-		this.fs.onRefreshTree.fire(this);
+		if (this.treeCached)
+		{
+			this.treeCached = false;
+			this.fs.onRefreshTree.fire(this);
+		}
 	}
 
 	public deleteItem(name:string):boolean
@@ -295,7 +309,11 @@ export class VFSDirectory extends VFSFileCommon
 		if (!old) return false;
 		old.refreshContent();
 		delete this.files[name];
-		this.fs.onRefreshTree.fire(this);
+		if (this.treeCached)
+		{
+			this.treeCached = false;
+			this.fs.onRefreshTree.fire(this);
+		}
 		return true;
 	}
 
@@ -326,7 +344,7 @@ export class VFSDirectory extends VFSFileCommon
 		const fn = splitFileName(path);
 		const dir = <VFSDirectory>this.getFromPath(fn.dir, true);
 		const file = new VFSFile(dir, fn.name);
-		this.setItem(fn.name, file);
+		dir.setItem(fn.name, file);
 		return file;
 	}
 

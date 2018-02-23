@@ -80,17 +80,15 @@ export const commands:Command = {
 
 		await config.loadTest();
 
-		await scheduler.task('ftpkr.upload', PRIORITY_NORMAL, async (task) => {
-			const isdir = await file.isDirectory();
-			if (isdir)
-			{
-				await server.uploadAll(task, file);
-			}
-			else
-			{
-				await taskTimer('Upload', server.ftpUpload(task, file, {whenRemoteModed:config.ignoreRemoteModification?'upload':'diff'}));
-			}
-		});
+		const isdir = await file.isDirectory();
+		if (isdir)
+		{
+			await server.uploadAll(file);
+		}
+		else
+		{
+			await server.ftpUpload(file, null, {whenRemoteModed:config.ignoreRemoteModification?'upload':'diff'});
+		}
 	},
 	async 'ftpkr.download' (args: CommandArgs)
 	{
@@ -104,17 +102,15 @@ export const commands:Command = {
 		
 		await config.loadTest();
 
-		await scheduler.task('ftpkr.download', PRIORITY_NORMAL, async (task) => {
-			const isdir = await file.isDirectory();
-			if (isdir)
-			{
-				await server.downloadAll(task, file);
-			}
-			else
-			{
-				await taskTimer('Download', server.ftpDownload(task, file))
-			}
-		});
+		const isdir = await file.isDirectory();
+		if (isdir)
+		{
+			await server.downloadAll(file);
+		}
+		else
+		{
+			await taskTimer('Download', server.ftpDownload(file));
+		}
 	},
 	async 'ftpkr.delete' (args: CommandArgs)
 	{
@@ -127,9 +123,7 @@ export const commands:Command = {
 		logger.show();
 		
 		await config.loadTest();
-
-		await scheduler.task('ftpkr.delete', PRIORITY_NORMAL, 
-			task => taskTimer('Delete', server.ftpDelete(task, file)));
+		await taskTimer('Delete', server.ftpDelete(file));
 	},
 	async 'ftpkr.diff' (args: CommandArgs)
 	{
@@ -147,7 +141,7 @@ export const commands:Command = {
 		const isdir = await file.isDirectory();
 		if (isdir) throw Error('Diff only supported for file');
 	
-		await scheduler.task('ftpkr.diff', PRIORITY_NORMAL, task => taskTimer('Diff', server.ftpDiff(task, file)));
+		await scheduler.task('ftpkr.diff', task => taskTimer('Diff', server.ftpDiff(file)));
 	},
 
 	async 'ftpkr.uploadAll' (args: CommandArgs)
@@ -168,8 +162,7 @@ export const commands:Command = {
 
 		const server = await ftp.selectServer();
 		if (server === undefined) return;
-		await scheduler.taskWithTimeout('ftpkr.uploadAll', PRIORITY_NORMAL, 1000, 
-			task => server.uploadAll(task, config.basePath));
+		await server.uploadAll(config.basePath);
 	},
 	async 'ftpkr.downloadAll' (args: CommandArgs)
 	{
@@ -189,8 +182,7 @@ export const commands:Command = {
 
 		const server = await ftp.selectServer();
 		if (server === undefined) return;
-		await scheduler.taskWithTimeout('ftpkr.downloadAll', PRIORITY_NORMAL, 1000, 
-			task => server.downloadAll(task, config.basePath));
+		await server.downloadAll(config.basePath);
 	},
 	async 'ftpkr.cleanAll' (args: CommandArgs)
 	{
@@ -209,8 +201,7 @@ export const commands:Command = {
 		await vscode.workspace.saveAll();
 		const server = await ftp.selectServer();
 		if (server === undefined) return;
-		await scheduler.taskWithTimeout('ftpkr.cleanAll', PRIORITY_NORMAL, 1000, 
-			task => server.cleanAll(task));
+		await server.cleanAll();
 	},
 	async 'ftpkr.refresh' (args: CommandArgs)
 	{
@@ -264,7 +255,7 @@ export const commands:Command = {
 		if (selected === undefined) return;
 		
 		await config.loadTest();
-		await scheduler.taskWithTimeout('ftpkr.list', PRIORITY_NORMAL, 1000, task => selected.list(task, config.basePath));
+		await selected.list(config.basePath);
 	},
 
 	async 'ftpkr.view' (args: CommandArgs)
@@ -277,7 +268,7 @@ export const commands:Command = {
 			const file = args.file;
 			const ftp = args.workspace.query(FtpSyncManager);
 			const scheduler = args.workspace.query(Scheduler);
-			await scheduler.task('ftpkr.view', PRIORITY_NORMAL, task => ftp.targetServer.initForRemotePath(task));
+			await scheduler.task('ftpkr.view', task => ftp.targetServer.initForRemotePath(task));
 			const ftppath = ftp.targetServer.toFtpUrl(file);
 			args.uri = Uri.parse(ftppath);
 		}
@@ -299,7 +290,7 @@ export const commands:Command = {
 
 		await config.loadTest();
 		scheduler.cancel();
-		await scheduler.task('ftpkr.reconnect', PRIORITY_NORMAL, task => ftp.reconnect(task));
+		await ftp.reconnect();
 	},
 
 	async 'ftpkr.runtask'(args: CommandArgs)

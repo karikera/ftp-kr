@@ -254,8 +254,7 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 	private loadWrap(name:string, onwork:(task:Task)=>Promise<void>):void
 	{
 		this.scheduler.cancel();
-		this.scheduler.task(name,
-			PRIORITY_NORMAL,
+		this.scheduler.taskMust(name,
 			async(task)=>{
 				try
 				{

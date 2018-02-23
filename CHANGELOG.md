@@ -1,3 +1,6 @@
+# 1.3.10
+* Bugfix about cache
+
 # 1.3.9
 * Download/Clean All fix
 

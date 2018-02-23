@@ -277,8 +277,13 @@ export class Scheduler implements WorkspaceItem
 		this.lastTask = null;
 	}
 
-	public task<T>(name:string, priority:number, taskfunc:(task:Task)=>Promise<T>):Promise<T>
+	public taskMust<T>(name:string, taskfunc:(task:Task)=>Promise<T>, taskFrom?:Task|null, priority?:number):Promise<T>
 	{
+		if (taskFrom)
+		{
+			return taskfunc(taskFrom);
+		}
+		if (priority === undefined) priority = PRIORITY_NORMAL;
 		const task = new TaskImpl(this, name, priority, taskfunc);
 		this._addTask(task);
 		if (!this.currentTask)
@@ -289,8 +294,14 @@ export class Scheduler implements WorkspaceItem
 		return task.promise;
 	}
 	
-	public taskWithTimeout<T>(name:string, priority:number, timeout:number, taskfunc:(task:Task)=>Promise<T>):Promise<T>
+	public task<T>(name:string, taskfunc:(task:Task)=>Promise<T>, taskFrom?:Task|null, priority?:number, timeout?:number):Promise<T>
 	{
+		if (taskFrom)
+		{
+			return taskfunc(taskFrom);
+		}
+		if (priority === undefined) priority = PRIORITY_NORMAL;
+		if (timeout === undefined) timeout = 2000;
 		const task = new TaskImpl(this, name, priority, taskfunc);
 		task.setTimeLimit(timeout);
 		this._addTask(task);

@@ -75,7 +75,12 @@ export class FtpDownloader implements WorkspaceItem
 	private async _downloadDir(dir:File):Promise<void>
 	{
 		const ftppath = this.ftpmgr.targetServer.toFtpPath(dir);
-		const list = await this.scheduler.task(`autoDownloadAlways.list`, PRIORITY_IDLE, task=>this.ftpmgr.targetServer.ftpList(task, ftppath));
+		const list = await this.scheduler.taskMust(
+			`autoDownloadAlways.list`, 
+			task=>this.ftpmgr.targetServer.ftpList(ftppath, task), 
+			null, 
+			PRIORITY_IDLE
+		);
 		if (!this.enabled) throw 'IGNORE';
 		for (var child of list.children())
 		{
@@ -87,7 +92,12 @@ export class FtpDownloader implements WorkspaceItem
 				if (child.type === 'l')
 				{
 					if (!this.config.followLink) continue;
-					const stats = await this.scheduler.task(`autoDownloadAlways.download`, PRIORITY_IDLE, task=>this.ftpmgr.targetServer.ftpTargetStat(task, child));
+					const stats = await this.scheduler.taskMust(
+						`autoDownloadAlways.download`, 
+						task=>this.ftpmgr.targetServer.ftpTargetStat(child, task), 
+						null, 
+						PRIORITY_IDLE
+					);
 					if (!stats) continue;
 					child = stats;
 				}
@@ -97,7 +107,12 @@ export class FtpDownloader implements WorkspaceItem
 				}
 				else
 				{
-					await this.scheduler.task(`autoDownloadAlways.download`, PRIORITY_IDLE, task=>this.ftpmgr.targetServer.ftpDownloadWithCheck(task, childFile));
+					await this.scheduler.taskMust(
+						`autoDownloadAlways.download`,
+						task=>this.ftpmgr.targetServer.ftpDownloadWithCheck(childFile, task),
+						null,
+						PRIORITY_IDLE
+					);
 					if (!this.enabled) throw 'IGNORE';
 				}
 			}

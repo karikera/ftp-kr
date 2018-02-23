@@ -7,7 +7,7 @@ import { ServerConfig } from "./util/serverinfo";
 import { WorkspaceItem, Workspace } from "./vsutil/ws";
 import { Logger } from "./vsutil/log";
 import { QuickPick } from "./vsutil/vsutil";
-import { Task } from "./vsutil/work";
+import { Task, Scheduler } from "./vsutil/work";
 
 import { Config } from "./config";
 import { FtpCacher, BatchOptions, UploadReport } from "./ftpcacher";
@@ -18,6 +18,7 @@ export class FtpSyncManager implements WorkspaceItem
 {
 	private readonly logger:Logger;
 	private readonly config:Config;
+	private readonly scheduler:Scheduler;
 	private readonly cacheFile:File;
 	public readonly servers:Map<ServerConfig, FtpCacher> = new Map;
 	private readonly fs:VirtualFileSystem = new VirtualFileSystem;
@@ -27,6 +28,7 @@ export class FtpSyncManager implements WorkspaceItem
 	{
 		this.logger = workspace.query(Logger);
 		this.config = workspace.query(Config);
+		this.scheduler = workspace.query(Scheduler);
 		this.cacheFile = this.workspace.child('.vscode/ftp-kr.sync.cache.json');
 
 		this.targetServer = <any>undefined;
@@ -91,6 +93,7 @@ export class FtpSyncManager implements WorkspaceItem
 			ftpTree.addServer(server);
 		}
 
+		ftpTree.refreshTree();
 		this.targetServer = this._getServerFromIndex(targetServerIndex) || mainServer;
 	}
 
@@ -156,10 +159,12 @@ export class FtpSyncManager implements WorkspaceItem
 		return selected;
 	}
 
-	public reconnect(task:Task):Promise<void>
+	public reconnect(task?:Task|null):Promise<void>
 	{
-		this.targetServer.terminate();
-		return this.targetServer.init(task);
+		return this.scheduler.taskMust('ftpkr.reconnect', task => {
+			this.targetServer.terminate();
+			return this.targetServer.init(task);
+		}, task);
 	}
 
 	public async runTaskJson(taskName:string, taskjson:File):Promise<void>

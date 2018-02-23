@@ -6,7 +6,7 @@ import { ServerConfig } from "../util/serverinfo";
 
 import { PRIORITY_NORMAL, Scheduler } from "./work";
 import { Workspace } from "./ws";
-import { FtpCacher } from "../ftpcacher";
+import { FtpCacher, ViewedFile } from "../ftpcacher";
 import { Logger } from "./log";
 
 const ftpTreeItemFromFile = new Map<VFSState, FtpTreeItem[]>();
@@ -49,7 +49,7 @@ export class FtpTreeItem extends TreeItem
 		if(!array) return;
 		for (var i=0;i<array.length;i++)
 		{
-			if (array[i] === item) continue;
+			if (array[i] !== item) continue;
 			array.splice(i, 1);
 
 			if (array.length === 0)
@@ -108,6 +108,7 @@ export class FtpTreeItem extends TreeItem
 	{
 		if (this.children) return this.children;
 		const items = await this.server.getChildrenFrom(this);
+		if (this.ftpFile) this.ftpFile.treeCached = true;
 		this.children = items;
 		return items;
 	}
@@ -137,24 +138,21 @@ export class FtpTreeServer extends FtpTreeItem
 	{
 		if (!file.ftpFile)
 		{
-			await this.scheduler.taskWithTimeout('ftpkr.treeview', PRIORITY_NORMAL, 1000, 
-				task => this.ftp.initForRemotePath(task));
+			await this.ftp.initForRemotePath();
 			file.ftpFile = this.ftp.home;
 			FtpTreeItem.add(file.ftpFile, file);
 		}
 		const path:string = file.ftpFile.getPath();
 		
 		const files:FtpTreeItem[] = [];
-		const dir = await this.scheduler.taskWithTimeout('ftpkr.treeview', PRIORITY_NORMAL, 1000, 
-			task => this.ftp.ftpList(task, path));
+		const dir = await this.ftp.ftpList(path);
 
 		for (var childfile of dir.children())
 		{				
 			while (childfile instanceof VFSSymLink)
 			{
 				const putfile:VFSSymLink = childfile;
-				const nchildfile = await this.scheduler.taskWithTimeout('ftpkr.treeview', PRIORITY_NORMAL, 1000, 
-					task => this.ftp.ftpTargetStat(task, putfile));
+				const nchildfile = await this.ftp.ftpTargetStat(putfile);
 				if (!nchildfile) return [];
 				childfile = nchildfile;
 			}
@@ -167,13 +165,12 @@ export class FtpTreeServer extends FtpTreeItem
 
 	public async getChildren():Promise<FtpTreeItem[]>
 	{
-		await this.scheduler.taskWithTimeout('ftpkr.treeview', PRIORITY_NORMAL, 1000, task=>this.ftp.initForRemotePath(task));
+		await this.ftp.initForRemotePath();
 		return await super.getChildren();
 	}
 
-	public downloadAsText(ftppath:string):Promise<string>
+	public downloadAsText(ftppath:string):Promise<ViewedFile>
 	{
-		return this.scheduler.taskWithTimeout('ftpkr.view', PRIORITY_NORMAL, 3000, 
-			task=>this.ftp.downloadAsText(task, ftppath));
+		return this.ftp.downloadAsText(ftppath);
 	}
 }

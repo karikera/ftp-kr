@@ -124,7 +124,9 @@ export class FtpTree implements TreeDataProvider<FtpTreeItem>, TextDocumentConte
 			logger = server.logger;
 
 			const ftppath = uri.path;
-			return await server.downloadAsText(ftppath);
+			const viewed = await server.downloadAsText(ftppath);
+			if (viewed.file) viewed.file.contentCached = true;
+			return viewed.content;
 		}
 		catch(err)
 		{

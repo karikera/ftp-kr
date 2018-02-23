@@ -126,7 +126,7 @@ class TaskImpl<T> implements Task
 		this.cancelled = true;
 		if (this.state === TaskState.WAIT)
 		{
-			this.reject('CANCELLED');
+			this.reject('IGNORE');
 		}
 		this.fireCancel();
 	}

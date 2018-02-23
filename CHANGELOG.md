@@ -1,3 +1,6 @@
+# 1.3.9
+* Download/Clean All fix
+
 # 1.3.8
 * Crash bug fix
 

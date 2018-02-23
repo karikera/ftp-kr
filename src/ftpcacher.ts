@@ -709,14 +709,14 @@ export class FtpCacher
 	{
 		const tasks = await this._syncTestDownload(task, path)
 		await Promise.resolve();
-		await this.runTaskJsonWithConfirm(task.name, tasks, 'Download All', this.mainConfig.basePath, true);
+		this.runTaskJsonWithConfirm(task.name, tasks, 'Download All', this.mainConfig.basePath, true);
 	}
 
 	public async cleanAll(task:Task):Promise<void>
 	{
 		const tasks = await this._syncTestClean(task);
 		await Promise.resolve();
-		return this.runTaskJsonWithConfirm(task.name, tasks, 'ftpkr.Clean All', this.mainConfig.basePath, true);
+		this.runTaskJsonWithConfirm(task.name, tasks, 'ftpkr.Clean All', this.mainConfig.basePath, true);
 	}
 	
 	public async list(task:Task, path:File):Promise<void>

@@ -8,3 +8,9 @@ set target server
 ssh
 menu
 upload all refresh
+
+
+watch file size in VirtualFileSystem -> autodownload
+
+autoDownload -> downloadOnOpen
+uploadOnSave

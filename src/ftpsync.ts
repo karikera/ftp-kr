@@ -161,7 +161,7 @@ export class FtpSyncManager implements WorkspaceItem
 
 	public reconnect(task?:Task|null):Promise<void>
 	{
-		return this.scheduler.taskMust('ftpkr.reconnect', task => {
+		return this.scheduler.taskMust('Reconnect', task => {
 			this.targetServer.terminate();
 			return this.targetServer.init(task);
 		}, task);

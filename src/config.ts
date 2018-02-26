@@ -132,7 +132,7 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 
 	public init():void
 	{
-		this.loadWrap('ftp-kr.init', async(task)=>{
+		this.loadWrap('init', async(task)=>{
 			initTimeForVSBug = Date.now();
 			await this.initJson();
 			vsutil.open(this.path);

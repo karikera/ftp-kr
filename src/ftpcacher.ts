@@ -64,8 +64,9 @@ export class UploadReport
 {
 	directoryIgnored?:boolean;
 	latestIgnored?:boolean;
-	modifiedIgnore?:boolean;
 	noFileIgnored?:boolean;
+	modifiedIgnored?:boolean;
+	quickPickRequested?:boolean;
 	file?:VFSState;
 }
 
@@ -86,13 +87,13 @@ interface TaskJsonResult
 	count:number;
 }
 
-
 export class FtpCacher
 {
 	public readonly mainConfig:Config;
 	private readonly ftpmgr:FtpManager;
 
 	private readonly refreshed:Map<string, RefreshedData> = new Map;
+
 	public readonly logger:Logger;
 	public readonly scheduler:Scheduler;
 
@@ -126,7 +127,7 @@ export class FtpCacher
 		await this.ftpList(this.config.remotePath, task).then(()=>{});
 		const remotePath = this.config.remotePath;
 		this.remotePath = remotePath.startsWith('/') ? remotePath : ftp_path.normalize(this.ftpmgr.home+'/'+remotePath);
-		this.home = <VFSDirectory>this.fs.getFromPath(this.remotePath, true);
+		this.home = <VFSDirectory>this.fs.getDirectoryFromPath(this.remotePath, true);
 	}
 
 	public async initForRemotePath(task?:Task|null):Promise<void>
@@ -152,10 +153,7 @@ export class FtpCacher
 
 	public toFtpFileFromFtpPath(ftppath:string):VFSState|undefined
 	{
-		const parent = ftp_path.dirname(ftppath);
-		const dir = this.fs.getFromPath(parent);
-		if (!dir) return undefined;
-		return dir.item(ftp_path.basename(ftppath));
+		return this.fs.getFromPath(ftppath);
 	}
 
 	public toFtpPath(path:File):string
@@ -297,7 +295,7 @@ export class FtpCacher
 			};
 	
 			const parentFtpPath = this.toFtpPath(path.parent());
-			const filedir = this.fs.getFromPath(parentFtpPath);
+			const filedir = this.fs.getDirectoryFromPath(parentFtpPath);
 			if (!filedir) return await next();
 			
 			oldfile = await this.ftpStat(ftppath, task);
@@ -329,7 +327,7 @@ export class FtpCacher
 				case 'upload':
 					return await next();
 				case 'ignore':
-					report.modifiedIgnore = true;
+					report.modifiedIgnored = true;
 					report.file = oldfile;
 					return report;
 				case 'diff':
@@ -348,25 +346,29 @@ export class FtpCacher
 						}
 						throw err;
 					}
-					const selected = await vsutil.info('Remote file modification detected', 'Upload', 'Download');
-					try
-					{
-						await diffFile.unlink();
-					}
-					catch(err)
-					{
-					}
-					switch (selected)
-					{
-					case 'Upload':
-						return await next();
-					case 'Download':
-						await this.ftpDownload(path, task);
-						throw 'IGNORE';
-					case undefined:
-						throw 'IGNORE';
-					}
-					break;
+					vsutil.info('Remote file modification detected', 'Upload', 'Download').then(async(selected)=>{
+						try
+						{
+							await diffFile.unlink();
+						}
+						catch(err)
+						{
+						}
+						switch (selected)
+						{
+						case 'Upload':
+							await this.ftpUpload(path, null, {doNotRefresh: true, whenRemoteModed:"upload"});
+							break;
+						case 'Download':
+							await this.ftpDownload(path, null, {doNotRefresh: true});
+							break;
+						case undefined:
+							break;
+						}
+					});
+					report.quickPickRequested = true;
+					report.file = oldfile;
+					return report;
 				}
 			}
 	
@@ -396,6 +398,8 @@ export class FtpCacher
 				await this.ftpmgr.download(task, path, ftppath);
 			}
 			const stats = await path.stat();
+			if (file.size !== stats.size) file.refreshContent();
+			file.size = stats.size;
 			file.lmtime = +stats.mtime;
 			file.lmtimeWithThreshold = file.lmtime + this.mainConfig.downloadTimeExtraThreshold;
 			file.modified = false;
@@ -419,6 +423,7 @@ export class FtpCacher
 			if (file.size > this.mainConfig.viewSizeLimit) return {
 				content: '< File is too large >\nYou can change file size limit with "viewSizeLimit" option in ftp-kr.json'
 			};
+
 			const content = await this.ftpmgr.view(task, ftppath);
 			return {
 				file,
@@ -990,7 +995,7 @@ export class FtpCacher
 
 	private _fsDelete(ftppath:string):void
 	{
-		const dir = this.fs.getFromPath(ftppath);
+		const dir = this.fs.getDirectoryFromPath(ftppath);
 		if (dir) this._deletedir(dir, ftppath);
 		this.fs.deleteFromPath(ftppath);
 	}

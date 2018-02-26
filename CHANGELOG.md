@@ -1,3 +1,7 @@
+# 1.3.12
+* Fix init error
+* Fix too many view & list problem
+
 # 1.3.11
 * Fix diff
 

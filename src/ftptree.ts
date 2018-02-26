@@ -8,9 +8,27 @@ import { Workspace } from "./vsutil/ws";
 import { Scheduler, PRIORITY_NORMAL } from "./vsutil/work";
 import { processError } from "./vsutil/error";
 import { Logger, defaultLogger } from "./vsutil/log";
-import { FtpCacher } from "./ftpcacher";
+import { FtpCacher, ViewedFile } from "./ftpcacher";
 import { vsutil } from "./vsutil/vsutil";
 import { FtpTreeItem, FtpTreeServer } from "./vsutil/ftptreeitem";
+
+// private readonly viewCache:Map<string, ViewCache> = new Map;
+
+const cacheMap = new Map<string, Promise<ViewedFile>>();
+
+function cache(path:string, cb:()=>Promise<ViewedFile>):Promise<ViewedFile>
+{
+	var cached = cacheMap.get(path);
+	if (cached) return cached;
+
+	setTimeout(()=>{
+		cacheMap.delete(path);
+	}, 500);
+
+	const newcached = cb();
+	cacheMap.set(path, newcached);
+	return newcached;
+}
 
 export class FtpTree implements TreeDataProvider<FtpTreeItem>, TextDocumentContentProvider
 {
@@ -124,7 +142,8 @@ export class FtpTree implements TreeDataProvider<FtpTreeItem>, TextDocumentConte
 			logger = server.logger;
 
 			const ftppath = uri.path;
-			const viewed = await server.downloadAsText(ftppath);
+			const viewed = await cache(ftppath, ()=>server.downloadAsText(ftppath));
+			
 			if (viewed.file) viewed.file.contentCached = true;
 			return viewed.content;
 		}

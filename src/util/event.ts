@@ -7,6 +7,7 @@ export interface Event<T>
 	
 	fire(value?:T):Promise<void>;
 	remove(onfunc:(value:T)=>void|Promise<void>):boolean;
+	clear():void;
 }
 
 class FiredEvent<T> extends Deferred<void>
@@ -42,24 +43,32 @@ export namespace Event
 				if (!fired) break;
 
 				list = list.filter(v=>v);
-				if (reverse)
+				try
 				{
-					for(var i = list.length -1 ; i>= 0; i--)
+					if (reverse)
 					{
-						const func = list[i];
-						if (!func) continue;
-						const prom = func(fired.value);
-						if (prom) await prom.then(fired.resolve, fired.reject);
+						for(var i = list.length -1 ; i>= 0; i--)
+						{
+							const func = list[i];
+							if (!func) continue;
+							const prom = func(fired.value);
+							if (prom) await prom;
+						}
 					}
+					else
+					{
+						for(const func of list)
+						{
+							if (!func) continue;
+							const prom = func(fired.value);
+							if (prom) await prom;
+						}
+					}
+					fired.resolve();
 				}
-				else
+				catch(err)
 				{
-					for(const func of list)
-					{
-						if (!func) continue;
-						const prom = func(fired.value);
-						if (prom) await prom.then(fired.resolve, fired.reject);
-					}
+					fired.reject(err);
 				}
 			}
 			firing = false;
@@ -79,6 +88,9 @@ export namespace Event
 				return true;
 			}
 			return false;
+		};
+		event.clear = ()=>{
+			list.length = 0;
 		};
 		return event;
 	}

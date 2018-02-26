@@ -76,7 +76,7 @@ export class FtpDownloader implements WorkspaceItem
 	{
 		const ftppath = this.ftpmgr.targetServer.toFtpPath(dir);
 		const list = await this.scheduler.taskMust(
-			`autoDownloadAlways.list`, 
+			`downloadAlways.list`, 
 			task=>this.ftpmgr.targetServer.ftpList(ftppath, task), 
 			null, 
 			PRIORITY_IDLE
@@ -93,7 +93,7 @@ export class FtpDownloader implements WorkspaceItem
 				{
 					if (!this.config.followLink) continue;
 					const stats = await this.scheduler.taskMust(
-						`autoDownloadAlways.download`, 
+						`downloadAlways.readLink`, 
 						task=>this.ftpmgr.targetServer.ftpTargetStat(child, task), 
 						null, 
 						PRIORITY_IDLE
@@ -108,7 +108,7 @@ export class FtpDownloader implements WorkspaceItem
 				else
 				{
 					await this.scheduler.taskMust(
-						`autoDownloadAlways.download`,
+						`downloadAlways`,
 						task=>this.ftpmgr.targetServer.ftpDownloadWithCheck(childFile, task),
 						null,
 						PRIORITY_IDLE

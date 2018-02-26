@@ -289,7 +289,7 @@ export const commands:Command = {
 		const ftp = workspace.query(FtpSyncManager);
 
 		await config.loadTest();
-		scheduler.cancel();
+		await scheduler.cancel();
 		await ftp.reconnect();
 	},
 

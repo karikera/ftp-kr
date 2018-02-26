@@ -256,10 +256,10 @@ export class Scheduler implements WorkspaceItem
 		this.cancel();
 	}
 
-	public cancel():void
+	public cancel():Promise<void>
 	{
 		const task = this.currentTask;
-		if (!task) return;
+		if (!task) return Promise.resolve();
 
 		task.cancel();
 
@@ -275,6 +275,7 @@ export class Scheduler implements WorkspaceItem
 		task.next = null;
 		this.nextTask = null;
 		this.lastTask = null;
+		return task.promise.catch(()=>{});
 	}
 
 	public taskMust<T>(name:string, taskfunc:(task:Task)=>Promise<T>, taskFrom?:Task|null, priority?:number):Promise<T>

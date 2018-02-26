@@ -253,33 +253,34 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 
 	private loadWrap(name:string, onwork:(task:Task)=>Promise<void>):void
 	{
-		this.scheduler.cancel();
-		this.scheduler.taskMust(name,
-			async(task)=>{
-				try
-				{
-					await onwork(task);
-
-					this.ignorePatterns = null;
-					if (this.localBasePath)
+		this.scheduler.cancel().then(
+			()=>this.scheduler.taskMust(name,
+				async(task)=>{
+					try
 					{
-						this.basePath = this.workspace.child(this.localBasePath);
+						await onwork(task);
+	
+						this.ignorePatterns = null;
+						if (this.localBasePath)
+						{
+							this.basePath = this.workspace.child(this.localBasePath);
+						}
+						else
+						{
+							this.basePath = this.workspace;
+						}
+	
+						this.logger.setLogLevel(this.logLevel);
+	
+						await this.fireLoad(task);
 					}
-					else
+					catch (err)
 					{
-						this.basePath = this.workspace;
+						await this.onLoadError(err);
 					}
-
-					this.logger.setLogLevel(this.logLevel);
-
-					await this.fireLoad(task);
 				}
-				catch (err)
-				{
-					await this.onLoadError(err);
-				}
-			}
-		)
-		.catch(err=>processError(this.logger, err));
+			)
+			.catch(err=>processError(this.logger, err))	
+		);
 	}
 }

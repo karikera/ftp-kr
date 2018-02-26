@@ -35,6 +35,7 @@ export class FtpManager
 	private connectionInfo:string = '';
 	private destroyTimeout:NodeJS.Timer|null = null;
 	private cancelBlockedCommand:(()=>void)|null = null;
+	private currentTask:Task|null = null;
 	private connected:boolean = false;
 	public home:string = '';
 	
@@ -67,6 +68,7 @@ export class FtpManager
 		{
 			this.cancelBlockedCommand();
 			this.cancelBlockedCommand = null;
+			this.currentTask = null;
 		}
 	}
 
@@ -87,17 +89,19 @@ export class FtpManager
 		return JSON.stringify(datas);
 	}
 
-	private _blockTestWith<T>(task:Promise<T>):Promise<T>
+	private _blockTestWith<T>(task:Task, prom:Promise<T>):Promise<T>
 	{
-		return new Promise<T>((resolve, reject)=>{
+		return task.with(new Promise<T>((resolve, reject)=>{
 			if (this.cancelBlockedCommand)
 			{
-				throw Error('Multiple order at same time');
+				const taskname = this.currentTask ? this.currentTask.name : 'none';
+				throw Error(`Multiple order at same time (previous: ${taskname}, current: ${task.name})`);
 			}
 			var blockTimeout:NodeJS.Timer|null = setTimeout(()=>{
 				if (blockTimeout)
 				{
 					this.cancelBlockedCommand = null;
+					this.currentTask = null;
 					blockTimeout = null;
 					reject('BLOCKED');
 				}
@@ -106,22 +110,24 @@ export class FtpManager
 				if (blockTimeout)
 				{
 					this.cancelBlockedCommand = null;
+					this.currentTask = null;
 					clearTimeout(blockTimeout);
 					blockTimeout = null;
 					return true;
 				}
 				return false;
 			};
+			this.currentTask = task;
 			this.cancelBlockedCommand = ()=>{
 				if (stopTimeout()) reject('CANCELLED');
 			};
 			
-			task.then(t=>{
+			prom.then(t=>{
 				if (stopTimeout()) resolve(t);
 			}, err=>{
 				if (stopTimeout()) reject(err);
 			});
-		});
+		}));
 	}
 	
 	private _blockTestWrap<T>(task:Task, callback:(client:FileInterface)=>Promise<T>)
@@ -132,7 +138,7 @@ export class FtpManager
 				this._cancelDestroyTimeout();
 				try
 				{
-					const t = await task.with(this._blockTestWith(callback(client)));
+					const t = await this._blockTestWith(task, callback(client));
 					this._updateDestroyTimeout();
 					return t;
 				}
@@ -206,7 +212,7 @@ export class FtpManager
 				try
 				{
 					that.logger.message(`Trying to connect to ${config.url} with user ${config.username}`);
-					await task.with(that._blockTestWith(client.connect(password)));
+					await that._blockTestWith(task, client.connect(password));
 					client.log('Connected');
 					that.client = client;
 					return;

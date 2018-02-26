@@ -90,6 +90,7 @@ export class WorkspaceWatcher implements WorkspaceItem
 			this.attachWatcher(WatcherMode.CONFIG);
 		});
 		this.config.onNotFound(() => {
+			this.ftp.onNotFoundConfig();
 			this.attachOpenWatcher(false);
 			this.attachWatcher(WatcherMode.NONE);
 		});

@@ -1,3 +1,6 @@
+# 1.3.13
+* sftp exec bug fix (about stream count limit)
+
 # 1.3.12
 * Fix init error
 * Fix too many request view & list problem

@@ -1,5 +1,5 @@
 
-import { Client, ConnectConfig, SFTPWrapper } from 'ssh2';
+import { Client, ConnectConfig, SFTPWrapper, ClientChannel } from 'ssh2';
 import { File } from 'krfile';
 
 import { FileInfo } from '../util/fileinfo';
@@ -57,26 +57,14 @@ export class SftpConnection extends FileInterface
 			options = merge(options, config.sftpOverride);
 	
 			return await new Promise<void>((resolve, reject) => {
-				client.on('ready', () => {
-					if (!client) return reject(Error(NOT_CREATED));
-
-					client.sftp((err, sftp) => {
-						if (err) return reject(err);
-						this.sftp = sftp;
-						resolve();
-					});
-				})
+				client.on('ready', resolve)
 				.on('error', reject)
 				.connect(options);
 			});
 		}
 		catch(err)
 		{
-			if (this.sftp)
-			{
-				this.sftp.end();
-				this.sftp = null;
-			}
+			this._endSftp();
 			if (this.client)
 			{
 				this.client.destroy();
@@ -88,11 +76,7 @@ export class SftpConnection extends FileInterface
 	
 	disconnect():void
 	{
-		if (this.sftp)
-		{
-			this.sftp.end();
-			this.sftp = null;
-		}
+		this._endSftp();
 		if (this.client)
 		{
 			this.client.end();
@@ -102,11 +86,7 @@ export class SftpConnection extends FileInterface
 
 	terminate():void
 	{
-		if (this.sftp)
-		{
-			this.sftp.end();
-			this.sftp = null;
-		}
+		this._endSftp();
 		if (this.client)
 		{
 			this.client.destroy();
@@ -116,11 +96,10 @@ export class SftpConnection extends FileInterface
 
 	exec(command:string):Promise<string>
 	{
-		const client = this.client;
-		if (!client) return Promise.reject(Error(NOT_CREATED));
-
 		return new Promise((resolve, reject)=>{
-			client.exec(command, (err, stream)=>{
+			if (!this.client) return reject(Error(NOT_CREATED));
+			this._endSftp();
+			this.client.exec(command, (err, stream)=>{
 				if (err) return reject(errorWrap(err));
 				var data = '';
 				var errs = '';
@@ -143,24 +122,42 @@ export class SftpConnection extends FileInterface
 		return this.exec('pwd');
 	}
 
+	private _endSftp():void
+	{
+		if (this.sftp)
+		{
+			this.sftp.end();
+			this.sftp = null;
+		}
+	}
+	private _getSftp():Promise<SFTPWrapper>
+	{
+		return new Promise((resolve, reject)=>{
+			if (this.sftp) return resolve(this.sftp);
+			if (!this.client) return reject(Error(NOT_CREATED));
+			this.client.sftp((err, sftp)=>{
+				this.sftp = sftp;
+				if (err) reject(err);
+				else resolve(sftp);
+			});
+		});
+	}
+
 	private _readLink(ftppath:string):Promise<string>
 	{
-		return new Promise<string>((resolve, reject)=>{
-			const sftp = this.sftp;
-			if (!sftp) return reject(Error(NOT_CREATED));
-
+		return this._getSftp()
+		.then(sftp=>new Promise<string>((resolve, reject)=>{
 			sftp.readlink(ftppath, (err, target)=>{
 				if (err) return reject(err);
 				resolve(target);
 			});
-		})
+		}));
 	}
 
 	private _rmdirSingle(ftppath:string):Promise<void>
 	{
-		return new Promise((resolve, reject) => {
-			const sftp = this.sftp;
-			if (!sftp) return reject(Error(NOT_CREATED));
+		return this._getSftp()
+		.then(sftp=>new Promise<void>((resolve, reject) => {
 			return sftp.rmdir(ftppath, (err) => {
 				if (err)
 				{
@@ -172,14 +169,11 @@ export class SftpConnection extends FileInterface
 					resolve();
 				}
 			});
-		});
+		}));
 	}
 
 	async _rmdir(ftppath:string):Promise<void>
 	{
-		const sftp = this.sftp;
-		if (!sftp) throw Error(NOT_CREATED);
-
 		const list = await this.list(ftppath);
 		if (list.length === 0)
 		{
@@ -210,9 +204,8 @@ export class SftpConnection extends FileInterface
 
 	_delete(ftppath:string):Promise<void>
 	{
-		return new Promise((resolve, reject) => {	
-			const sftp = this.sftp;
-			if (!sftp) return reject(Error(NOT_CREATED));
+		return this._getSftp()
+		.then(sftp=>new Promise<void>((resolve, reject) => {
 			sftp.unlink(ftppath, (err) => {
 				if (err) {
 					if (err.code === 2) err.ftpCode = FILE_NOT_FOUND;
@@ -221,14 +214,13 @@ export class SftpConnection extends FileInterface
 				}
 				resolve();
 			});
-		});	
+		}));	
 	}
 
 	_mkdirSingle(ftppath:string):Promise<void>
 	{
-		return new Promise((resolve, reject) => {	
-			const sftp = this.sftp;
-			if (!sftp) return reject(Error(NOT_CREATED));
+		return this._getSftp()
+		.then(sftp=>new Promise<void>((resolve, reject) => {	
 			sftp.mkdir(ftppath, (err) => {
 				if (err)
 				{
@@ -239,7 +231,7 @@ export class SftpConnection extends FileInterface
 				}
 				resolve();
 			});
-		});
+		}));
 	}
 
 	async _mkdir(ftppath:string):Promise<void>
@@ -259,9 +251,8 @@ export class SftpConnection extends FileInterface
 
 	_put(localpath:File, ftppath:string):Promise<void>
 	{
-		return new Promise((resolve, reject) => {
-			const sftp = this.sftp;
-			if (!sftp) return reject(Error(NOT_CREATED));
+		return this._getSftp()
+		.then(sftp=>new Promise<void>((resolve, reject) => {
 			sftp.fastPut(localpath.fsPath, ftppath, (err) => {
 				if (err)
 				{
@@ -271,14 +262,13 @@ export class SftpConnection extends FileInterface
 				}
 				resolve();
 			});
-		});
+		}));
 	}
 
 	_get(ftppath:string):Promise<NodeJS.ReadableStream>
 	{
-		return new Promise((resolve, reject) => {
-			const sftp = this.sftp;
-			if (!sftp) return reject(Error(NOT_CREATED));
+		return this._getSftp()
+		.then(sftp=>new Promise<NodeJS.ReadableStream>((resolve, reject) => {
 			try
 			{
 				const stream = sftp.createReadStream(ftppath, {encoding:<any>null});
@@ -291,14 +281,13 @@ export class SftpConnection extends FileInterface
 				else if(err.code === 550) err.ftpCode = FILE_NOT_FOUND;
 				reject(err);
 			}
-		});	
+		}));	
 	}
 
 	_list(ftppath:string):Promise<FileInfo[]>
 	{
-		return new Promise((resolve, reject) => {
-			const sftp = this.sftp;
-			if (!sftp) return reject(Error(NOT_CREATED));
+		return this._getSftp()
+		.then(sftp=>new Promise<FileInfo[]>((resolve, reject) => {
 			sftp.readdir(ftppath, (err, list) => {
 				if (err) {
 					if (err.code === 2) return resolve([]);
@@ -332,24 +321,22 @@ export class SftpConnection extends FileInterface
 				}
 				resolve(nlist);
 			});
-		});
+		}));
 	}
 
 	_readlink(fileinfo:FileInfo, ftppath:string):Promise<string>
 	{
-		return new Promise<string>((resolve, reject)=>{
-			if (fileinfo.link)
-			{
-				resolve(fileinfo.link);
-				return;
-			}
-			const sftp = this.sftp;
-			if (!sftp) return reject(Error(NOT_CREATED));
+		if (fileinfo.link)
+		{
+			return Promise.resolve(fileinfo.link);
+		}
+		return this._getSftp()
+		.then(sftp=>new Promise<string>((resolve, reject)=>{
 			sftp.readlink(ftppath, (err, target)=>{
 				if (err) return reject(err);
 				fileinfo.link = target;
 				resolve(target);
 			});
-		});
+		}));
 	}
 }

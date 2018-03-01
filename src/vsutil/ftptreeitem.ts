@@ -93,10 +93,6 @@ export class FtpTreeItem extends TreeItem
 				arguments: [Uri.parse(ftpFile.getUrl())]
 			};
 		}
-		
-		if (ftpFile)
-		{
-		}
 	}
 
 	compare(other:FtpTreeItem):number

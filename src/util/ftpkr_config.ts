@@ -328,10 +328,9 @@ class FtpKrConfigClass extends ConfigContainer<ConfigProperties>
 			// copy main config
 			for(const p of this.properties)
 			{
-				if (!(p in server))
-				{
-					(<any>server)[p] = util.clone(config[p]);
-				}
+				if (!(p in config)) continue;
+				if (p in server) continue;
+				(<any>server)[p] = util.clone(config[p]);
 			}
 
 			// make dupmap

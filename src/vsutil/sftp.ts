@@ -3,7 +3,7 @@ import { Client, ConnectConfig, SFTPWrapper, ClientChannel } from 'ssh2';
 import { File } from 'krfile';
 
 import { FileInfo } from '../util/fileinfo';
-import { merge, errorWrap } from '../util/util';
+import { merge, promiseErrorWrap } from '../util/util';
 import { ServerConfig } from '../util/serverinfo';
 
 import { FileInterface, NOT_CREATED, DIRECTORY_NOT_FOUND, FILE_NOT_FOUND } from './fileinterface';
@@ -96,25 +96,25 @@ export class SftpConnection extends FileInterface
 
 	exec(command:string):Promise<string>
 	{
-		return new Promise((resolve, reject)=>{
+		return promiseErrorWrap(new Promise((resolve, reject)=>{
 			if (!this.client) return reject(Error(NOT_CREATED));
 			this._endSftp();
 			this.client.exec(command, (err, stream)=>{
-				if (err) return reject(errorWrap(err));
+				if (err) return reject(err);
 				var data = '';
 				var errs = '';
 				stream.on('data', (stdout:string|undefined, stderr:string|undefined)=>{
 					if (stdout) data += stdout;
 					if (stderr) errs += stderr;
 				})
-				.on('error', (err:any)=>reject(errorWrap(err)))
+				.on('error', (err:any)=>reject(err))
 				.on('exit', (code, signal)=>{
 					if (errs) reject(Error(errs));
 					else resolve(data.trim());
 					stream.end();
 				});
 			});
-		});
+		}));
 	}
 
 	pwd():Promise<string>

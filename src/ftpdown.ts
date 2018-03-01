@@ -7,6 +7,7 @@ import { Logger } from './vsutil/log';
 
 import { Config } from './config';
 import { FtpSyncManager } from './ftpsync';
+import { printMappedError } from './util/sm';
 
 export class FtpDownloader implements WorkspaceItem
 {
@@ -118,7 +119,7 @@ export class FtpDownloader implements WorkspaceItem
 			}
 			catch(err)
 			{
-				console.error(err);
+				printMappedError(err);
 			}
 		}
 	}

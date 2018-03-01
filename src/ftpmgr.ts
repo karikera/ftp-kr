@@ -83,8 +83,8 @@ export class FtpManager
 			config.host,
 			config.port,
 			usepk,
-			usepk ? config.privateKey : undefined,
-			usepk ? config.passphrase : undefined
+			usepk ? config.privateKey : '',
+			usepk ? config.passphrase : ''
 		];
 		return JSON.stringify(datas);
 	}

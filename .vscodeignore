@@ -6,7 +6,6 @@ jsconfig.json
 
 node_modules/.bin/**
 /src/
-/out/**/*.js.map
 /out/tool/schema_to_md.js
 /images/*.psd
 /compile.js

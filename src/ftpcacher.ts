@@ -15,6 +15,7 @@ import { Task, Scheduler, PRIORITY_NORMAL } from './vsutil/work';
 
 import { Config } from './config';
 import { FtpManager } from './ftpmgr';
+import { getMappedStack, printMappedError } from './util/sm';
 
 export interface BatchOptions
 {
@@ -661,8 +662,8 @@ export class FtpCacher
 				}
 				else
 				{
-					console.error(err);
-					this.logger.message(err);
+					printMappedError(err);
+					this.logger.message(err.message ? err.message : err);
 				}
 				errorCount ++;
 			}

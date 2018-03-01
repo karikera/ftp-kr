@@ -3,6 +3,7 @@ import { OutputChannel, window } from 'vscode';
 import { WorkspaceItem, Workspace } from './ws';
 import { vsutil } from './vsutil';
 import { LogLevel } from '../util/serverinfo';
+import { getMappedStack } from '../util/sm';
 
 enum LogLevelEnum
 {
@@ -17,6 +18,7 @@ export class Logger implements WorkspaceItem
 	public logLevel:LogLevelEnum = LogLevelEnum.NORMAL;
 	private output:OutputChannel|null = null;
 	public static all:Set<Logger> = new Set;
+	private task:Promise<void> = Promise.resolve();
 
 	constructor(name:string|Workspace)
 	{
@@ -28,24 +30,23 @@ export class Logger implements WorkspaceItem
 		Logger.all.add(this);
 	}
 	
-	private print(message:string):void
-	{
-		if (!this.output) return;
-		this.output.appendLine(message);
-	}
-
-	private log(level:LogLevelEnum, ...message:string[]):void
+	private logRaw(level:LogLevelEnum, ...message:string[]):void
 	{
 		if (level < this.logLevel) return;
+		if (!this.output) return;
 		switch (this.logLevel)
 		{
 		case LogLevelEnum.VERBOSE:
-			this.print(LogLevelEnum[level]+': '+message.join(' ').replace(/\n/g, '\nVERBOSE: '));
+			this.output.appendLine(LogLevelEnum[level]+': '+message.join(' ').replace(/\n/g, '\nVERBOSE: '));
 			break;
 		default:
-			this.print(message.join(' '));
+			this.output.appendLine(message.join(' '));
 			break;
 		}
+	}
+	private log(level:LogLevelEnum, ...message:string[]):Promise<void>
+	{
+		return this.task = this.task.then(()=>this.logRaw(level, ...message));
 	}
 	
 	public setLogLevel(level:LogLevel):void
@@ -77,15 +78,16 @@ export class Logger implements WorkspaceItem
 		this.log(LogLevelEnum.VERBOSE, ... message);
 	}
 		
-	public error(err:NodeJS.ErrnoException|string):void
+	public error(err:any):Promise<void>
 	{
-		if (err === 'IGNORE') return;
-		console.error(err);
-		this.log(LogLevelEnum.ERROR, err.toString());
-		if (err instanceof Error)
-		{
-			window.showErrorMessage(err.message, 'Detail')
-			.then(res=>{
+		return this.task = this.task.then(async()=>{
+			if (err === 'IGNORE') return;
+			const stack = await getMappedStack(err);
+			if (stack)
+			{
+				console.error(stack);
+				this.logRaw(LogLevelEnum.ERROR, stack);
+				const res = await window.showErrorMessage(err.message, 'Detail');
 				if (res !== 'Detail') return;
 				var output = '';
 				if (err.task)
@@ -109,31 +111,37 @@ export class Logger implements WorkspaceItem
 					output += err.errno;
 				}
 				output += '\n[Stack Trace]\n';
-				output += err.stack;
+				output += stack;
 				vsutil.openNew(output);
-			});
-		}
-		else
-		{
-			window.showErrorMessage(err.toString());
-		}
+			}
+			else
+			{
+				console.error(err);
+				const errString = err.toString();
+				this.logRaw(LogLevelEnum.ERROR, errString);
+				window.showErrorMessage(errString);
+			}
+		});
 	}
 
 	public errorConfirm(err:Error|string, ...items:string[]):Thenable<string|undefined>
 	{
 		var msg:string;
+		var error:Error;
 		if (err instanceof Error)
 		{
 			msg = err.message;
-			console.error(err);
-			this.log(LogLevelEnum.ERROR, err.toString());
+			error = err;
 		}
 		else
 		{
 			msg = err;
-			console.error(new Error(err));
-			this.log(LogLevelEnum.ERROR, err);
+			error = Error(err);
 		}
+		
+		this.task = this.task
+		.then(()=>getMappedStack(error))
+		.then(stack=>this.logRaw(LogLevelEnum.ERROR, stack));
 
 		return window.showErrorMessage(msg, ...items);
 	}

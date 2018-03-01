@@ -7,6 +7,7 @@ import * as util from '../util/util';
 import { FileInfo } from '../util/fileinfo';
 
 import { FileInterface, NOT_CREATED, FILE_NOT_FOUND, DIRECTORY_NOT_FOUND } from "./fileinterface";
+import { printMappedError } from '../util/sm';
 
 
 class FtpClient extends FtpClientO
@@ -155,7 +156,7 @@ export class FtpConnection extends FileInterface
 					socket.write = (str:string)=>oldwrite.call(socket, str, 'binary');
 					socket.setEncoding('binary');
 					client.binary(err=>{
-						if (err) console.error(err);
+						if (err) printMappedError(err);
 						resolve();
 					});
 				})

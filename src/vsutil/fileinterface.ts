@@ -8,7 +8,7 @@ import { Logger } from './log';
 import { StateBar } from './vsutil';
 import { Workspace } from './ws';
 import { ServerConfig } from '../util/serverinfo';
-import { errorWrap } from '../util/util';
+import { promiseErrorWrap } from '../util/util';
 
 export const NOT_CREATED = 'not created connection access';
 export const DIRECTORY_NOT_FOUND = 1;
@@ -36,7 +36,7 @@ export abstract class FileInterface
 
 	public connect(password?:string):Promise<void>
 	{
-		return this._connect(password).catch(err=>{throw errorWrap(err);});
+		return promiseErrorWrap(this._connect(password));
 	}
 
 	abstract _connect(password?:string):Promise<void>;
@@ -72,15 +72,15 @@ export abstract class FileInterface
 	_callWithName<T>(name:string, ftppath:string, ignorecode:number, defVal:T, callback:(name:string)=>Promise<T>):Promise<T>
 	{
 		this.logWithState(name+' '+ftppath);
-		return callback(this.str2bin(ftppath)).then(v=>{
+		return promiseErrorWrap(callback(this.str2bin(ftppath)).then(v=>{
 			this.state.close();
 			return v;
 		}, (err):T=>{
 			this.state.close();
 			if (err.ftpCode === ignorecode) return defVal;
 			this.log(name+" fail: "+ftppath);
-			throw errorWrap(err);
-		});
+			throw err;
+		}));
 	}
 
 	upload(ftppath:string, localpath:File):Promise<void>
@@ -88,7 +88,7 @@ export abstract class FileInterface
 		this.logWithState('upload '+ftppath);
 		const binpath = this.str2bin(ftppath);
 
-		return this._put(localpath, binpath)
+		return promiseErrorWrap(this._put(localpath, binpath)
 		.catch(err=>{
 			if (err.ftpCode !== DIRECTORY_NOT_FOUND) throw err;
 			const idx = ftppath.lastIndexOf("/");
@@ -101,15 +101,15 @@ export abstract class FileInterface
 		}, err=>{
 			this.state.close();
 			this.log("upload fail: "+ftppath);
-			throw errorWrap(err);
-		});
+			throw err;
+		}));
 	}
 
 	download(localpath:File, ftppath:string):Promise<void>
 	{
 		this.logWithState('download '+ftppath);
 
-		return this._get(this.str2bin(ftppath))
+		return promiseErrorWrap(this._get(this.str2bin(ftppath))
 		.then((stream)=>{
 			return new Promise<void>((resolve, reject)=>{
 				stream.once('close', ()=>{
@@ -125,15 +125,15 @@ export abstract class FileInterface
 		}, err=>{
 			this.state.close();
 			this.log("download fail: "+ftppath);
-			throw errorWrap(err);
-		});
+			throw err;
+		}));
 	}
 
 	view(ftppath:string):Promise<string>
 	{
 		this.logWithState('view '+ftppath);
 
-		return this._get(this.str2bin(ftppath))
+		return promiseErrorWrap(this._get(this.str2bin(ftppath))
 		.then((stream)=>{
 			return new Promise<string>((resolve, reject)=>{
 				var str = '';
@@ -152,8 +152,8 @@ export abstract class FileInterface
 		}, err=>{
 			this.state.close();
 			this.log("view fail: "+ftppath);
-			throw errorWrap(err);
-		});
+			throw err;
+		}));
 	}
 
 	list(ftppath:string):Promise<FileInfo[]>
@@ -161,7 +161,7 @@ export abstract class FileInterface
 		if (!ftppath) ftppath = ".";
 		this.logWithState('list '+ftppath);
 
-		return this._list(this.str2bin(ftppath))
+		return promiseErrorWrap(this._list(this.str2bin(ftppath))
 		.then((list)=>{
 			this.state.close();
 
@@ -184,8 +184,8 @@ export abstract class FileInterface
 		}, err=>{
 			this.state.close();
 			this.log("list fail: "+ftppath);
-			throw errorWrap(err);
-		});
+			throw err;
+		}));
 	}
 
 	rmdir(ftppath:string):Promise<void>
@@ -207,7 +207,7 @@ export abstract class FileInterface
 	{
 		if (fileinfo.type !== 'l') throw Error(ftppath + ' is not symlink');
 		this.logWithState('readlink '+fileinfo.name);
-		return this._readlink(fileinfo, this.str2bin(ftppath))
+		return promiseErrorWrap(this._readlink(fileinfo, this.str2bin(ftppath))
 		.then(v=>{
 			if (v.startsWith('/')) v = ftp_path.normalize(v);
 			else v = ftp_path.normalize(ftppath + '/../' + v);
@@ -217,8 +217,8 @@ export abstract class FileInterface
 		}, (err)=>{
 			this.state.close();
 			this.log("readlink fail: "+fileinfo.name);
-			throw errorWrap(err);
-		});
+			throw err;
+		}));
 	}
 
 

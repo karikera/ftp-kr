@@ -27,9 +27,9 @@ export function activate(context:ExtensionContext) {
 	
 	Workspace.loadAll();
 
-	workspace.registerTextDocumentContentProvider('sftp', ftpTree);
-	workspace.registerTextDocumentContentProvider('ftp', ftpTree);
-	workspace.registerTextDocumentContentProvider('ftps', ftpTree);
+	workspace.registerTextDocumentContentProvider('sftp', ftpTree.getContentProvider('sftp'));
+	workspace.registerTextDocumentContentProvider('ftp', ftpTree.getContentProvider('ftp'));
+	workspace.registerTextDocumentContentProvider('ftps', ftpTree.getContentProvider('ftps'));
 	window.registerTreeDataProvider('ftpkr.explorer', ftpTree);
 }
 export function deactivate() {

@@ -30,22 +30,65 @@ function cache(path:string, cb:()=>Promise<ViewedFile>):Promise<ViewedFile>
 	return newcached;
 }
 
-export class FtpTree implements TreeDataProvider<FtpTreeItem>, TextDocumentContentProvider
+export class FtpContentProvider implements TextDocumentContentProvider
 {
-	private _onDidChangeTreeData: EventEmitter<FtpTreeItem> = new EventEmitter<FtpTreeItem>();
-	private _onDidChange: EventEmitter<Uri> = new EventEmitter<Uri>();
-	readonly onDidChangeTreeData: Event<FtpTreeItem> = this._onDidChangeTreeData.event;
+	readonly _onDidChange: EventEmitter<Uri> = new EventEmitter<Uri>();
 	readonly onDidChange: Event<Uri> = this._onDidChange.event;
+
+	constructor(public readonly scheme:string)
+	{
+	}
 	
-	private readonly map:Map<FtpCacher, FtpTreeServer> = new Map;
+	public async provideTextDocumentContent(uri: Uri, token: CancellationToken): Promise<string | null>
+	{
+		var logger = defaultLogger;
+		try
+		{
+			const server = ftpTree.getServerFromUri(uri);
+			logger = server.logger;
+
+			const ftppath = uri.path;
+			const viewed = await server.downloadAsText(ftppath);
+			
+			if (viewed.file) viewed.file.contentCached = true;
+			return viewed.content;
+		}
+		catch(err)
+		{
+			processError(logger, err);
+			return '<Error>\n'+err ? (err.stack || err.message || err) : '';
+		}
+	}
+
+}
+
+export class FtpTree implements TreeDataProvider<FtpTreeItem>
+{
+	private readonly _onDidChangeTreeData: EventEmitter<FtpTreeItem> = new EventEmitter<FtpTreeItem>();
+	readonly onDidChangeTreeData: Event<FtpTreeItem> = this._onDidChangeTreeData.event;
+	
+	private readonly map = new Map<FtpCacher, FtpTreeServer>();
+	private readonly contentProviders = new Map<string, FtpContentProvider>();
 
 	constructor()
 	{
 	}
 
+	public getContentProvider(scheme:string):FtpContentProvider
+	{
+		var cp = this.contentProviders.get(scheme);
+		if (cp) return cp;
+		cp = new FtpContentProvider(scheme);
+		this.contentProviders.set(scheme, cp);
+		return cp;
+	}
+
 	public refreshContent(target:VFSState):void
 	{
-		this._onDidChange.fire(Uri.parse(target.getUrl()));
+		const uri = Uri.parse(target.getUrl());
+		const cp = this.contentProviders.get(uri.scheme);
+		if (!cp) return;
+		cp._onDidChange.fire();
 	}
 
 	public refreshTree(target?:VFSState):void
@@ -132,28 +175,6 @@ export class FtpTree implements TreeDataProvider<FtpTreeItem>, TextDocumentConte
 			return [];
 		}
 	}
-
-	public async provideTextDocumentContent(uri: Uri, token: CancellationToken): Promise<string | null>
-	{
-		var logger = defaultLogger;
-		try
-		{
-			const server = this.getServerFromUri(uri);
-			logger = server.logger;
-
-			const ftppath = uri.path;
-			const viewed = await cache(ftppath, ()=>server.downloadAsText(ftppath));
-			
-			if (viewed.file) viewed.file.contentCached = true;
-			return viewed.content;
-		}
-		catch(err)
-		{
-			processError(logger, err);
-			return '<Error>\n'+err ? (err.stack || err.message || err) : '';
-		}
-	}
-
 }
 
 export const ftpTree = new FtpTree;

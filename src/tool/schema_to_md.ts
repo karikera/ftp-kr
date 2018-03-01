@@ -1,5 +1,6 @@
 
 import { File } from 'krfile';
+import { printMappedError } from '../util/sm';
 
 
 function mergeType(obj:any, other:any):void
@@ -123,4 +124,4 @@ async function main():Promise<void>
 	await file.reext('md').create(writer.finalize());
 }
 
-main().catch(err=>console.error(err));
+main().catch(err=>printMappedError(err));

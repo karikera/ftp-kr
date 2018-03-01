@@ -1,3 +1,9 @@
+# 1.3.14
+* bugfix - SFTP alt server error
+* bugfix - Tree view after config updated
+* SSH password re-ask
+* append js.map for debugging
+
 # 1.3.13
 * sftp exec bug fix (about stream count limit)
 

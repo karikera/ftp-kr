@@ -242,21 +242,18 @@ export function clone<T>(value:T):T
 	return <any>nobj;
 }
 
-export function errorWrap(err:any):any
+export function promiseErrorWrap<T>(prom:Promise<T>):Promise<T>
 {
-	if (err && err.stack)
-	{
-		if (err.code)
+	const stack = Error().stack || '';
+	return prom.catch(err=>{
+		if (err && err.stack)
 		{
-			err.message = err.message + "[" + err.code + "]";
+			if (err.code)
+			{
+				err.message = err.message + "[" + err.code + "]";
+			}
+			err.stack = err.stack + stack.substr(stack.indexOf('\n'));
 		}
-		const nstack = Error(err.message).stack || '';
-		nstack.substr(nstack.indexOf('\n'));
-		err.stack = nstack;
-		return err;
-	}
-	else
-	{
-		return err;
-	}
+		throw err;
+	});
 }

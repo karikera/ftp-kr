@@ -74,7 +74,10 @@ async function main():Promise<void>
 			options.privateKey = keybuf;
 			options.passphrase = config.passphrase;
 		}
-		if (config.password) options.password = config.password;
+		else
+		{
+			if (config.password) options.password = config.password;
+		}
 		options.host = config.host;
 		options.port = config.port ? config.port : 22,
 		options.username = config.username;
@@ -84,7 +87,7 @@ async function main():Promise<void>
 	
 		for (;;)
 		{
-			if (!options.password)
+			if (!config.privateKey && !options.password)
 			{
 				const password = await new Promise<string>((resolve, reject)=>read({prompt:"Password: ", silent:true}, (err, result)=>{
 					if (err) reject(err);

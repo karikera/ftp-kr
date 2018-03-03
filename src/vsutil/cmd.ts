@@ -13,9 +13,11 @@ import { FtpTreeItem } from './ftptreeitem';
 export interface CommandArgs
 {
 	file?:File;
+	files?:File[];
 	uri?:Uri;
 	treeItem?:FtpTreeItem;
 	workspace?:Workspace;
+	openedFile?:boolean;
 }
 
 export type Command = {[key:string]:(args:CommandArgs)=>any};
@@ -40,6 +42,15 @@ async function runCommand(commands:Command, name:string, ...args:any[]):Promise<
 					if (arg.scheme === 'file')
 					{
 						cmdargs.file = new File(arg.fsPath);
+						const files = args[1];
+						if (files && (files instanceof Array) && (files[0] instanceof Uri))
+						{
+							cmdargs.files = files.map((uri:Uri)=>new File(uri.fsPath));
+						}
+						else
+						{
+							cmdargs.files = [cmdargs.file];
+						}
 					}
 					else
 					{
@@ -53,6 +64,8 @@ async function runCommand(commands:Command, name:string, ...args:any[]):Promise<
 					{
 						const doc = editor.document;
 						cmdargs.file = new File(doc.uri.fsPath);
+						cmdargs.files = [cmdargs.file];
+						cmdargs.openedFile = true;
 						await doc.save();
 					}
 				}

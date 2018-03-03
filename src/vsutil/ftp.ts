@@ -125,7 +125,7 @@ export class FtpConnection extends FileInterface
 
 			var options:FtpClientO.Options;
 			const config = this.config;
-			if (config.protocol === 'ftps')
+			if (config.protocol === 'ftps' || config.secure)
 			{
 				options = {
 					secure: true,

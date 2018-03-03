@@ -47,6 +47,7 @@ export class FtpTreeItem extends TreeItem
 		if (!item.ftpFile) return;
 		const array = ftpTreeItemFromFile.get(item.ftpFile);
 		if(!array) return;
+
 		for (var i=0;i<array.length;i++)
 		{
 			if (array[i] !== item) continue;
@@ -85,13 +86,17 @@ export class FtpTreeItem extends TreeItem
 		super(label, (!ftpFile ||  ftpFile.type === 'd') ? TreeItemCollapsibleState.Collapsed : TreeItemCollapsibleState.None);
 		this.server = server || <any>this;
 
-		if (ftpFile && ftpFile.type === '-')
+		if (ftpFile)
 		{
-			this.command = {
-				command: 'ftpkr.view',
-				title: 'View This',
-				arguments: [Uri.parse(ftpFile.getUrl())]
-			};
+			FtpTreeItem.add(ftpFile, this);
+			if (ftpFile.type === '-')
+			{
+				this.command = {
+					command: 'ftpkr.view',
+					title: 'View This',
+					arguments: [Uri.parse(ftpFile.getUrl())]
+				};
+			}
 		}
 	}
 

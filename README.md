@@ -45,7 +45,7 @@ You can override ftp/sftp options by `ftpOverride`/`sftpOverride` field, It will
 * Real-Time FTP/SFTP synchronization(You can off it!)
 * `ftp-kr: Init` - Starts up extension and generates `ftp-kr.json`.
 * `ftp-kr: Upload All` - Upload all without same size files
-* `ftp-kr: Download All` - Download all without existed files
+* `ftp-kr: Download All` - Download all without same size files
 * `ftp-kr: Upload This` - Upload this file.
 * `ftp-kr: Download This` - Download this file.
 * `ftp-kr: Delete This` - Delete file in remote server.

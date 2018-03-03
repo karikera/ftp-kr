@@ -1,3 +1,9 @@
+# 1.3.15
+* Multiple selected file upload/download support
+* `Download all` checks with file size now
+* Make `Detail` more detail
+* many bugfix
+
 # 1.3.14
 * bugfix - SFTP alt server error
 * bugfix - Tree view after config updated

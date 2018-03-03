@@ -13,7 +13,7 @@ import { Workspace } from '../vsutil/ws';
 import { ftpTree } from '../ftptree';
 import { FtpSyncManager } from '../ftpsync';
 import { Config } from '../config';
-import { FtpCacher } from '../ftpcacher';
+import { FtpCacher, BatchOptions } from '../ftpcacher';
 import { openSshTerminal } from '../sshmgr';
 
 function taskTimer<T>(taskname: string, taskpromise: Promise<T>): Promise<T> {
@@ -27,17 +27,19 @@ function taskTimer<T>(taskname: string, taskpromise: Promise<T>): Promise<T> {
 	});
 }
 
-async function getInfoToTransfer(args: CommandArgs):Promise<{workspace:Workspace, server:FtpCacher, file:File}>
+async function getInfoToTransfer(args: CommandArgs):Promise<{workspace:Workspace, server:FtpCacher, file:File, files:File[]}>
 {
 	var workspace:Workspace;
 	var server:FtpCacher;
 	var file:File;
+	var files:File[];
 
 	if (args.uri)
 	{
 		server = ftpTree.getServerFromUri(args.uri).ftp;
 		workspace = server.workspace;
 		file = server.fromFtpPath(args.uri.path);
+		files = [file];
 	}
 	else if (args.treeItem)
 	{
@@ -51,6 +53,7 @@ async function getInfoToTransfer(args: CommandArgs):Promise<{workspace:Workspace
 		{
 			file = server.fromFtpFile(args.treeItem.ftpFile);
 		}
+		files = [file];
 	}
 	else
 	{
@@ -63,14 +66,68 @@ async function getInfoToTransfer(args: CommandArgs):Promise<{workspace:Workspace
 		workspace = args.workspace;
 		server = workspace.query(FtpSyncManager).targetServer;
 		file = args.file;
+		files = args.files || [file];
 	}
-	return {workspace, server, file};
+	return {workspace, server, file, files};
+}
+
+/**
+ * return false if files not contains directory
+ */
+async function isFileCountOver(files:(File[]|File), count:number):Promise<boolean>
+{
+	async function checkFiles(files:File[]):Promise<void>
+	{
+		for(const file of files)
+		{
+			if (await file.isDirectory())
+			{
+				const files = await file.children();
+				count -= files.length;
+				if (count <= 0) throw 'OVER';
+				await checkFiles(files);
+			}
+		}
+	}
+
+	try
+	{
+		if (!(files instanceof Array)) files = [files];
+		checkFiles(files);
+		return false;
+	}
+	catch (err)
+	{
+		if (err === 'OVER') return true;
+		throw err;
+	}
+}
+
+function removeChildren(files:File[]):File[]
+{
+	const sorted:(File|null)[] = files.slice().sort(v=>v.fsPath.length);
+	for (var i=0;i<sorted.length;i++)
+	{
+		const parent = sorted[i];
+		if (!parent) continue;
+		for (var j=i+1;j<sorted.length;j++)
+		{
+			const child = sorted[j];
+			if (!child) continue;
+			if (child.in(parent))
+			{
+				sorted[i] = null;
+			}
+		}
+	}
+	return <File[]>sorted.filter(file=>file !== null);
 }
 
 export const commands:Command = {
 	async 'ftpkr.upload' (args: CommandArgs)
 	{
-		const {workspace, server, file} = await getInfoToTransfer(args);
+		var {workspace, server, files} = await getInfoToTransfer(args);
+		files = removeChildren(files);
 
 		const logger = workspace.query(Logger);
 		const config = workspace.query(Config);
@@ -80,19 +137,31 @@ export const commands:Command = {
 
 		await config.loadTest();
 
-		const isdir = await file.isDirectory();
-		if (isdir)
+		const bo:BatchOptions = {
+			whenRemoteModed:config.ignoreRemoteModification?'upload':'diff'
+		};
+		if (files.length === 1 && !await files[0].isDirectory())
 		{
-			await server.uploadAll(file);
+			await taskTimer('Upload', server.ftpUpload(files[0], null, bo));
 		}
 		else
 		{
-			await server.ftpUpload(file, null, {whenRemoteModed:config.ignoreRemoteModification?'upload':'diff'});
+			bo.doNotRefresh = true;
+			const confirmFirst = await isFileCountOver(files, config.noticeFileCount);
+			if (confirmFirst)
+			{
+				bo.confirmFirst = true;
+				await server.uploadAll(files, null, bo);
+			}
+			else
+			{
+				await taskTimer('Upload', server.uploadAll(files, null, bo));
+			}
 		}
 	},
 	async 'ftpkr.download' (args: CommandArgs)
 	{
-		const {workspace, server, file} = await getInfoToTransfer(args);
+		const {workspace, server, files} = await getInfoToTransfer(args);
 		
 		const logger = workspace.query(Logger);
 		const config = workspace.query(Config);
@@ -102,19 +171,30 @@ export const commands:Command = {
 		
 		await config.loadTest();
 
-		const isdir = await file.isDirectory();
-		if (isdir)
+		if (files.length === 1 && !await files[0].isDirectory())
 		{
-			await server.downloadAll(file);
+			await taskTimer('Download', server.ftpDownload(files[0], null, {}));
 		}
 		else
 		{
-			await taskTimer('Download', server.ftpDownload(file));
+			const confirmFirst = await isFileCountOver(files, config.noticeFileCount);
+			const bo:BatchOptions = {
+				doNotRefresh: true
+			};
+			if (confirmFirst)
+			{
+				bo.confirmFirst = true;
+				await server.downloadAll(files, null, bo);
+			}
+			else
+			{
+				await taskTimer('Download', server.downloadAll(files, null, bo));
+			}
 		}
 	},
 	async 'ftpkr.delete' (args: CommandArgs)
 	{
-		const {workspace, server, file} = await getInfoToTransfer(args);
+		const {workspace, server, files} = await getInfoToTransfer(args);
 		
 		const logger = workspace.query(Logger);
 		const config = workspace.query(Config);
@@ -123,7 +203,23 @@ export const commands:Command = {
 		logger.show();
 		
 		await config.loadTest();
-		await taskTimer('Delete', server.ftpDelete(file));
+		
+		if (files.length === 1 && !await files[0].isDirectory())
+		{
+			await taskTimer('Delete', server.ftpDelete(files[0], null, {}));
+		}
+		else
+		{
+			const confirmFirst = await isFileCountOver(files, config.noticeFileCount);
+			if (confirmFirst)
+			{
+				await server.deleteAll(files, null, {confirmFirst});
+			}
+			else
+			{
+				await taskTimer('Delete', server.deleteAll(files, null, {}));
+			}
+		}
 	},
 	async 'ftpkr.diff' (args: CommandArgs)
 	{
@@ -162,7 +258,11 @@ export const commands:Command = {
 
 		const server = await ftp.selectServer();
 		if (server === undefined) return;
-		await server.uploadAll(config.basePath);
+		await server.uploadAll(config.basePath, null, {
+			confirmFirst: true, 
+			doNotRefresh: true,
+			whenRemoteModed:config.ignoreRemoteModification?'upload':'error'
+		});
 	},
 	async 'ftpkr.downloadAll' (args: CommandArgs)
 	{
@@ -182,7 +282,10 @@ export const commands:Command = {
 
 		const server = await ftp.selectServer();
 		if (server === undefined) return;
-		await server.downloadAll(config.basePath);
+		await server.downloadAll(config.basePath, null, {
+			confirmFirst: true,
+			doNotRefresh: true
+		});
 	},
 	async 'ftpkr.cleanAll' (args: CommandArgs)
 	{
@@ -201,7 +304,11 @@ export const commands:Command = {
 		await vscode.workspace.saveAll();
 		const server = await ftp.selectServer();
 		if (server === undefined) return;
-		await server.cleanAll();
+		
+		await server.cleanAll(config.basePath, null, {
+			confirmFirst: true,
+			doNotRefresh: true
+		});
 	},
 	async 'ftpkr.refresh' (args: CommandArgs)
 	{
@@ -232,7 +339,7 @@ export const commands:Command = {
 			const ftp = workspace.query(FtpSyncManager);
 			for (const server of ftp.servers.values())
 			{
-				server.fs.refreshContent();
+				await server.fs.refreshContent();
 				server.refresh();
 			}
 			ftpTree.refreshTree();
@@ -311,7 +418,9 @@ export const commands:Command = {
 		await vscode.workspace.saveAll();
 		
 		const path = args.file;
-		ftp.runTaskJson('ftpkr.runtask', path);
+		ftp.runTaskJson('ftpkr.runtask', path, {
+			whenRemoteModed:config.ignoreRemoteModification?'upload':'error'
+		});
 	},
 	
 	async 'ftpkr.target'(args: CommandArgs)
@@ -323,7 +432,7 @@ export const commands:Command = {
 		}
 
 		const ftp = args.workspace.query(FtpSyncManager);
-		const server = await ftp.selectServer();
+		const server = await ftp.selectServer(true);
 		if (!server) return;
 		ftp.targetServer = server;
 	},

@@ -15,6 +15,7 @@ import { Task } from './vsutil/work';
 
 import { Config } from './config';
 import { ftp_path } from './util/ftp_path';
+import { promiseErrorWrap } from './util/util';
 
 function createClient(workspace:Workspace, config:ServerConfig):FileInterface
 {
@@ -132,7 +133,7 @@ export class FtpManager
 	
 	private _blockTestWrap<T>(task:Task, callback:(client:FileInterface)=>Promise<T>)
 	{
-		return this.init(task).then(async(client)=>{
+		return promiseErrorWrap(this.init(task).then(async(client)=>{
 			for (;;)
 			{
 				this._cancelDestroyTimeout();
@@ -150,7 +151,7 @@ export class FtpManager
 					client = await this.init(task);
 				}
 			}
-		});
+		}));
 	}
 
 	public disconnect():void

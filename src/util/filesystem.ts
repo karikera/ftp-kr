@@ -132,16 +132,17 @@ export abstract class VFSFileCommon extends VFSState
 
 export class VFSDirectory extends VFSFileCommon
 {
-	private files:{[key:string]:VFSState|undefined} = {};
+	private files = new Map<string, VFSState>();
 
 	constructor(parent:VFSDirectory|undefined, name:string)
 	{
 		super(parent, name);
 		
-		this.type = "d";
+		this.type = 'd';
 
-		this.files[""] = this.files["."] = this;
-		this.files[".."] = this.parent;
+		this.files.set('', this);
+		this.files.set('.', this);
+		if (this.parent) this.files.set('..', this.parent);
 	}
 
 	public async refreshContent():Promise<void>
@@ -195,9 +196,10 @@ export class VFSDirectory extends VFSFileCommon
 
 	public setByInfos(list:FileInfo[]):void
 	{
-		var nfiles:{[key:string]:(VFSState|undefined)} = {};
-		nfiles["."] = nfiles[""] = this;
-		nfiles[".."] = this.parent;
+		var nfiles = new Map<string,VFSState>();
+		this.files.set('', this);
+		this.files.set('.', this);
+		if (this.parent) this.files.set('..', this.parent);
 
 		var childrenChanged = false;
 
@@ -209,7 +211,7 @@ export class VFSDirectory extends VFSFileCommon
 			case "..": break;
 			case ".": this.setByInfo(ftpfile); break;
 			default:
-				var file = this.files[ftpfile.name];
+				var file = this.files.get(ftpfile.name);
 				const oldfile = file;
 				if (!file || file.type !== ftpfile.type)
 				{ 
@@ -239,7 +241,7 @@ export class VFSDirectory extends VFSFileCommon
 						file.refreshContent();
 					}
 				}
-				nfiles[ftpfile.name] = file;
+				nfiles.set(ftpfile.name, file);
 				file.setByInfo(ftpfile);
 				break;
 			}
@@ -277,28 +279,30 @@ export class VFSDirectory extends VFSFileCommon
 
 	public * children():Iterable<VFSState>
 	{
-		for (const name in this.files)
+		for (const [name, file] of this.files)
 		{
 			switch(name)
 			{
 			case '': case '.': case '..': continue;
 			}
-			
-			const file = this.files[name];
-			if (!file) continue;
 			yield file;
 		}
 	}
 
 	public item(name:string):VFSState|undefined
 	{
-		return this.files[name];
+		return this.files.get(name);
+	}
+
+	public get fileCount():number
+	{
+		return this.files.size;
 	}
 
 	public setItem(name:string, item:VFSState):void
 	{
-		const old = this.files[name];
-		this.files[name] = item;
+		const old = this.files.get(name);
+		this.files.set(name, item);
 		if (old) old.refreshContent();
 
 		if (this.treeCached)
@@ -313,10 +317,10 @@ export class VFSDirectory extends VFSFileCommon
 
 	public deleteItem(name:string):boolean
 	{
-		const old = this.files[name];
+		const old = this.files.get(name);
 		if (!old) return false;
 		old.refreshContent();
-		delete this.files[name];
+		this.files.delete(name);
 		if (this.treeCached)
 		{
 			this.treeCached = false;
@@ -331,7 +335,7 @@ export class VFSDirectory extends VFSFileCommon
 		var dir:VFSDirectory = this;
 		for (const cd of dirs)
 		{
-			const ndir = dir.files[cd];
+			const ndir = dir.files.get(cd);
 			if(ndir)
 			{
 				if (ndir instanceof VFSDirectory)
@@ -341,8 +345,9 @@ export class VFSDirectory extends VFSFileCommon
 				}
 			}
 			if (!make) return undefined;
-			dir = new VFSDirectory(dir, cd);
-			this.setItem(cd, dir);
+			const maked = new VFSDirectory(dir, cd);
+			dir.setItem(cd, maked);
+			dir = maked;
 		}
 		return dir;
 	}

@@ -269,19 +269,15 @@ export class SftpConnection extends FileInterface
 	{
 		return this._getSftp()
 		.then(sftp=>new Promise<NodeJS.ReadableStream>((resolve, reject) => {
-			try
-			{
-				const stream = sftp.createReadStream(ftppath, {encoding:<any>null});
-				stream.on('error', reject)
-				.on('readable', () => resolve(stream));
-			}
-			catch(err)
-			{
-				if (err.code === 2) err.ftpCode = FILE_NOT_FOUND;
-				else if(err.code === 550) err.ftpCode = FILE_NOT_FOUND;
-				reject(err);
-			}
-		}));	
+			const stream = sftp.createReadStream(ftppath, {encoding:<any>null});
+			stream.on('error', reject)
+			.on('readable', () => resolve(stream));
+		}))
+		.catch(err=>{
+			if (err.code === 2) err.ftpCode = FILE_NOT_FOUND;
+			else if(err.code === 550) err.ftpCode = FILE_NOT_FOUND;
+			throw err;
+		});
 	}
 
 	_list(ftppath:string):Promise<FileInfo[]>

@@ -31,6 +31,7 @@ export interface ConfigProperties extends ServerConfig
 	downloadTimeExtraThreshold:number;
 	ignoreRemoteModification:boolean;
 	ignoreJsonUploadCaution:boolean;
+	noticeFileCount:number;
 }
 
 const CONFIG_INIT:ConfigProperties = <any>{
@@ -143,6 +144,7 @@ class FtpKrConfigClass extends ConfigContainer<ConfigProperties>
 	
 		if (typeof config.host !== 'string') config.host = config.host+'';
 		if (typeof config.username !== 'string') config.username = config.username+'';
+		config.secure = config.secure === true;
 		if ("port" in config) config.port = (config.port || 0)|0;
 		config.ignoreWrongFileEncoding = config.ignoreWrongFileEncoding === true;
 		if ('name' in config) config.name = config.name+'';
@@ -222,6 +224,15 @@ class FtpKrConfigClass extends ConfigContainer<ConfigProperties>
 		config.viewSizeLimit = Number(config.viewSizeLimit || 1024*1024*4)
 		config.downloadTimeExtraThreshold = Number(config.downloadTimeExtraThreshold || 1000);
 		config.ignoreRemoteModification = config.ignoreRemoteModification === true;
+		if (typeof config.noticeFileCount !== 'number') config.noticeFileCount = 10;
+		else
+		{
+			config.noticeFileCount = +config.noticeFileCount;
+			if (config.noticeFileCount < 0) config.noticeFileCount = 10;
+			else if (!isFinite(config.noticeFileCount)) config.noticeFileCount = 10;
+			else config.noticeFileCount = Math.floor(config.noticeFileCount);
+		}
+
 		delete config.name;
 
 		this._serverTypeClearing(config, 0);

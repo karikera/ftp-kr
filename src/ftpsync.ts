@@ -137,7 +137,7 @@ export class FtpSyncManager implements WorkspaceItem
 		}
 	}
 
-	public async selectServer():Promise<FtpCacher|undefined>
+	public async selectServer(openAlways?:boolean):Promise<FtpCacher|undefined>
 	{
 		var selected:FtpCacher|undefined = undefined;
 		const pick = new QuickPick;
@@ -150,12 +150,13 @@ export class FtpSyncManager implements WorkspaceItem
 			if (server === this.targetServer) name += ' *';
 			pick.item(name, ()=>{ selected = this.servers.get(config); });
 		}
-		if (pick.items.length === 1)
+		if (!openAlways && pick.items.length === 1)
 		{
 			pick.items[0].onselect();
 		}
 		else
 		{
+			if (pick.items.length === 0) throw Error('Server not found');
 			await pick.open();
 		}
 		return selected;
@@ -169,11 +170,11 @@ export class FtpSyncManager implements WorkspaceItem
 		}, task);
 	}
 
-	public async runTaskJson(taskName:string, taskjson:File):Promise<void>
+	public async runTaskJson(taskName:string, taskjson:File, options:BatchOptions):Promise<void>
 	{
 		const selected = await this.selectServer();
 		if (selected === undefined) return;
 		const tasks = await taskjson.json();
-		await selected.runTaskJsonWithConfirm(taskName, tasks, taskjson.basename(), taskjson.parent(), false);
+		await selected.runTaskJsonWithConfirm(taskName, tasks, taskjson.basename(), taskjson.parent(), options);
 	}
 }

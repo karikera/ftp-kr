@@ -85,6 +85,7 @@ export class FtpTree implements TreeDataProvider<FtpTreeItem>
 
 	public refreshContent(target:VFSState):void
 	{
+		defaultLogger.verbose('refreshContent '+target.getUrl());
 		const uri = Uri.parse(target.getUrl());
 		const cp = this.contentProviders.get(uri.scheme);
 		if (!cp) return;
@@ -93,6 +94,7 @@ export class FtpTree implements TreeDataProvider<FtpTreeItem>
 
 	public refreshTree(target?:VFSState):void
 	{
+		defaultLogger.verbose('refreshTree '+(target ? target.getUrl() : "all"));
 		if (!target)
 		{
 			FtpTreeItem.clear();
@@ -107,13 +109,19 @@ export class FtpTree implements TreeDataProvider<FtpTreeItem>
 		{
 			for (const item of FtpTreeItem.get(target))
 			{
-				FtpTreeItem.delete(item);
-				this._onDidChangeTreeData.fire(item);
+				if (item.children)
+				{
+					for (const child of item.children)
+					{
+						FtpTreeItem.delete(child);
+					}
+					item.children = undefined;
+				}
 				if (item.server === item)
 				{
-					item.children = undefined;
 					item.ftpFile = undefined;
 				}
+				this._onDidChangeTreeData.fire(item);
 			}
 		}
 	}

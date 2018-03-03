@@ -71,6 +71,16 @@
 			"description": "Disable remote modification checker",
 			"default": false
 		},
+		"ignoreJsonUploadCaution": {
+			"type":"boolean",
+			"description": "ignore caution when ftp-kr.json is uploaded",
+			"default:": false
+		},
+		"noticeFileCount": {
+			"type":"number",
+			"description": "Notice with task.json if upload/download file is too many",
+			"default": 10
+		},
 		"logLevel": {
 			"enum": [
 				"VERBOSE",

@@ -4,6 +4,10 @@ import { WorkspaceItem, Workspace } from './ws';
 import { vsutil } from './vsutil';
 import { LogLevel } from '../util/serverinfo';
 import { getMappedStack } from '../util/sm';
+import * as os from 'os';
+import { File } from 'krfile';
+import { replaceErrorUrl } from '../util/util';
+import { parseJson } from 'krjson';
 
 enum LogLevelEnum
 {
@@ -17,6 +21,7 @@ export class Logger implements WorkspaceItem
 {
 	public logLevel:LogLevelEnum = LogLevelEnum.NORMAL;
 	private output:OutputChannel|null = null;
+	private workspace:Workspace|null = null;
 	public static all:Set<Logger> = new Set;
 	private task:Promise<void> = Promise.resolve();
 
@@ -24,6 +29,7 @@ export class Logger implements WorkspaceItem
 	{
 		if (name instanceof Workspace)
 		{
+			this.workspace = name;
 			name = "ftp-kr/" + name.name;
 		}
 		this.output = window.createOutputChannel(name);
@@ -51,10 +57,11 @@ export class Logger implements WorkspaceItem
 	
 	public setLogLevel(level:LogLevel):void
 	{
+		const oldlevel = this.logLevel;
 		this.logLevel = LogLevelEnum[level];
 		this.verbose(`logLevel = ${level}`);
 
-		if (this.logLevel === defaultLogger.logLevel)
+		if (oldlevel === defaultLogger.logLevel)
 		{
 			var minLevel = LogLevelEnum.ERROR;
 			for (const logger of Logger.all)
@@ -82,7 +89,7 @@ export class Logger implements WorkspaceItem
 	{
 		return this.task = this.task.then(async()=>{
 			if (err === 'IGNORE') return;
-			const stack = await getMappedStack(err);
+			var stack = await getMappedStack(err);
 			if (stack)
 			{
 				console.error(stack);
@@ -92,26 +99,105 @@ export class Logger implements WorkspaceItem
 				var output = '';
 				if (err.task)
 				{
-					output += 'Task: ';
-					output += err.task;
-					output += '\n';
+					output += `Task: ${err.task}\n`;
 				}
-				output += '[';
-				output += err.constructor.name;
-				output += ']\nmessage: ';
-				output += err.message;
+				const pathRemap:string[] = [];
+				pathRemap.push(new File(__dirname).parent().parent().fsPath, '[ftp-kr]');
+				if (this.workspace)
+				{
+					pathRemap.push(this.workspace.fsPath, `[workspace]`);
+				}
+				output += `platform: ${os.platform()}\n`;
+				output += `arch: ${os.arch()}\n\n`;
+				output += `[${err.constructor.name}]\nmessage: ${err.message}`;
 				if (err.code)
 				{
-					output += '\ncode: ';
-					output += err.code;
+					output += `\ncode: ${err.code}`;
 				}
 				if (err.errno)
 				{
-					output += '\nerrno: ';
-					output += err.errno;
+					output += `\nerrno: ${err.errno}`;
 				}
-				output += '\n[Stack Trace]\n';
-				output += stack;
+				
+				function repath(path:string):string
+				{
+					for (var i=0;i<pathRemap.length;i+=2)
+					{
+						const prevPath = pathRemap[i];
+						if (path.startsWith(prevPath))
+						{
+							return pathRemap[i+1] + path.substr(prevPath.length);
+						}
+					}
+					return path;
+				}
+
+				function filterAllField(value:any):any
+				{
+					if (typeof value === 'string')
+					{
+						return repath(value);
+					}
+					if (typeof value === 'object')
+					{
+						if (value instanceof Array)
+						{
+							for (var i=0;i<value.length;i++)
+							{
+								value[i] = filterAllField(value[i]);
+							}
+						}
+						else
+						{
+							for (const name in value)
+							{
+								value[name] = filterAllField(value[name]);
+							}
+							
+							if ("password" in value)
+							{
+								const type = typeof value.password;
+								if (type === 'string') value.password = '********';
+								else value.password = '['+type+']';
+							}
+							if ("passphrase" in value)
+							{
+								const type = typeof value.passphrase;
+								if (type === 'string') value.passphrase = '********';
+								else value.passphrase = '['+type+']';
+							}
+						}
+					}
+					return value;
+				}
+
+				stack = replaceErrorUrl(stack, (path, line, column)=>`${repath(path)}:${line}:${column}`);
+				output += `\n\n[Stack Trace]\n${stack}\n`;
+
+				if (this.workspace)
+				{
+					output += '\n[ftp-kr.json]\n';
+					const ftpkrjson = this.workspace.child('.vscode/ftp-kr.json');
+					try
+					{
+						const readedjson = await ftpkrjson.open();
+						try
+						{
+							const obj = filterAllField(parseJson(readedjson));
+							output += JSON.stringify(obj, null, 4);
+						}
+						catch (err)
+						{
+							output += 'Cannot Parse: '+err+'\n';
+							output += readedjson;
+						}
+					}
+					catch (err)
+					{
+						output += 'Cannot Read: '+err+'\n';
+					}
+				}
+				
 				vsutil.openNew(output);
 			}
 			else

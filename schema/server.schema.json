@@ -25,6 +25,11 @@
 			"type": "string",
 			"description": "FTP/SFTP password"
 		},
+		"secure":{
+			"type": "boolean",
+			"default": false,
+			"description": "Set to true for both control and data connection encryption. (default: false)"
+		},
 		"keepPasswordInMemory":{
 			"type": "boolean",
 			"default": false,

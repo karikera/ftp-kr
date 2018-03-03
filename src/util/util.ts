@@ -248,12 +248,53 @@ export function promiseErrorWrap<T>(prom:Promise<T>):Promise<T>
 	return prom.catch(err=>{
 		if (err && err.stack)
 		{
-			if (err.code)
+			if (!err.__messageCodeAttached && err.code)
 			{
 				err.message = err.message + "[" + err.code + "]";
+				err.__messageCodeAttached = true;
 			}
 			err.stack = err.stack + stack.substr(stack.indexOf('\n'));
 		}
 		throw err;
 	});
+}
+
+export function replaceErrorUrl(stack:string, foreach:(path:string, line:number, column:number)=>string):string
+{
+	const regexp = /^\tat ([^(\n]+) \(([^)\n]+)\:([0-9]+)\:([0-9]+)\)$/gm;
+	var arr:RegExpExecArray|null;
+	var lastIndex = 0;
+	var out = '';
+	while (arr = regexp.exec(stack))
+	{
+		out += stack.substring(lastIndex, arr.index);
+		out += '\tat ';
+		out += arr[1];
+		out += ' (';
+		out += foreach(arr[2], +arr[3], +arr[4]);
+		out += ')';
+		lastIndex = regexp.lastIndex;
+	}
+	out += stack.substr(lastIndex);
+	return out;
+}
+
+export async function replaceErrorUrlAsync(stack:string, foreach:(path:string, line:number, column:number)=>Promise<string>):Promise<string>
+{
+	const regexp = /^\tat ([^(\n]+) \(([^)\n]+)\:([0-9]+)\:([0-9]+)\)$/gm;
+	var arr:RegExpExecArray|null;
+	var lastIndex = 0;
+	var out = '';
+	while (arr = regexp.exec(stack))
+	{
+		out += stack.substring(lastIndex, arr.index);
+		out += '\tat ';
+		out += arr[1];
+		out += ' (';
+		out += await foreach(arr[2], +arr[3], +arr[4]);
+		out += ')';
+		lastIndex = regexp.lastIndex;
+	}
+	out += stack.substr(lastIndex);
+	return out;
 }

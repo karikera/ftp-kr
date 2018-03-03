@@ -11,6 +11,7 @@ export interface ServerConfig
 	
 	host:string;
 	username:string;
+	secure:boolean;
 	
 	port?:number;
 	ignoreWrongFileEncoding:boolean;

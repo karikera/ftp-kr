@@ -20,36 +20,52 @@ import { getMappedStack, printMappedError } from './util/sm';
 export interface BatchOptions
 {
 	// in
+	confirmFirst?:boolean; // upload/download All
 	doNotRefresh?:boolean;
-	doNotMakeDirectory?:boolean;
-	ignoreNotExistFile?:boolean;
+	doNotMakeDirectory?:boolean; // upload
+	ignoreNotExistFile?:boolean; // upload
 	forceRefresh?:boolean;
-	cancelWhenLatest?:boolean;
-	whenRemoteModed?:"upload"|"diff"|"ignore";
+	cancelWhenLatest?:boolean; // upload
+	whenRemoteModed?:"upload"|"diff"|"ignore"|"error"; // upload/upload all
 }
 
-function testLatest(file:VFSState|undefined, localStat:Stats):boolean
+async function isSameFile(file:VFSState|undefined, local:Stats|File):Promise<boolean>
 {
-    if (!file) return false;
+	if (local instanceof File)
+	{
+		try
+		{
+			local = await local.stat();
+		}
+		catch (err)
+		{
+			if (err.code === 'ENOENT')
+			{
+				if (!file) return true;
+				return false;
+			}
+			throw err;
+		}
+	}
+	if (!file) return false;
     switch(file.type)
     {
     case "-":
-        if (!localStat.isFile()) return false;
+        if (!local.isFile()) return false;
 		if (file instanceof VFSFileCommon)
 		{
-    		if (localStat.size !== file.size) return false;
+    		if (local.size !== file.size) return false;
 		}
         break;
     case "d":
-        if (!localStat.isDirectory()) return false;
+        if (!local.isDirectory()) return false;
         break;
     case "l":
-        if (!localStat.isSymbolicLink()) return false;
+        if (!local.isSymbolicLink()) return false;
         break;
     }
     return true;
 }
-
 
 class RefreshedData extends Deferred<VFSDirectory>
 {
@@ -86,6 +102,7 @@ interface TaskJsonResult
 {
 	tasks:TaskList;
 	count:number;
+	modified:number;
 }
 
 export class FtpCacher
@@ -331,6 +348,8 @@ export class FtpCacher
 					report.modifiedIgnored = true;
 					report.file = oldfile;
 					return report;
+				case 'error':
+					throw 'MODIFIED';
 				case 'diff':
 				default:
 					var diffFile:File;
@@ -391,15 +410,32 @@ export class FtpCacher
 					throw Error(`Not found in remote: ${ftppath}`);
 				}
 			}
+			if (file.type === 'l')
+			{
+				if (!this.mainConfig.followLink) return;
+				do
+				{
+					const nfile:VFSState|undefined = await this.ftpTargetStat(file, task);
+					if (!nfile) return;
+					file = nfile;
+				}
+				while (file.type === 'l');
+			}
 	
-			if (file instanceof VFSDirectory) await path.mkdirp();
+			if (file instanceof VFSDirectory)
+			{
+				await path.mkdirp();
+			}
 			else
 			{
 				await path.parent().mkdirp();
 				await this.ftpmgr.download(task, path, ftppath);
 			}
 			const stats = await path.stat();
-			if (file.size !== stats.size) file.refreshContent();
+			if (file.type === '-' && file.size !== stats.size)
+			{
+				file.refreshContent();
+			}
 			file.size = stats.size;
 			file.lmtime = +stats.mtime;
 			file.lmtimeWithThreshold = file.lmtime + this.mainConfig.downloadTimeExtraThreshold;
@@ -587,15 +623,12 @@ export class FtpCacher
 		}
 	}
 
-	public async runTaskJson(parentDirectory:File, tasklist:TaskList, task:Task):Promise<TaskJsonResult|null>
+	public async runTaskJson(parentDirectory:File, tasklist:TaskList, task:Task, options:BatchOptions):Promise<TaskJsonResult|null>
 	{
 		await this.initForRemotePath(task);
-		const options:BatchOptions = {
-			doNotRefresh:true, 
-			whenRemoteModed:'upload'
-		};
 
 		var errorCount = 0;
+		var modifiedCount = 0;
 		const failedTasks:TaskList = {};
 
 		for (const workpath in tasklist)
@@ -656,28 +689,33 @@ export class FtpCacher
 			catch(err)
 			{
 				failedTasks[workpath] = exec;
-				if (err.code === 'ENOENT')
+				if (err === 'MODIFIED')
 				{
-					this.logger.message("Error: file not found: '"+workpath+"'");
+					this.logger.message(workpath+": Remote modification detected");
+					modifiedCount ++;
+				}
+				else if (err.code === 'ENOENT')
+				{
+					this.logger.message(workpath+": File not found");
 				}
 				else
 				{
 					printMappedError(err);
-					this.logger.message(err.message ? err.message : err);
+					this.logger.message(workpath + ": "+(err.message ? err.message : err));
 				}
 				errorCount ++;
 			}
 		}
 		if (errorCount)
-			return {tasks:failedTasks, count:errorCount};
+			return {tasks:failedTasks, count:errorCount, modified:modifiedCount};
 		else return null;
 	}
 
-	public async runTaskJsonWithConfirm(taskName:string, tasks: TaskList, taskname: string, parentDirectory:File, confirmFirst:boolean): Promise<void>
+	public async runTaskJsonWithConfirm(taskName:string, tasks: TaskList, taskname: string, parentDirectory:File, options:BatchOptions): Promise<void>
 	{
 		var confirmer:(()=>Thenable<string|undefined>)|null = null;
 		
-		if (confirmFirst)
+		if (options.confirmFirst)
 		{
 			confirmer = ()=>vsutil.info("Review Operations to perform.", "OK");
 		}
@@ -712,7 +750,11 @@ export class FtpCacher
 			this.logger.message(taskname + ' started');
 			const startTime = Date.now();
 			
-			const failed = await this.scheduler.task(taskName, task=>this.runTaskJson(parentDirectory, tasks, task));
+			const options:BatchOptions = {
+				doNotRefresh:true, 
+				whenRemoteModed:'upload'
+			};
+			const failed = await this.scheduler.task(taskName, task=>this.runTaskJson(parentDirectory, tasks, task, options));
 			if (!failed) 
 			{
 				const passedTime = Date.now() - startTime;
@@ -729,30 +771,39 @@ export class FtpCacher
 		}
 	}
 
-	public async uploadAll(path: File, task?:Task): Promise<void>
+	public uploadAll(path: File|File[], task?:Task|null, options?:BatchOptions): Promise<void>
 	{
-		await this.scheduler.task('Upload All', async (task) => {
-			const tasks = await this._syncTestUpload(path, task);
+		return this.scheduler.task('Upload All', async (task) => {
+			const tasks = await this._makeUploadTask(path, task);
 			await Promise.resolve();
-			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, true);
+			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, options || {});
 		}, task);
 	}
 
-	public async downloadAll(path: File, task?:Task): Promise<void>
+	public downloadAll(path: File|File[], task?:Task|null, options?:BatchOptions): Promise<void>
 	{
-		await this.scheduler.task('Download All', async(task) => {
-			const tasks = await this._syncTestDownload(path, task)
+		return this.scheduler.task('Download All', async(task) => {
+			const tasks = await this._makeDownloadTask(path, task)
 			await Promise.resolve();
-			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, true);
+			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, options || {});
 		}, task);
 	}
 
-	public cleanAll(task?:Task|null):Promise<void>
+	public deleteAll(path:File|File[], task?:Task|null, options?:BatchOptions):Promise<void>
+	{
+		return this.scheduler.task('Delete All', async(task) => {
+			const tasks = await this._makeDeleteTask(path, task)
+			await Promise.resolve();
+			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, options || {});
+		}, task);
+	}
+
+	public cleanAll(path: File|File[], task?:Task|null, options?:BatchOptions):Promise<void>
 	{
 		return this.scheduler.task('Clean All', async(task) => {
-			const tasks = await this._syncTestClean(task);
+			const tasks = await this._makeCleanTask(path, task);
 			await Promise.resolve();
-			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, true);
+			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, options || {});
 		}, task);
 	}
 
@@ -843,66 +894,171 @@ export class FtpCacher
 		await pick.open();
 	}
 	
-	private async _syncTestUpload(path:File, task:Task):Promise<TaskList>
+	private async _makeUploadTask(path:File|File[], task:Task):Promise<TaskList>
 	{
 		await this.initForRemotePath(task);
-		const list:{[key:string]:Stats} = {};
-		await this._getUpdatedFile(this.home, path, list)
-		
+
 		const output:TaskList = {};
-		for(const workpath in list)
+
+		if (!(path instanceof Array)) path = [path];
+		for (const p of path)
 		{
-			const path = this.mainConfig.fromWorkpath(workpath, this.mainConfig.basePath);
-			const ftppath = this.toFtpPath(path);
-			const st = list[workpath];
-			
-			const file = await this.ftpStat(ftppath, task);
-			if (!await testLatest(file, st))
+			if (await p.isDirectory())
 			{
+				const list:{[key:string]:Stats} = {};
+				await this._getUpdatedFile(this.home, p, list);
+				for(const workpath in list)
+				{
+					const path = this.mainConfig.fromWorkpath(workpath, this.mainConfig.basePath);
+					const ftppath = this.toFtpPath(path);
+					const st = list[workpath];
+					
+					const file = await this.ftpStat(ftppath, task);
+					if (!await isSameFile(file, st))
+					{
+						output[workpath] = "upload";
+					}
+				}
+			}
+			else
+			{
+				const workpath = this.mainConfig.workpath(p);
 				output[workpath] = "upload";
 			}
 		}
+		
 		return output;
 	}
 
-	private _syncTestDownload(path:File, task:Task):Promise<TaskList>
+	private async _makeDownloadTask(path:File|File[], task:Task):Promise<TaskList>
 	{
-		const list:TaskList = {};
-		return this._listNotExists(path, list, true, task)
-		.then(() => list);
-	}
-
-	private _syncTestClean(task:Task):Promise<TaskList>
-	{
-		const list:TaskList = {};
-		return this._listNotExists(this.mainConfig.basePath, list, false, task)
-		.then(() => list);
-	}
-
-	private async _listNotExists(path:File, list:TaskList, download:boolean, task:Task):Promise<void>
-	{
-		if (this.mainConfig.checkIgnorePath(path)) return;
 		await this.initForRemotePath(task);
-		const command = download ? "download" : "delete"; 
-		
-		var fslist:File[];
-		try
+
+		const list:TaskList = {};
+
+		const _make = async(ftpfile:VFSState, file:File, dirlist:File[]):Promise<void>=>{
+			if (this.mainConfig.checkIgnorePath(file)) return;
+			if (ftpfile.type === 'l')
+			{
+				if (!this.mainConfig.followLink) return;
+				const nfile = await this.ftpTargetStat(ftpfile, task);
+				if (!nfile) return;
+				ftpfile = nfile;
+			}
+			if (!await isSameFile(ftpfile, file))
+			{
+				list[this.mainConfig.workpath(file)] = 'download';
+			}
+			if (ftpfile.type === 'd')
+			{
+				dirlist.push(file);
+			}
+		};
+		const _makeDir = async(dir:File):Promise<void>=>{
+			const ftppath = this.toFtpPath(dir);
+			const ftpdir = await this.ftpList(ftppath, task);
+
+			const dirlist:File[] = [];
+			for(var ftpfile of ftpdir.children())
+			{
+				const file = dir.child(ftpfile.name);
+				await _make(ftpfile, file, dirlist);
+			}
+			for (const dir of dirlist)
+			{
+				await _makeDir(dir);
+			}
+		};
+	
+		if (!(path instanceof Array)) path = [path];
+
+		const dirlist:File[] = [];
+		for(const file of path)
 		{
-			fslist = await path.children();
+			if (this.mainConfig.checkIgnorePath(file)) continue;
+			const ftppath = this.toFtpPath(file);
+			const ftpfile = await this.ftpStat(ftppath, task);
+			if (!ftpfile) continue;
+			await _make(ftpfile, file, dirlist);
 		}
-		catch (err)
+		for (const dir of dirlist)
 		{
-			if (!download) return;
-			fslist = [];
+			await _makeDir(dir);
+		}
+		return list;
+	}
+
+	private async _makeDeleteTask(path:File|File[], task:Task):Promise<TaskList>
+	{
+		await this.initForRemotePath(task);
+		const list:TaskList = {};
+
+		const _make = async(file:File):Promise<void>=>{
+			if (this.mainConfig.checkIgnorePath(file)) return;
+			if (file.fsPath === this.workspace.fsPath)
+			{
+				const ftppath = this.toFtpPath(file);
+				const ftpdir = await this.ftpList(ftppath, task);
+	
+				for(const ftpfile_child of ftpdir.children())
+				{
+					await _make(file.child(ftpfile_child.name));
+				}
+			}
+			else
+			{
+				list[this.mainConfig.workpath(file)] = 'delete';
+			}
+		};
+	
+		if (!(path instanceof Array))
+		{
+			path = [path];
 		}
 
-		try
+		if (path.length === 1)
 		{
+			const ftppath = this.toFtpPath(path[0]);
+			const ftpfile = await this.ftpStat(ftppath, task);
+			if (!ftpfile) return list;
+			if (ftpfile.type === 'd')
+			{
+				const ftpdir = await this.ftpList(ftppath, task);
+				if (ftpdir.fileCount === 0)
+				{
+					if (path[0].fsPath === this.workspace.fsPath) return list;
+					list[this.mainConfig.workpath(path[0])] = 'delete';
+					return list;
+				}
+			}
+		}
+	
+		for (const p of path)
+		{
+			await _make(p);
+		}
+		return list;
+	}
+
+	private async _makeCleanTask(path:File|File[], task:Task):Promise<TaskList>
+	{
+		await this.initForRemotePath(task);
+		const list:TaskList = {};
+
+		const _listNotExists = async(path:File):Promise<void>=>{
+			try
+			{
+				var fslist = await path.children();
+			}
+			catch (err)
+			{
+				return;
+			}
+
 			const ftppath = this.toFtpPath(path);
 			const dir = await this.ftpList(ftppath, task);
 			const targets = new Set<string>();
 
-			const dirlist:File[] = [];
 			for(var file of dir.children())
 			{
 				const fullPath = path.child(file.name);
@@ -917,41 +1073,42 @@ export class FtpCacher
 				targets.add(file.name);
 				if (file.type === 'd')
 				{
-					dirlist.push(fullPath);
+					await _listNotExists(fullPath);
 				}
 			}
 			for(const file of fslist)
 			{
 				targets.delete(file.basename());
 			}
+			for (const p of targets)
+			{
+				list[this.mainConfig.workpath(path.child(p))] = 'delete';
+			}
+		};
+	
+		if (!(path instanceof Array)) path = [path];
 
-			const flushList = ()=>{
-				for (const p of targets)
-				{
-					list[this.mainConfig.workpath(path.child(p))] = command;
-				}
-			};
-			const processChild = async()=>{
-				for(const child of dirlist)
-				{
-					await this._listNotExists(child, list, download, task);
-				}
-			};
-			if (download)
-			{
-				flushList();
-				await processChild();
-			}
-			else // delete
-			{
-				await processChild();
-				flushList();
-			}
-		}
-		catch(err)
+		for(const fullPath of path)
 		{
-			throw err;
+			if (!await fullPath.isDirectory()) continue;
+			if (this.mainConfig.checkIgnorePath(fullPath)) continue;
+
+			const ftppath = this.toFtpPath(fullPath);
+			var file = await this.ftpStat(ftppath, task);
+			if (!file) continue;
+			if (file.type === 'l')
+			{
+				if (!this.mainConfig.followLink) continue;
+				const nfile = await this.ftpTargetStat(file, task);
+				if (!nfile) continue;
+				file = nfile;
+			}
+			if (file.type === 'd')
+			{
+				await _listNotExists(fullPath);
+			}
 		}
+		return list;
 	}
 
 	private async _getUpdatedFileInDir(cmp:VFSDirectory|undefined, path:File, list:{[key:string]:Stats}):Promise<void>
@@ -976,7 +1133,7 @@ export class FtpCacher
 		{
 			const st = await path.lstat();
 			if (st.isDirectory()) await this._getUpdatedFileInDir(cmp instanceof VFSDirectory ? cmp : undefined, path, list);
-			if (testLatest(cmp, st)) return;
+			if (await isSameFile(cmp, st)) return;
 			list[this.mainConfig.workpath(path)] = st;
 		}
 		catch(err)

@@ -1,5 +1,6 @@
 import { SourceMapConsumer, NullableMappedPosition } from 'source-map';
 import { File } from 'krfile';
+import { replaceErrorUrlAsync } from './util';
 
 const rawSourceMap = {
 	version: 3,
@@ -32,36 +33,16 @@ export async function getMappedStack(err:any):Promise<string>
 	const stack = err.stack;
 	if (typeof stack !== 'string') return err;
 	
-	const regexp = /^\tat ([^(\n]+) \(([^)\n]+)\:([0-9]+)\:([0-9]+)\)$/gm;
-	var out = '';
-	var arr:RegExpExecArray|null;
-	var lastIndex = 0;
-/**
-	at Object.parseJson (d:\Projects\git\ftp-kr\node_modules\krjson\out\index.js:23:21)
-	at Config.set (d:\Projects\git\ftp-kr\out\util\ftpkr_config.js:202:28)
-	at Config.<anonymous> (d:\Projects\git\ftp-kr\out\util\ftpkr_config.js:345:18)
-	at Generator.next (<anonymous>)
-	at fulfilled (d:\Projects\git\ftp-kr\out\util\ftpkr_config.js:4:58)
-	at <anonymous>"
-
- */
-	while (arr = regexp.exec(stack))
-	{
-		const pos = await getTsPosition(new File(arr[2]), +arr[3], +arr[4]);
-		out += stack.substring(lastIndex, arr.index);
-		out += '\tat ';
-		out += arr[1];
-		out += ' (';
-		out += pos.source;
-		out += ':';
-		out += pos.line;
-		out += ':';
-		out += pos.column;
-		out += ')';
-		lastIndex = regexp.lastIndex;
-	}
-	out += stack.substr(lastIndex);
-	return out;
+	return replaceErrorUrlAsync(stack, async(path, line, column)=>{
+		const pos = await getTsPosition(new File(path), line, column);
+		var res = '';
+		res += pos.source;
+		res += ':';
+		res += pos.line;
+		res += ':';
+		res += pos.column;
+		return res;
+	});
 }
 
 export async function printMappedError(err:any):Promise<void>

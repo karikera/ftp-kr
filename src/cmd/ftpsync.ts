@@ -375,7 +375,7 @@ export const commands:Command = {
 			const file = args.file;
 			const ftp = args.workspace.query(FtpSyncManager);
 			const scheduler = args.workspace.query(Scheduler);
-			await ftp.targetServer.initForRemotePath();
+			await ftp.targetServer.init();
 			const ftppath = ftp.targetServer.toFtpUrl(file);
 			args.uri = Uri.parse(ftppath);
 		}

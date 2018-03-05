@@ -22,7 +22,8 @@ export class FtpSyncManager implements WorkspaceItem
 	private readonly cacheFile:File;
 	public readonly servers:Map<ServerConfig, FtpCacher> = new Map;
 	private readonly fs:VirtualFileSystem = new VirtualFileSystem;
-	public targetServer:FtpCacher;
+	public targetServer:FtpCacher = <any>null;
+	public mainServer:FtpCacher = <any>null;
 	
 	constructor(public readonly workspace:Workspace)
 	{
@@ -30,8 +31,6 @@ export class FtpSyncManager implements WorkspaceItem
 		this.config = workspace.query(Config);
 		this.scheduler = workspace.query(Scheduler);
 		this.cacheFile = this.workspace.child('.vscode/ftp-kr.sync.cache.json');
-
-		this.targetServer = <any>undefined;
 
 		this.fs.onRefreshContent(file=>ftpTree.refreshContent(file));
 		this.fs.onRefreshTree(file=>ftpTree.refreshTree(file));
@@ -57,6 +56,8 @@ export class FtpSyncManager implements WorkspaceItem
 			server.terminate();
 		}
 		this.servers.clear();
+		this.mainServer = <any>null;
+		this.targetServer = <any>null;
 	}
 
 	public async onLoadConfig(task:Task):Promise<void>
@@ -78,9 +79,9 @@ export class FtpSyncManager implements WorkspaceItem
 		
 		const mainServer = new FtpCacher(this.workspace, this.config, this.fs);
 		this.servers.set(this.config, mainServer);
+		this.mainServer = mainServer;
 
 		ftpTree.addServer(mainServer);
-		await mainServer.init(task);
 
 		for (const config of this.config.altServer)
 		{

@@ -256,7 +256,7 @@ export class Scheduler implements WorkspaceItem
 		this.cancel();
 	}
 
-	public cancel():Promise<void>
+	public cancel():Thenable<void>
 	{
 		const task = this.currentTask;
 		if (!task) return Promise.resolve();

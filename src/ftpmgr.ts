@@ -133,7 +133,7 @@ export class FtpManager
 	
 	private _blockTestWrap<T>(task:Task, callback:(client:FileInterface)=>Promise<T>)
 	{
-		return promiseErrorWrap(this.init(task).then(async(client)=>{
+		return promiseErrorWrap(this.connect(task).then(async(client)=>{
 			for (;;)
 			{
 				this._cancelDestroyTimeout();
@@ -148,7 +148,7 @@ export class FtpManager
 					this._updateDestroyTimeout();
 					if (err !== 'BLOCKED') throw err;
 					this.terminate();
-					client = await this.init(task);
+					client = await this.connect(task);
 				}
 			}
 		}));
@@ -186,7 +186,7 @@ export class FtpManager
 		}
 	}
 
-	public async init(task:Task):Promise<FileInterface>
+	public async connect(task:Task):Promise<FileInterface>
 	{
 		const that = this;
 		const coninfo = this._makeConnectionInfo();

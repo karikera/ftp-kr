@@ -1,3 +1,6 @@
+# 1.3.16
+* bugfix
+
 # 1.3.15
 * Multiple selected file upload/download support
 * `Download all` checks with file size now

@@ -139,7 +139,7 @@ export class FtpTreeServer extends FtpTreeItem
 	{
 		if (!file.ftpFile)
 		{
-			await this.ftp.initForRemotePath();
+			await this.ftp.init();
 			file.ftpFile = this.ftp.home;
 			FtpTreeItem.add(file.ftpFile, file);
 		}
@@ -166,7 +166,7 @@ export class FtpTreeServer extends FtpTreeItem
 
 	public async getChildren():Promise<FtpTreeItem[]>
 	{
-		await this.ftp.initForRemotePath();
+		await this.ftp.init();
 		return await super.getChildren();
 	}
 

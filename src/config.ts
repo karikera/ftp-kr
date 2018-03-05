@@ -74,6 +74,7 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 	public basePath:File;
 	
 	public readonly onLoad = Event.make<Task>('onLoad', false);
+	public readonly onLoadAfter = Event.make<void>('onLoadAfter', false);
 	public readonly onInvalid = Event.make<void>('onInvalid', false);
 	public readonly onNotFound = Event.make<void>('onNotFound', true);
 	
@@ -251,36 +252,40 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 		}
 	}
 
-	private loadWrap(name:string, onwork:(task:Task)=>Promise<void>):void
+	private async loadWrap(name:string, onwork:(task:Task)=>Promise<void>):Promise<void>
 	{
-		this.scheduler.cancel().then(
-			()=>this.scheduler.taskMust(name,
-				async(task)=>{
-					try
+		await this.scheduler.cancel();
+		try
+		{
+			await this.scheduler.taskMust(name, async(task)=>{
+				try
+				{
+					await onwork(task);
+	
+					this.ignorePatterns = null;
+					if (this.localBasePath)
 					{
-						await onwork(task);
-	
-						this.ignorePatterns = null;
-						if (this.localBasePath)
-						{
-							this.basePath = this.workspace.child(this.localBasePath);
-						}
-						else
-						{
-							this.basePath = this.workspace;
-						}
-	
-						this.logger.setLogLevel(this.logLevel);
-	
-						await this.fireLoad(task);
+						this.basePath = this.workspace.child(this.localBasePath);
 					}
-					catch (err)
+					else
 					{
-						await this.onLoadError(err);
+						this.basePath = this.workspace;
 					}
+	
+					this.logger.setLogLevel(this.logLevel);
+	
+					await this.fireLoad(task);
 				}
-			)
-			.catch(err=>processError(this.logger, err))	
-		);
+				catch (err)
+				{
+					await this.onLoadError(err);
+				}
+			});
+			await this.onLoadAfter.fire();
+		}
+		catch (err)
+		{
+			await processError(this.logger, err);
+		}
 	}
 }

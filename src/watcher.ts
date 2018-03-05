@@ -85,6 +85,10 @@ export class WorkspaceWatcher implements WorkspaceItem
 				});
 			}
 		});
+		this.config.onLoadAfter(()=>{
+			if (this.ftp.mainServer === null) throw Error('MainServer not found');
+			return this.ftp.mainServer.init();
+		});
 		this.config.onInvalid(() => {
 			this.attachOpenWatcher(false);
 			this.attachWatcher(WatcherMode.CONFIG);

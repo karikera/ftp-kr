@@ -140,20 +140,15 @@ export class FtpCacher
 		return name;
 	}
 	
-	public async init(task:Task):Promise<void>
+	public init(task?:Task|null):Promise<void>
 	{
-		await this.ftpList(this.config.remotePath, task).then(()=>{});
-		const remotePath = this.config.remotePath;
-		this.remotePath = remotePath.startsWith('/') ? remotePath : ftp_path.normalize(this.ftpmgr.home+'/'+remotePath);
-		this.home = <VFSDirectory>this.fs.getDirectoryFromPath(this.remotePath, true);
-	}
-
-	public async initForRemotePath(task?:Task|null):Promise<void>
-	{
-		if (!this.remotePath)
-		{
-			await this.scheduler.task('First Connect', task => this.init(task), task);
-		}
+		if (this.remotePath) return Promise.resolve();
+		return this.scheduler.task('First Connect', async(task) => {
+			await this.ftpList(this.config.remotePath, task);
+			const remotePath = this.config.remotePath;
+			this.remotePath = remotePath.startsWith('/') ? remotePath : ftp_path.normalize(this.ftpmgr.home+'/'+remotePath);
+			this.home = <VFSDirectory>this.fs.getDirectoryFromPath(this.remotePath, true);
+		}, task);
 	}
 
 	public terminate():void
@@ -205,7 +200,7 @@ export class FtpCacher
 	public ftpDelete(path:File, task?:Task|null, options?:BatchOptions):Promise<void>
 	{
 		return this.scheduler.task('Delete', async(task)=>{
-			await this.initForRemotePath(task);
+			await this.init(task);
 			const ftppath = this.toFtpPath(path);
 	
 			const deleteTest = async(file:VFSState):Promise<void>=>{
@@ -234,7 +229,7 @@ export class FtpCacher
 	public ftpUpload(path:File, task?:Task|null, options?:BatchOptions):Promise<UploadReport>
 	{
 		return this.scheduler.task('Upload', async (task) => {
-			await this.initForRemotePath(task);
+			await this.init(task);
 	
 			const noptions = options || {};
 			const ftppath = this.toFtpPath(path);
@@ -399,7 +394,7 @@ export class FtpCacher
 	public async ftpDownload(path:File, task?:Task|null, options?:BatchOptions):Promise<void>
 	{
 		await this.scheduler.task('Download', async (task) => {
-			await this.initForRemotePath(task);
+			await this.init(task);
 			const ftppath = this.toFtpPath(path);
 			var file:VFSState|undefined = this.fs.getFromPath(ftppath);
 			if (!file)
@@ -471,7 +466,7 @@ export class FtpCacher
 
 	public async ftpDownloadWithCheck(path:File, task:Task):Promise<void>
 	{
-		await this.initForRemotePath(task);
+		await this.init(task);
 		const ftppath = this.toFtpPath(path);
 
 		try
@@ -535,7 +530,7 @@ export class FtpCacher
 	public ftpDiff(file:File, task?:Task|null, sameCheck?:boolean):Promise<File>
 	{
 		return this.scheduler.task('Diff', async(task)=>{
-			await this.initForRemotePath(task);
+			await this.init(task);
 			const basename = file.basename();
 			const diffFile:File = await this.workspace.child('.vscode/ftp-kr.diff.'+basename).findEmptyIndex();
 			var title:string = basename + ' Diff';
@@ -581,7 +576,7 @@ export class FtpCacher
 			this.refreshed.set(ftppath, deferred);
 	
 			return (async()=>{
-				await this.ftpmgr.init(task);
+				await this.ftpmgr.connect(task);
 	
 				try
 				{
@@ -625,7 +620,7 @@ export class FtpCacher
 
 	public async runTaskJson(parentDirectory:File, tasklist:TaskList, task:Task, options:BatchOptions):Promise<TaskJsonResult|null>
 	{
-		await this.initForRemotePath(task);
+		await this.init(task);
 
 		var errorCount = 0;
 		var modifiedCount = 0;
@@ -809,7 +804,7 @@ export class FtpCacher
 
 	public async list(path:File):Promise<void>
 	{
-		await this.initForRemotePath();
+		await this.init();
 		const openFile = (file:VFSState)=>{
 			const npath = path.child(file.name);
 			pick.clear();
@@ -896,7 +891,7 @@ export class FtpCacher
 	
 	private async _makeUploadTask(path:File|File[], task:Task):Promise<TaskList>
 	{
-		await this.initForRemotePath(task);
+		await this.init(task);
 
 		const output:TaskList = {};
 
@@ -932,7 +927,7 @@ export class FtpCacher
 
 	private async _makeDownloadTask(path:File|File[], task:Task):Promise<TaskList>
 	{
-		await this.initForRemotePath(task);
+		await this.init(task);
 
 		const list:TaskList = {};
 
@@ -977,9 +972,21 @@ export class FtpCacher
 		{
 			if (this.mainConfig.checkIgnorePath(file)) continue;
 			const ftppath = this.toFtpPath(file);
-			const ftpfile = await this.ftpStat(ftppath, task);
+			var ftpfile = await this.ftpStat(ftppath, task);
 			if (!ftpfile) continue;
-			await _make(ftpfile, file, dirlist);
+			
+			if (ftpfile.type === 'l')
+			{
+				if (!this.mainConfig.followLink) continue;
+				const nfile = await this.ftpTargetStat(ftpfile, task);
+				if (!nfile) continue;
+				ftpfile = nfile;
+			}
+			list[this.mainConfig.workpath(file)] = 'download';
+			if (ftpfile.type === 'd')
+			{
+				dirlist.push(file);
+			}
 		}
 		for (const dir of dirlist)
 		{
@@ -990,7 +997,7 @@ export class FtpCacher
 
 	private async _makeDeleteTask(path:File|File[], task:Task):Promise<TaskList>
 	{
-		await this.initForRemotePath(task);
+		await this.init(task);
 		const list:TaskList = {};
 
 		const _make = async(file:File):Promise<void>=>{
@@ -1042,7 +1049,7 @@ export class FtpCacher
 
 	private async _makeCleanTask(path:File|File[], task:Task):Promise<TaskList>
 	{
-		await this.initForRemotePath(task);
+		await this.init(task);
 		const list:TaskList = {};
 
 		const _listNotExists = async(path:File):Promise<void>=>{

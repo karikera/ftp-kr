@@ -1,3 +1,5 @@
+# This project will not be updated further for a while
+
 # VSCode FTP Extension
 
 This is FTP Extension!
@@ -67,9 +69,5 @@ You can override ftp/sftp options by `ftpOverride`/`sftpOverride` field, It will
 Bug Report & Feature Request: https://github.com/karikera/ftp-kr/issues  
 Wiki: https://github.com/karikera/ftp-kr/wiki  
 I'm not good at english, Sorry for my bad english ㅠㅠ  
-
-Could you donate me ...?  
-BTC: 1HD7vgpnwEzycDipxZU4cSz31cjkGqB53W  
-BCH: 1U9KPQZaBSXXRRwnJ9ZPV5iSq7Fw3VvXY
 
 **Enjoy!**

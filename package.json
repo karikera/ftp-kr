@@ -56,7 +56,7 @@
       },
       {
         "command": "ftpkr.delete",
-        "title": "Delete This",
+        "title": "WARNING: Delete This",
         "category": "ftp-kr"
       },
       {

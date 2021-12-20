@@ -228,7 +228,7 @@
     "node-ipc": "^9.1.1",
     "read": "^1.0.7",
     "source-map": "^0.7.2",
-    "ssh2": "^0.5.5",
+    "ssh2": "^1.4.0",
     "strip-json-comments": "2.0.1"
   },
   "devDependencies": {

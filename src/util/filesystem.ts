@@ -72,7 +72,7 @@ export abstract class VFSState extends FileInfo
 	{
 		const list:string[] = [];
 		var file:VFSState|undefined = this;
-		while (file && !(file instanceof VFSServer))
+		while (file && file !== this.server)
 		{
 			list.push(file.name);
 			file = file.parent;
@@ -84,9 +84,10 @@ export abstract class VFSState extends FileInfo
 
 	public getUrl():string
 	{
+		if (this.server == null) throw Error(`Server not determined, ${this.name}`);
 		const list:string[] = [this.name];
 		var parent = this.parent;
-		while (parent && !(parent instanceof VirtualFileSystem))
+		while (parent && parent !== this.fs)
 		{
 			list.push(parent.name);
 			parent = parent.parent;
@@ -331,6 +332,7 @@ export class VFSDirectory extends VFSFileCommon
 
 	public getDirectoryFromPath(path:string, make?:boolean):VFSDirectory|undefined
 	{
+		if (path.startsWith('/')) path = path.substr(1);
 		const dirs = path.split("/");
 		var dir:VFSDirectory = this;
 		for (const cd of dirs)

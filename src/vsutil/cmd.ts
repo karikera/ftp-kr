@@ -87,15 +87,7 @@ async function runCommand(commands:Command, name:string, ...args:any[]):Promise<
 	catch(err)
 	{
 		const logger = cmdargs.workspace ? cmdargs.workspace.query(Logger) : defaultLogger;
-		switch (err)
-		{
-		case 'PASSWORD_CANCEL':
-			logger.verbose(`[Command:${name}]: cancelled by password input`);
-			break;
-		default:
-			processError(logger, err);
-			break;
-		}
+		processError(logger, err);
 	}
 }
 

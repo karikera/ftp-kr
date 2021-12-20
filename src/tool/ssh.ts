@@ -136,7 +136,7 @@ async function main():Promise<void>
 		switch (err)
 		{
 		case 'NOTFOUND':
-			console.error('ftp-kr.json not found in '+workspaceDir);
+			console.error('/.vscode/ftp-kr.json not found in '+workspaceDir);
 			process.exit(-1);
 			break;
 		default:

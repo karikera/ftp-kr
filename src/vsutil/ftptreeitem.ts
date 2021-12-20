@@ -102,7 +102,7 @@ export class FtpTreeItem extends TreeItem
 
 	compare(other:FtpTreeItem):number
 	{
-		return (other.collapsibleState||0) - (this.collapsibleState||0) || this.label.localeCompare(other.label);
+		return (other.collapsibleState||0) - (this.collapsibleState||0) || +(this.label != null) - +(other.label != null) || this.label!.localeCompare(other.label!);
 	}
 
 	async getChildren():Promise<FtpTreeItem[]>

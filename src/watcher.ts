@@ -1,24 +1,22 @@
 
-import { FileSystemWatcher, Disposable, workspace } from 'vscode';
 import { File } from 'krfile';
-
-import { PRIORITY_NORMAL, Scheduler, Task } from './vsutil/work';
-import { Workspace, WorkspaceItem } from './vsutil/ws';
-import { Logger } from './vsutil/log';
-import { processError } from './vsutil/error';
-
+import { Disposable, workspace } from 'vscode';
+import { Config } from './config';
 import { FtpSyncManager } from './ftpsync';
-import { Config, testInitTimeBiasForVSBug } from './config';
-import { ConfigProperties } from './util/ftpkr_config';
+import { FtpKrConfigProperties } from './util/serverinfo';
+import { processError } from './vsutil/error';
+import { LazyWatcher } from './vsutil/lazywatcher';
+import { Logger } from './vsutil/log';
+import { Scheduler, Task } from './vsutil/work';
+import { Workspace, WorkspaceItem } from './vsutil/ws';
 
-enum WatcherMode
-{
+enum WatcherMode {
 	NONE,
 	CONFIG,
 	FULL,
 }
 
-function ignoreVsCodeDir(config:ConfigProperties):void
+function ignoreVsCodeDir(config:FtpKrConfigProperties):void
 {
 	for (var i=0;i<config.ignore.length;)
 	{
@@ -42,7 +40,7 @@ function ignoreVsCodeDir(config:ConfigProperties):void
 export class WorkspaceWatcher implements WorkspaceItem
 {
 	private watcherQueue : Promise<void> = Promise.resolve();
-	private watcher: FileSystemWatcher | null = null;
+	private watcher: LazyWatcher | null = null;
 	private openWatcher: Disposable | null = null;
 	
 	private watcherMode:WatcherMode = WatcherMode.NONE;
@@ -67,13 +65,12 @@ export class WorkspaceWatcher implements WorkspaceItem
 			
 			if (!this.config.ignoreJsonUploadCaution && !this.config.checkIgnorePath(this.config.path))
 			{
-				this.logger.errorConfirm("ftp-kr CAUTION: ftp-kr.json is uploaded to remote. Are you sure?", "Delete and Ignore /.vscode path", "It's OK").then(async(selected)=>{
+				this.logger.errorConfirm("ftp-kr CAUTION: ftp-kr.json will be uploaded to remote. Are you sure?", "Delete and Ignore /.vscode path", "It's OK").then(async(selected)=>{
 					switch (selected)
 					{
 					case "Delete and Ignore /.vscode path":
 						this.config.updateIgnorePath();
-						for(const server of this.ftp.servers.values())
-						{
+						for(const server of this.ftp.servers.values()) {
 							await server.ftpDelete(this.config.basePath.child('.vscode'), task);
 						}
 						await this.config.modifySave(cfg=>ignoreVsCodeDir(cfg));
@@ -84,10 +81,8 @@ export class WorkspaceWatcher implements WorkspaceItem
 					}
 				});
 			}
-		});
-		this.config.onLoadAfter(()=>{
 			if (this.ftp.mainServer === null) throw Error('MainServer not found');
-			return this.ftp.mainServer.init();
+			return this.ftp.mainServer.init(task);
 		});
 		this.config.onInvalid(() => {
 			this.attachOpenWatcher(false);
@@ -106,21 +101,9 @@ export class WorkspaceWatcher implements WorkspaceItem
 				this.config.load();
 			}
 		});
-		
-		// It has many bug, not completed code
-		// this.ftp.onCreated = path=>{
-		// 	this.logger.verbose("ftp.onCreated: "+path);
-		// };
-		// this.ftp.onModified = path=>{
-		// 	this.logger.verbose("ftp.onModified: "+path);
-		// };
-		// this.ftp.onDeleted = path=>{
-		// 	this.logger.verbose("ftp.onDeleted: "+path);
-		// };
 	}
 
-	dispose()
-	{
+	dispose():void {
 		this.attachWatcher(WatcherMode.NONE);
 	}
 
@@ -133,12 +116,6 @@ export class WorkspaceWatcher implements WorkspaceItem
 		try
 		{
 			if (path.fsPath == this.config.path.fsPath) {
-				// #2. 와처가 바로 이전에 생성한 설정 파일에 반응하는 상황을 우회
-				if (testInitTimeBiasForVSBug())
-				{
-					if (workName === 'upload') return;
-				}
-
 				this.logger.show();
 				this.config.load();
 				if (this.watcherMode === WatcherMode.CONFIG) return;
@@ -231,8 +208,7 @@ export class WorkspaceWatcher implements WorkspaceItem
 
 	attachWatcher(mode: WatcherMode): void {
 		if (this.watcherMode === mode) return;
-		if (this.watcher)
-		{
+		if (this.watcher !== null) {
 			this.watcher.dispose();
 			this.watcher = null;
 		}
@@ -247,7 +223,7 @@ export class WorkspaceWatcher implements WorkspaceItem
 			default: return;
 		}
 
-		this.watcher = workspace.createFileSystemWatcher(watcherPath);
+		this.watcher = new LazyWatcher(watcherPath);
 
 		this.watcher.onDidChange(uri => {
 			this.logger.verbose('watcher.onDidChange: '+uri.fsPath);

@@ -1,25 +1,15 @@
 
 
-import minimatch = require('minimatch');
 import { File } from 'krfile';
 import 'krjson';
-
-import * as util from "./util/util";
-import * as event from "./util/event";
-
-import { ConfigContainer } from './util/config';
-import { ftp_path } from './util/ftp_path';
-import { PRIORITY_NORMAL, Task, Scheduler } from './vsutil/work';
-import { vsutil } from './vsutil/vsutil';
+import { Event } from './util/event';
+import { FtpKrConfig } from './util/ftpkr_config';
+import { FtpKrConfigProperties } from './util/serverinfo';
 import { processError } from './vsutil/error';
 import { Logger } from './vsutil/log';
-import { WorkspaceItem, Workspace } from './vsutil/ws';
-import { Event } from './util/event';
-import { parseJson } from 'krjson';
-import { keys } from './util/keys';
-import { DEFAULT_IGNORE_LIST, FtpKrConfig, ConfigProperties } from './util/ftpkr_config';
-
-var initTimeForVSBug:number = 0;
+import { vsutil } from './vsutil/vsutil';
+import { Scheduler, Task } from './vsutil/work';
+import { Workspace, WorkspaceItem } from './vsutil/ws';
 
 const REGEXP_MAP:{[key:string]:string} = {
 	".": "\\.", 
@@ -52,20 +42,6 @@ function patternToRegExp(pattern:string):RegExp
 	return new RegExp(regexp);
 }
 
-export function testInitTimeBiasForVSBug():boolean
-{
-	if (initTimeForVSBug)
-	{
-		const inittime = initTimeForVSBug;
-		initTimeForVSBug = 0;
-		if (Date.now() <= inittime + 500)
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
 export class Config extends FtpKrConfig implements WorkspaceItem
 {
 	public state:ConfigState = ConfigState.NOTFOUND;
@@ -73,10 +49,10 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 
 	public basePath:File;
 	
-	public readonly onLoad = Event.make<Task>('onLoad', false);
-	public readonly onLoadAfter = Event.make<void>('onLoadAfter', false);
-	public readonly onInvalid = Event.make<void>('onInvalid', false);
-	public readonly onNotFound = Event.make<void>('onNotFound', true);
+	public readonly onLoad = Event.make<Task>(false);
+	public readonly onLoadAfter = Event.make<void>(false);
+	public readonly onInvalid = Event.make<void>(false);
+	public readonly onNotFound = Event.make<void>(true);
 	
 	private ignorePatterns:(RegExp[])|null = null;
 	private readonly logger:Logger;
@@ -96,7 +72,7 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 	{
 	}
 
-	public async modifySave(cb:(cfg:ConfigProperties)=>void):Promise<void>
+	public async modifySave(cb:(cfg:FtpKrConfigProperties)=>void):Promise<void>
 	{
 		const json = await this.path.json();
 		cb(json);
@@ -134,7 +110,6 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 	public init():void
 	{
 		this.loadWrap('init', async(task)=>{
-			initTimeForVSBug = Date.now();
 			await this.initJson();
 			vsutil.open(this.path);
 		});
@@ -174,7 +149,7 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 	private fireLoad(task:Task):Promise<void>
 	{
 		return this.onLoad.fire(task).then(()=>{
-			this.logger.message("ftp-kr.json: loaded");
+			this.logger.message('/.vscode/ftp-kr.json: loaded');
 			if (this.state !== ConfigState.LOADED)
 			{
 				vsutil.info('');
@@ -188,7 +163,7 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 		switch (err)
 		{
 		case 'NOTFOUND':
-			this.logger.message("ftp-kr.json: not found");
+			this.logger.message('/.vscode/ftp-kr.json: not found');
 			await this.fireNotFound();
 			throw 'IGNORE';
 		case 'PASSWORD_CANCEL':

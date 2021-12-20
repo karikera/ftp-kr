@@ -1,20 +1,16 @@
+import { File } from 'krfile';
 import * as vscode from 'vscode';
 import { Uri } from 'vscode';
-import { File } from 'krfile';
-
-import { VFSDirectory, VFSState } from '../util/filesystem';
-
-import { PRIORITY_NORMAL, Scheduler } from '../vsutil/work';
+import { Config } from '../config';
+import { BatchOptions, FtpCacher } from '../ftpcacher';
+import { FtpSyncManager } from '../ftpsync';
+import { ftpTree } from '../ftptree';
+import { openSshTerminal } from '../sshmgr';
+import { Command, CommandArgs } from '../vsutil/cmd';
 import { Logger } from '../vsutil/log';
 import { vsutil } from '../vsutil/vsutil';
-import { Command, CommandArgs } from '../vsutil/cmd';
+import { Scheduler } from '../vsutil/work';
 import { Workspace } from '../vsutil/ws';
-
-import { ftpTree } from '../ftptree';
-import { FtpSyncManager } from '../ftpsync';
-import { Config } from '../config';
-import { FtpCacher, BatchOptions } from '../ftpcacher';
-import { openSshTerminal } from '../sshmgr';
 
 function taskTimer<T>(taskname: string, taskpromise: Promise<T>): Promise<T> {
 	const startTime = Date.now();
@@ -374,7 +370,6 @@ export const commands:Command = {
 
 			const file = args.file;
 			const ftp = args.workspace.query(FtpSyncManager);
-			const scheduler = args.workspace.query(Scheduler);
 			await ftp.targetServer.init();
 			const ftppath = ftp.targetServer.toFtpUrl(file);
 			args.uri = Uri.parse(ftppath);

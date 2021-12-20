@@ -75,93 +75,82 @@ export class Logger implements WorkspaceItem
 		}
 	}
 	
-	public message(...message:string[]):void
-	{
+	public message(...message:string[]):void {
 		this.log(LogLevelEnum.NORMAL, ...message);
 	}
 	
-	public verbose(...message:string[]):void
-	{
+	public verbose(...message:string[]):void {
 		this.log(LogLevelEnum.VERBOSE, ... message);
 	}
 		
-	public error(err:any):Promise<void>
-	{
+	public error(err:any):Promise<void> {
 		return this.task = this.task.then(async()=>{
 			if (err === 'IGNORE') return;
 			var stack = await getMappedStack(err);
-			if (stack)
-			{
+			if (stack) {
 				console.error(stack);
 				this.logRaw(LogLevelEnum.ERROR, stack);
 				const res = await window.showErrorMessage(err.message, 'Detail');
 				if (res !== 'Detail') return;
-				var output = '';
-				if (err.task)
-				{
+				var output = '[ftp-kr Reporting]\n';
+				if (err.task) {
 					output += `Task: ${err.task}\n`;
 				}
 				const pathRemap:string[] = [];
 				pathRemap.push(new File(__dirname).parent().parent().fsPath, '[ftp-kr]');
-				if (this.workspace)
-				{
+				if (this.workspace) {
 					pathRemap.push(this.workspace.fsPath, `[workspace]`);
 				}
 				output += `platform: ${os.platform()}\n`;
 				output += `arch: ${os.arch()}\n\n`;
 				output += `[${err.constructor.name}]\nmessage: ${err.message}`;
-				if (err.code)
-				{
+				if (err.code) {
 					output += `\ncode: ${err.code}`;
 				}
-				if (err.errno)
-				{
+				if (err.errno) {
 					output += `\nerrno: ${err.errno}`;
 				}
 				
-				function repath(path:string):string
-				{
-					for (var i=0;i<pathRemap.length;i+=2)
-					{
+				function repath(path:string):string {
+					for (var i=0;i<pathRemap.length;i+=2) {
 						const prevPath = pathRemap[i];
-						if (path.startsWith(prevPath))
-						{
+						if (path.startsWith(prevPath)) {
 							return pathRemap[i+1] + path.substr(prevPath.length);
 						}
 					}
 					return path;
 				}
 
-				function filterAllField(value:any):any
-				{
-					if (typeof value === 'string')
-					{
+				function filterAllField(value:any):any {
+					if (typeof value === 'string') {
 						return repath(value);
 					}
-					if (typeof value === 'object')
-					{
-						if (value instanceof Array)
-						{
-							for (var i=0;i<value.length;i++)
-							{
+					if (typeof value === 'object') {
+						if (value instanceof Array) {
+							for (var i=0;i<value.length;i++) {
 								value[i] = filterAllField(value[i]);
 							}
-						}
-						else
-						{
-							for (const name in value)
-							{
+						} else {
+							for (const name in value) {
 								value[name] = filterAllField(value[name]);
 							}
 							
-							if ("password" in value)
-							{
+							if ("host" in value) {
+								const type = typeof value.host;
+								if (type === 'string') value.host = value.host.replace(/[a-zA-Z]/g, '*');
+								else value.host = '['+type+']';
+							}
+							if ("privateKey" in value) {
+								const type = typeof value.privateKey;
+								if (type === 'string') value.privateKey = value.privateKey.replace(/[a-zA-Z]/g, '*');
+								else value.privateKey = '['+type+']';
+							}
+							if ("password" in value) {
 								const type = typeof value.password;
 								if (type === 'string') value.password = '********';
 								else value.password = '['+type+']';
 							}
-							if ("passphrase" in value)
-							{
+							if ("passphrase" in value) {
 								const type = typeof value.passphrase;
 								if (type === 'string') value.passphrase = '********';
 								else value.passphrase = '['+type+']';

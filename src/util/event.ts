@@ -21,7 +21,7 @@ class FiredEvent<T> extends Deferred<void>
 
 export namespace Event
 {
-	export function make<T>(name:string, reverse:boolean):Event<T>
+	export function make<T>(reverse:boolean):Event<T>
 	{
 		var list:(((value:T)=>void|Promise<void>) | undefined)[] = [];
 		var firing = false;

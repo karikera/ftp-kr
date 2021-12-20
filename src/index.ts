@@ -1,18 +1,20 @@
 
-import { window, ExtensionContext, workspace } from 'vscode';
+try {
+	require('source-map-support/register');
+} catch (err) {
+}
 
-import { Command } from './vsutil/cmd';
-import { Workspace } from './vsutil/ws';
-
-import { WorkspaceWatcher } from './watcher';
-import { Config } from './config';
-import { FtpDownloader } from './ftpdown';
-
+import { ExtensionContext, window, workspace } from 'vscode';
 import { commands as cfgcmd } from './cmd/config';
 import { commands as ftpcmd } from './cmd/ftpsync';
-import { defaultLogger } from './vsutil/log';
-import { vsutil } from './vsutil/vsutil';
+import { Config } from './config';
+import { FtpDownloader } from './ftpdown';
 import { ftpTree } from './ftptree';
+import { Command } from './vsutil/cmd';
+import { Workspace } from './vsutil/ws';
+import { WorkspaceWatcher } from './watcher';
+
+
 
 Workspace.onNew(workspace=>{
 	workspace.query(WorkspaceWatcher);

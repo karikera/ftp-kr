@@ -1,4 +1,8 @@
 {
+    "entry": {
+        "./src/index.ts": "./out/index.bundle.js",
+		"./src/tool/schema_to_md.ts": "./out/schema_to_md.js"
+    },
 	"compileOnSave": true,
 	"compilerOptions": {
 		"lib": [
@@ -10,8 +14,9 @@
 		"sourceMap": true,
 		"strictNullChecks": true,
 		"noImplicitThis": true,
-		"noEmitOnError": true,
-		"strict": true
+		"strict": true,
+		"useUnknownInCatchVariables": false,
+		"experimentalDecorators": true
 	},
 	"include": ["src/**/*"]
 }

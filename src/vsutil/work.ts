@@ -67,15 +67,19 @@ class TaskImpl<T> implements Task
 		});
 	}
 
-	public setTimeLimit(timeout:number):void
-	{
-		if (this.timeout) return;
+	public setTimeLimit(timeout:number):void {
+		if (this.timeout == null) return;
 		if (this.state >= TaskState.STARTED) return;
+
+		let stack = Error('').stack;
+		if (stack != null) stack = stack.substr(stack.indexOf('\n'));
 
 		this.timeout = setTimeout(()=>{
 			const task = this.scheduler.currentTask;
-			if (task === null) this.logger.error(Error(`ftp-kr is busy: [null...?] is being proceesed. Cannot run [${this.name}]`));
-			else this.logger.error(Error(`ftp-kr is busy: [${task.name}] is being proceesed. Cannot run [${this.name}]`));
+			const message = `ftp-kr is busy: [${task === null ? 'null...?' : task.name}] is being proceesed. Cannot run [${this.name}]`;
+			const err = Error(message);
+			err.stack = message+stack;
+			this.logger.error(err);
 			this.cancel();
 		}, timeout);
 	}
@@ -190,11 +194,9 @@ class TaskImpl<T> implements Task
 export class Scheduler implements WorkspaceItem
 {
 	public currentTask:TaskImpl<any>|null = null;
-	private nextTask:TaskImpl<any>|null = null;
+	private firstTask:TaskImpl<any>|null = null;
 	private lastTask:TaskImpl<any>|null = null;
 	public readonly logger:Logger;
-
-	private promise:Promise<void> = Promise.resolve();
 
 	constructor(arg:Logger|Workspace)
 	{
@@ -211,7 +213,7 @@ export class Scheduler implements WorkspaceItem
 	private _addTask(task:TaskImpl<any>):void
 	{
 		var node = this.lastTask;
-		if (node)
+		if (node !== null)
 		{
 			if (task.priority <= node.priority)
 			{
@@ -225,19 +227,19 @@ export class Scheduler implements WorkspaceItem
 				{
 					const nodenext = node;
 					node = node.previous;
-					if (!node)
+					if (node === null)
 					{
-						const next = this.nextTask;
-						if (!next) throw Error('Impossible');
-						task.next = next;
-						next.previous = task;
-						this.nextTask = task;
+						const first = this.firstTask;
+						if (first === null) throw Error('Impossible');
+						task.next = first;
+						first.previous = task;
+						this.firstTask = task;
 						break;
 					}
 					if (task.priority <= node.priority)
 					{
 						nodenext.previous = task;
-						task.next = nodenext.next;
+						task.next = nodenext;
 						task.previous = node;
 						node.next = task;
 						break;
@@ -247,7 +249,7 @@ export class Scheduler implements WorkspaceItem
 		}
 		else
 		{
-			this.nextTask = this.lastTask = task;
+			this.firstTask = this.lastTask = task;
 		}
 	}
 
@@ -263,17 +265,17 @@ export class Scheduler implements WorkspaceItem
 
 		task.cancel();
 
-		this.logger.message(`[${task.name}]task is cancelled`);
+		this.logger.message(`[${task.name}] task is cancelled`);
 
 		var next = task.next;
 		while (next)
 		{
-			this.logger.message(`[${next.name}]task is cancelled`);
+			this.logger.message(`[${next.name}] task is cancelled`);
 			next = next.next;
 		}
 
 		task.next = null;
-		this.nextTask = null;
+		this.firstTask = null;
 		this.lastTask = null;
 		return task.promise.catch(()=>{});
 	}
@@ -306,8 +308,7 @@ export class Scheduler implements WorkspaceItem
 		const task = new TaskImpl(this, name, priority, taskfunc);
 		task.setTimeLimit(timeout);
 		this._addTask(task);
-		if (!this.currentTask)
-		{
+		if (this.currentTask == null) {
 			this.logger.verbose(`[SCHEDULAR] start`);
 			this.progress();
 		}
@@ -316,8 +317,8 @@ export class Scheduler implements WorkspaceItem
 	
 	private progress():void
 	{
-		const task = this.nextTask;
-		if (!task)
+		const task = this.firstTask;
+		if (task === null)
 		{
 			this.logger.verbose(`[SCHEDULAR] end`);
 			this.currentTask = null;
@@ -326,13 +327,10 @@ export class Scheduler implements WorkspaceItem
 		this.currentTask = task;
 
 		const next = task.next;
-		if (next === null)
-		{
-			this.nextTask = this.lastTask = null;
-		}
-		else
-		{
-			this.nextTask = next;
+		if (next === null) {
+			this.firstTask = this.lastTask = null;
+		} else {
+			this.firstTask = next;
 		}
 		const prom = task.play();
 		prom.then(()=>this.progress(), ()=>this.progress());

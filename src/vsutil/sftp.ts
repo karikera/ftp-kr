@@ -1,12 +1,10 @@
 
-import { Client, ConnectConfig, SFTPWrapper, ClientChannel } from 'ssh2';
 import { File } from 'krfile';
-
+import { Client, ConnectConfig, SFTPWrapper } from 'ssh2';
 import { FileInfo } from '../util/fileinfo';
-import { merge, promiseErrorWrap } from '../util/util';
 import { ServerConfig } from '../util/serverinfo';
-
-import { FileInterface, NOT_CREATED, DIRECTORY_NOT_FOUND, FILE_NOT_FOUND } from './fileinterface';
+import { merge, promiseErrorWrap } from '../util/util';
+import { DIRECTORY_NOT_FOUND, FileInterface, FILE_NOT_FOUND, NOT_CREATED } from './fileinterface';
 import { Workspace } from './ws';
 
 
@@ -268,10 +266,9 @@ export class SftpConnection extends FileInterface
 	_get(ftppath:string):Promise<NodeJS.ReadableStream>
 	{
 		return this._getSftp()
-		.then(sftp=>new Promise<NodeJS.ReadableStream>((resolve, reject) => {
+		.then(sftp=>new Promise<NodeJS.ReadableStream>((resolve) => {
 			const stream = sftp.createReadStream(ftppath, {encoding:<any>null});
-			stream.on('error', reject)
-			.on('readable', () => resolve(stream));
+			resolve(stream);
 		}))
 		.catch(err=>{
 			if (err.code === 2) err.ftpCode = FILE_NOT_FOUND;

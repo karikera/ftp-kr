@@ -153,7 +153,7 @@ export class FtpConnection extends FileInterface
 					
 					const socket:stream.Duplex = (<any>client)._socket;
 					const oldwrite = socket.write;
-					socket.write = (str:string)=>oldwrite.call(socket, str, 'binary');
+					socket.write = (str:string)=>oldwrite.call(socket, str, 'binary' as any); // XXX: TS bug, overloading is not considered.
 					socket.setEncoding('binary');
 					client.binary(err=>{
 						if (err) printMappedError(err);
@@ -206,7 +206,7 @@ export class FtpConnection extends FileInterface
 		});
 	}
 
-	static wrapToPromise<T>(callback:(cb:(err:Error, val?:T)=>void)=>void):Promise<T>
+	static wrapToPromise<T>(callback:(cb:(err:Error, val:T)=>void)=>void):Promise<T>
 	{
 		return new Promise<T>((resolve, reject)=>callback((err, val)=>{
 			if(err) reject(err);

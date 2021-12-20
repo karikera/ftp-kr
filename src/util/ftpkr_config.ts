@@ -1,40 +1,17 @@
 
-import { parseJson } from "krjson";
 import { File } from "krfile";
-
+import { parseJson } from "krjson";
 import { ConfigContainer } from "./config";
-import { LogLevel, ServerConfig } from "./serverinfo";
-import { keys } from "./keys";
 import { ftp_path } from "./ftp_path";
+import { FtpKrConfigProperties, ServerConfig } from "./serverinfo";
 import * as util from "./util";
-
 
 export const DEFAULT_IGNORE_LIST = [
 	".git",
 	"/.vscode",
 ];
 
-export interface ConfigProperties extends ServerConfig
-{
-	ignore:string[];
-	autoUpload:boolean;
-	autoDelete:boolean;
-	autoDownload:boolean;
-	
-	altServer:ServerConfig[];
-	localBasePath?:string;
-	followLink:boolean;
-	autoDownloadAlways:number;
-	createSyncCache:boolean;
-	logLevel:LogLevel;
-	viewSizeLimit:number;
-	downloadTimeExtraThreshold:number;
-	ignoreRemoteModification:boolean;
-	ignoreJsonUploadCaution:boolean;
-	noticeFileCount:number;
-}
-
-const CONFIG_INIT:ConfigProperties = <any>{
+const CONFIG_INIT:FtpKrConfigProperties = <any>{
 	host: "",
 	username: "",
 	password: "",
@@ -65,12 +42,12 @@ function throwJsonError(data:string, match:RegExp, message:string):never
 	throw err;
 }
 
-function findUndupplicatedSet<T>(dupPriority:(keyof T)[], obj:T, objs:T[]):string[]
+function findUndupplicatedSet<T>(dupPriority:(keyof T)[], obj:T, objs:T[]):(number|string|symbol)[]
 {
-	const dupmap:{[key:string]:Set<T>} = {};
+	const dupmap:{[key:number|string|symbol]:Set<T>} = {};
 	for (const prop of dupPriority)
 	{
-		const set = new Set;
+		const set = new Set<T>();
 		const value = obj[prop];
 		for (const other of objs)
 		{
@@ -84,7 +61,7 @@ function findUndupplicatedSet<T>(dupPriority:(keyof T)[], obj:T, objs:T[]):strin
 		dupmap[prop] = set;
 	}
 
-	function testDup(keys:string[]):boolean
+	function testDup(keys:(number|string|symbol)[]):boolean
 	{
 		_notdup:for (const other of objs)
 		{
@@ -100,10 +77,10 @@ function findUndupplicatedSet<T>(dupPriority:(keyof T)[], obj:T, objs:T[]):strin
 	}
 
 	const all = 1 << dupPriority.length;
-	for (var i=1;i<all;i++)
+	for (let i=1;i<all;i++)
 	{
-		var v = i;
-		const arr:string[] = [];
+		let v = i;
+		const arr:(number|string|symbol)[] = [];
 		for (const prop of dupPriority)
 		{
 			if (v & 1) arr.push(prop);
@@ -114,14 +91,13 @@ function findUndupplicatedSet<T>(dupPriority:(keyof T)[], obj:T, objs:T[]):strin
 	return [];
 }
 
-
-class FtpKrConfigClass extends ConfigContainer<ConfigProperties>
+class FtpKrConfigClass extends ConfigContainer<FtpKrConfigProperties>
 {
 	public readonly path:File;
 
 	constructor(workspaceDir:File)
 	{
-		super(keys<ConfigProperties>());
+		super(FtpKrConfigProperties.keys);
 
 		this.path = workspaceDir.child('./.vscode/ftp-kr.json');
 
@@ -163,7 +139,7 @@ class FtpKrConfigClass extends ConfigContainer<ConfigProperties>
 			
 		// generate field
 		config.index = index;
-		var url = config.protocol;
+		let url = config.protocol;
 		url += '://';
 		url += config.host;
 		if (config.port)
@@ -175,16 +151,16 @@ class FtpKrConfigClass extends ConfigContainer<ConfigProperties>
 		url += config.remotePath;
 		config.url = url;
 		
-		var hostUrl = config.protocol;
+		let hostUrl = config.protocol;
 		hostUrl += '://';
+		hostUrl += config.username;
+		hostUrl += '@';
 		hostUrl += config.host;
 		if (config.port)
 		{
 			hostUrl += ':';
 			hostUrl += config.port;
 		}
-		hostUrl += '@';
-		hostUrl += config.username;
 		config.hostUrl = hostUrl;
 
 		delete config.passwordInMemory;
@@ -195,7 +171,7 @@ class FtpKrConfigClass extends ConfigContainer<ConfigProperties>
 		// x !== false : default is true
 		// x === true : default is false
 
-		const config = <ConfigProperties><any>this;
+		const config = <FtpKrConfigProperties><any>this;
 		if (!(config.ignore instanceof Array)) config.ignore = DEFAULT_IGNORE_LIST;
 		config.autoUpload = config.autoUpload === true;
 		config.autoDelete = config.autoDelete === true;
@@ -236,7 +212,7 @@ class FtpKrConfigClass extends ConfigContainer<ConfigProperties>
 		delete config.name;
 
 		this._serverTypeClearing(config, 0);
-		for (var i=0;i<config.altServer.length;)
+		for (let i=0;i<config.altServer.length;)
 		{
 			if (typeof config.altServer[i] !== 'object')
 			{
@@ -252,7 +228,7 @@ class FtpKrConfigClass extends ConfigContainer<ConfigProperties>
 
 	public set(data:string):void
 	{
-		var obj:ConfigProperties;
+		let obj:FtpKrConfigProperties;
 		try
 		{
 			obj = parseJson(data);
@@ -296,7 +272,7 @@ class FtpKrConfigClass extends ConfigContainer<ConfigProperties>
 		this.clearConfig();
 		this.appendConfig(obj);
 
-		const config = <ConfigProperties><any>this;
+		const config = <FtpKrConfigProperties><any>this;
 
 		if (!config.altServer || config.altServer.length === 0)
 		{
@@ -319,7 +295,7 @@ class FtpKrConfigClass extends ConfigContainer<ConfigProperties>
 				}
 				fulldupped.add(prop);
 			}
-			for (var i=0; i<dupPriority.length;)
+			for (let i=0; i<dupPriority.length;)
 			{
 				if (fulldupped.has(dupPriority[i]))
 				{
@@ -345,11 +321,11 @@ class FtpKrConfigClass extends ConfigContainer<ConfigProperties>
 			}
 
 			// make dupmap
-			var usedprop:string[] = findUndupplicatedSet(dupPriority, server, servers);
+			let usedprop:(number|string|symbol)[] = findUndupplicatedSet(dupPriority, server, servers);
 			const nameidx = usedprop.indexOf('name');
 			if (nameidx !== -1) usedprop.splice(nameidx, 1);
 
-			var altname = '';
+			let altname = '';
 			if (usedprop.length !== 0)
 			{
 				if (server.host) altname = server.host;
@@ -388,9 +364,9 @@ class FtpKrConfigClass extends ConfigContainer<ConfigProperties>
 
 	public async initJson():Promise<void>
 	{
-		var obj;
-		var data:string = '';
-		var changed = false;
+		let obj;
+		let data:string = '';
+		let changed = false;
 		try
 		{
 			data = await this.path.open();
@@ -398,10 +374,9 @@ class FtpKrConfigClass extends ConfigContainer<ConfigProperties>
 			for (const p in CONFIG_INIT)
 			{
 				if (p in obj) continue;
+				obj[p] = CONFIG_INIT[p as keyof FtpKrConfigProperties];
 				changed = true;
-				break;
 			}
-			Object.assign(obj, CONFIG_INIT);
 		}
 		catch (err)
 		{
@@ -418,9 +393,10 @@ class FtpKrConfigClass extends ConfigContainer<ConfigProperties>
 
 	public async readJson():Promise<void>
 	{
+		let data:string;
 		try
 		{
-			var data = await this.path.open();
+			data = await this.path.open();
 		}
 		catch(err)
 		{
@@ -431,5 +407,5 @@ class FtpKrConfigClass extends ConfigContainer<ConfigProperties>
 }
 
 
-export type FtpKrConfig = FtpKrConfigClass & ConfigProperties;
+export type FtpKrConfig = FtpKrConfigClass & FtpKrConfigProperties;
 export const FtpKrConfig = <{new(workspaceDir:File):FtpKrConfig}><any>FtpKrConfigClass;

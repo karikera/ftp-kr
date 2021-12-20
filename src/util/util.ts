@@ -3,7 +3,7 @@ import stripJsonComments = require('strip-json-comments');
 
 export class Deferred<T> implements Promise<T>
 {
-	public resolve:((v?:T)=>void);
+	public resolve:((v:T|PromiseLike<T>)=>void);
 	public reject:((v?:any)=>void);
 	public readonly [Symbol.toStringTag] = "Promise";
 	private promise:Promise<T>;
@@ -26,6 +26,10 @@ export class Deferred<T> implements Promise<T>
 	public catch<R2>(func:(v:any)=>R2|Promise<R2>):Promise<T|R2>
 	{
 		return this.promise.catch(func);
+	}
+
+	public finally(func?:()=>void):Promise<T> {
+		return this.promise.finally(func);
 	}
 }
 

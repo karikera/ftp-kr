@@ -205,8 +205,7 @@ export class FtpManager
 		const config = this.config;
 		const usepk = config.protocol === 'sftp' && !!config.privateKey;
 	
-		async function tryToConnect(password:string|undefined):Promise<void>
-		{
+		async function tryToConnect(password:string|undefined):Promise<void> {
 			for (;;)
 			{
 				const client = createClient(that.workspace, config);
@@ -259,32 +258,25 @@ export class FtpManager
 			}
 		}
 	
-		if (!usepk && config.password === undefined)
-		{
+		if (!usepk && config.password === undefined) {
 			var errorMessage:string|undefined;
-			if (this.config.passwordInMemory !== undefined)
-			{
+			if (this.config.passwordInMemory !== undefined) {
 				errorMessage = await tryToConnectOrErrorMessage(this.config.passwordInMemory);
 				if (errorMessage !== undefined) throw Error(errorMessage);
-			}
-			else for (;;)
-			{
+			} else for (;;) {
 				const promptedPassword = await window.showInputBox({
 					prompt:'ftp-kr: '+(config.protocol||'').toUpperCase()+" Password Request",
 					password: true,
 					ignoreFocusOut: true,
 					placeHolder: errorMessage
 				});
-				if (promptedPassword === undefined)
-				{
+				if (promptedPassword === undefined) {
 					this.terminate();
 					throw 'PASSWORD_CANCEL';
 				}
 				errorMessage = await tryToConnectOrErrorMessage(promptedPassword);
-				if (errorMessage === undefined)
-				{
-					if (config.keepPasswordInMemory)
-					{
+				if (errorMessage === undefined) {
+					if (config.keepPasswordInMemory) {
 						this.config.passwordInMemory = promptedPassword;
 					}
 					break;

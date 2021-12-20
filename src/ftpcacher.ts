@@ -143,7 +143,7 @@ export class FtpCacher
 	public init(task?:Task|null):Promise<void>
 	{
 		if (this.remotePath) return Promise.resolve();
-		return this.scheduler.task('First Connect', async(task) => {
+		return this.scheduler.task('first connect', async(task) => {
 			await this.ftpList(this.config.remotePath, task);
 			const remotePath = this.config.remotePath;
 			this.remotePath = remotePath.startsWith('/') ? remotePath : ftp_path.normalize(this.ftpmgr.home+'/'+remotePath);

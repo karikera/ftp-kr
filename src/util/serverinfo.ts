@@ -1,5 +1,6 @@
 
 import {Options as FtpOptions} from 'ftp';
+import { reflect } from 'if-tsb/reflect';
 import {ConnectConfig as SftpOptions} from 'ssh2';
 
 export interface ServerConfig
@@ -40,3 +41,27 @@ export interface ServerConfig
 }
 
 export type LogLevel = 'VERBOSE' | 'NORMAL' | 'ERROR';
+
+export interface FtpKrConfigProperties extends ServerConfig
+{
+	ignore:string[];
+	autoUpload:boolean;
+	autoDelete:boolean;
+	autoDownload:boolean;
+	
+	altServer:ServerConfig[];
+	localBasePath?:string;
+	followLink:boolean;
+	autoDownloadAlways:number;
+	createSyncCache:boolean;
+	logLevel:LogLevel;
+	viewSizeLimit:number;
+	downloadTimeExtraThreshold:number;
+	ignoreRemoteModification:boolean;
+	ignoreJsonUploadCaution:boolean;
+	noticeFileCount:number;
+}
+
+export namespace FtpKrConfigProperties {
+	export const keys = reflect<'./reflect', 'keys', FtpKrConfigProperties>();
+}

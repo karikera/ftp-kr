@@ -1,3 +1,6 @@
+# 1.3.20
+* remove make.json schema
+
 # 1.3.16 ~ 1.3.19
 * bugfix
 

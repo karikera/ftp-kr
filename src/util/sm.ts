@@ -1,15 +1,6 @@
-import { SourceMapConsumer, NullableMappedPosition } from 'source-map';
 import { File } from 'krfile';
+import { SourceMapConsumer } from 'source-map';
 import { replaceErrorUrlAsync } from './util';
-
-const rawSourceMap = {
-	version: 3,
-	file: 'min.js',
-	names: ['bar', 'baz', 'n'],
-	sources: ['one.js', 'two.js'],
-	sourceRoot: 'http://example.com/www/js/',
-	mappings: 'CAAC,IAAI,IAAM,SAAUA,GAClB,OAAOC,IAAID;CCDb,IAAI,IAAM,SAAUE,GAClB,OAAOA'
-};
 
 export async function getTsPosition(js:File, line:number, column:number):Promise<{source:string, line:number, column:number}>
 {

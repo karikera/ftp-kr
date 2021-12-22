@@ -1,11 +1,12 @@
+
 .vscode/**
-
 .gitignore
-jsconfig.json
-.tsconfig.json
+tsconfig.json
 
-node_modules/.bin/**
-/src/
-/out/tool/schema_to_md.js
-/images/*.psd
-/compile.js
+../if-tsb
+node_modules
+src
+out/schema_to_md.js
+
+images/*.psd
+WANTTODO

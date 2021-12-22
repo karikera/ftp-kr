@@ -4,6 +4,10 @@
 		"./src/tool/schema_to_md.ts": "./out/schema_to_md.js"
     },
 	"compileOnSave": true,
+	"bundlerOptions": {
+		"bundleExternals": true,
+        "externals": ["vscode"]
+	},
 	"compilerOptions": {
 		"lib": [
 			"es2015"

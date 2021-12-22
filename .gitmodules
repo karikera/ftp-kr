@@ -1,0 +1,3 @@
+[submodule "ssh2"]
+	path = ssh2
+	url = https://github.com/karikera/ssh2.git

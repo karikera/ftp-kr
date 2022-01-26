@@ -247,6 +247,7 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 						this.basePath = this.workspace;
 					}
 	
+					this.logger.dontOpen = this.dontOpenOutput;
 					this.logger.setLogLevel(this.logLevel);
 	
 					await this.fireLoad(task);

@@ -1,3 +1,6 @@
+# 1.3.21
+* add a `dontOpenOutput` option
+
 # 1.3.20
 * remove make.json schema
 

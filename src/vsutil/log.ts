@@ -20,6 +20,7 @@ enum LogLevelEnum
 export class Logger implements WorkspaceItem
 {
 	public logLevel:LogLevelEnum = LogLevelEnum.NORMAL;
+	public dontOpen:boolean = false;
 	private output:OutputChannel|null = null;
 	private workspace:Workspace|null = null;
 	public static all:Set<Logger> = new Set;
@@ -236,6 +237,7 @@ export class Logger implements WorkspaceItem
 	public show():void
 	{
 		if (!this.output) return;
+		if (this.dontOpen) return;
 		this.output.show();
 	}
 

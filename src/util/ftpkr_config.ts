@@ -197,6 +197,7 @@ class FtpKrConfigClass extends ConfigContainer<FtpKrConfigProperties>
 			config.logLevel = 'NORMAL';
 			break;
 		}
+		config.dontOpenOutput = !!config.dontOpenOutput;
 		config.viewSizeLimit = Number(config.viewSizeLimit || 1024*1024*4)
 		config.downloadTimeExtraThreshold = Number(config.downloadTimeExtraThreshold || 1000);
 		config.ignoreRemoteModification = config.ignoreRemoteModification === true;

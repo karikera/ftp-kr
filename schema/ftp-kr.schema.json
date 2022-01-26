@@ -89,9 +89,14 @@
             "description": "Log level setting for debug (default: NORMAL)",
 			"default": "NORMAL"
 		},
+		"dontOpenOutput": {
+			"type": "boolean",
+            "description": "Open the output window with some commands (default: false)",
+			"default": false
+		},
 		"ignore": {
 			"type": "array",
-			"description": "Ignore file or directory list. Is NOT glob pattern",
+			"description": "Ignore file or directory list. Is NOT the glob pattern",
 			"items": {
 				"type": "string",
 				"description": "Ignore file or directory"

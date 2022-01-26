@@ -55,6 +55,7 @@ export interface FtpKrConfigProperties extends ServerConfig
 	autoDownloadAlways:number;
 	createSyncCache:boolean;
 	logLevel:LogLevel;
+	dontOpenOutput:boolean;
 	viewSizeLimit:number;
 	downloadTimeExtraThreshold:number;
 	ignoreRemoteModification:boolean;

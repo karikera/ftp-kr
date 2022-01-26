@@ -1,3 +1,6 @@
+# 1.3.22
+* update npm packages
+
 # 1.3.21
 * add a `dontOpenOutput` option
 

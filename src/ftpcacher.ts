@@ -1,21 +1,21 @@
 
-import { window, workspace } from 'vscode';
 import { File, Stats } from 'krfile';
 
-import { ServerConfig } from './util/serverinfo';
+import { VFSDirectory, VFSFile, VFSServer, VFSState, VFSServerList } from './util/filesystem';
 import { ftp_path } from './util/ftp_path';
-import { VFSState, VirtualFileSystem, VFSFile, VFSDirectory, VFSFileCommon, VFSServer } from './util/filesystem';
+import { ServerConfig } from './util/serverinfo';
 import { Deferred, isEmptyObject } from './util/util';
 
-import { DIRECTORY_NOT_FOUND, FILE_NOT_FOUND } from './vsutil/fileinterface';
-import { WorkspaceItem, Workspace } from './vsutil/ws';
-import { vsutil, QuickPick } from './vsutil/vsutil';
+import { FtpErrorCode } from './vsutil/fileinterface';
 import { Logger } from './vsutil/log';
-import { Task, Scheduler, PRIORITY_NORMAL } from './vsutil/work';
+import { QuickPick, vsutil } from './vsutil/vsutil';
+import { Scheduler, Task } from './vsutil/work';
+import { Workspace } from './vsutil/ws';
 
 import { Config } from './config';
 import { FtpManager } from './ftpmgr';
-import { getMappedStack, printMappedError } from './util/sm';
+import { printMappedError } from './util/sm';
+import { TemporalDocument } from './vsutil/tmpfile';
 
 export interface BatchOptions
 {
@@ -27,6 +27,7 @@ export interface BatchOptions
 	forceRefresh?:boolean;
 	cancelWhenLatest?:boolean; // upload
 	whenRemoteModed?:"upload"|"diff"|"ignore"|"error"; // upload/upload all
+	skipModCheck?:boolean; // upload/download All
 }
 
 async function isSameFile(file:VFSState|undefined, local:Stats|File):Promise<boolean>
@@ -52,9 +53,14 @@ async function isSameFile(file:VFSState|undefined, local:Stats|File):Promise<boo
     {
     case "-":
         if (!local.isFile()) return false;
-		if (file instanceof VFSFileCommon)
+		if (file instanceof VFSState)
 		{
-    		if (local.size !== file.size) return false;
+			if (local.size !== file.size) return false;
+			if (file.lmtimeWithThreshold !== 0) { // it has lmtime
+				if (local.mtimeMs > file.lmtimeWithThreshold) return false;
+			} else { // it does not have lmtime. update it.
+				file.lmtime = file.lmtimeWithThreshold = local.mtimeMs;
+			}
 		}
         break;
     case "d":
@@ -95,7 +101,8 @@ export interface TaskList
 export interface ViewedFile
 {
 	file?:VFSState;
-	content:string;
+	content:Buffer;
+	error?:string;
 }
 
 interface TaskJsonResult
@@ -103,6 +110,51 @@ interface TaskJsonResult
 	tasks:TaskList;
 	count:number;
 	modified:number;
+}
+
+class TaskFileConfirm {
+	private readonly taskFile:File;
+	private tmpDoc:TemporalDocument|null = null;
+
+	constructor(public readonly workspace:Workspace) {
+		this.taskFile = this.workspace.child(".vscode/ftp-kr.task.json");
+	}
+
+	async confirm(tasks:TaskList, confirmer:Thenable<string|undefined>):Promise<TaskList|null> {
+		try
+		{
+			if (this.tmpDoc !== null) {
+				this.tmpDoc.close();
+				this.tmpDoc = null;
+			}
+			await this.taskFile.create(JSON.stringify(tasks, null, 1));
+			await vsutil.open(this.taskFile);
+			this.tmpDoc = new TemporalDocument(this.taskFile, this.taskFile);
+			const res = await Promise.race([
+				this.tmpDoc.onClose,
+				confirmer,
+			]);
+			if (res === undefined) return null;
+			const editor = await vsutil.open(this.taskFile);
+			await editor.document.save();
+			tasks = await this.taskFile.json();
+		}
+		finally
+		{
+			if (this.tmpDoc !== null) {
+				this.tmpDoc.close();
+				this.tmpDoc = null;
+			}
+			await this.taskFile.quietUnlink();
+		}
+		return tasks;
+	}
+}
+
+export class FtpError extends Error {
+	constructor(error:string, public description:string) {
+		super(error);
+	}
 }
 
 export class FtpCacher
@@ -119,7 +171,9 @@ export class FtpCacher
 	public home:VFSDirectory;
 	public remotePath:string;
 
-	constructor(public readonly workspace:Workspace, public readonly config:ServerConfig, fs:VirtualFileSystem)
+	private readonly confirm:TaskFileConfirm;
+
+	constructor(public readonly workspace:Workspace, public readonly config:ServerConfig, fs:VFSServerList)
 	{
 		this.mainConfig = workspace.query(Config);
 		this.config = config;
@@ -131,6 +185,8 @@ export class FtpCacher
 		
 		this.home = <any>undefined;
 		this.remotePath = <any>undefined;
+
+		this.confirm = new TaskFileConfirm(workspace);
 	}
 
 	public getName():string
@@ -226,6 +282,84 @@ export class FtpCacher
 		}, task);
 	}
 
+	public ftpRename(from:File, to:File, task?:Task|null):Promise<void>
+	{
+		return this.scheduler.task('Rename', async(task)=>{
+			await this.init(task);
+			const ftppathFrom = this.toFtpPath(from);
+			const ftppathTo = this.toFtpPath(to);
+	
+			const renameTest = async(from:VFSState):Promise<void>=>{
+				await this.ftpmgr.rename(task, ftppathFrom, ftppathTo);
+				this._fsDelete(ftppathFrom);
+				this.fs.setFromItem(ftppathTo, from);
+			}
+	
+			let file:VFSState|undefined = this.fs.getFromPath(ftppathFrom);
+			if (file) {
+				try
+				{
+					return await renameTest(file);
+				}
+				catch(err)
+				{
+				}
+			}
+			file = await this.ftpStat(ftppathFrom, task);
+			if (!file) return;
+			await renameTest(file);
+		}, task);
+	}
+
+	public ftpMkdir(path:File, task?:Task|null):Promise<void>
+	{
+		return this.scheduler.task('Mkdir', async (task) => {
+			await this.init(task);
+	
+			const mtime = Date.now();
+			const ftppath = this.toFtpPath(path);
+		
+			var oldfile:VFSState|undefined = undefined;
+			
+			const next = async ():Promise<void>=>{
+				if (oldfile) {
+					if (oldfile instanceof VFSDirectory) {
+						oldfile.lmtimeWithThreshold = oldfile.lmtime = mtime;
+						return;
+					}
+					await this.ftpDelete(path, task);
+				}
+				await this.ftpmgr.mkdir(task, ftppath);
+
+				const dir = this.fs.mkdir(ftppath);
+				dir.lmtimeWithThreshold = dir.lmtime = mtime;
+				dir.remoteModified = false;
+				return;
+			};
+	
+			const parentFtpPath = this.toFtpPath(path.parent());
+			const filedir = this.fs.getDirectoryFromPath(parentFtpPath);
+			if (!filedir) return await next();
+			
+			oldfile = await this.ftpStat(ftppath, task);
+			if (!oldfile) return await next();
+			return await next();
+		}, task);
+	}
+
+	private _upload(task:Task, ftppath:string, localpath:File):Promise<void> {
+		return this.ftpmgr.upload(task, ftppath, localpath).catch(err=>{
+			if (err.ftpCode !== FtpErrorCode.REQUEST_MKDIR) throw err;
+			const errorMessageOverride = err.message;
+			const idx = ftppath.lastIndexOf("/");
+			if (idx <= 0) throw err;
+			return this.ftpmgr.mkdir(task, ftppath.substr(0, idx)).then(
+				()=>this.ftpmgr.upload(task, ftppath, localpath), 
+				err=>{ err.message = errorMessageOverride; }
+			);
+		});
+	}
+
 	public ftpUpload(path:File, task?:Task|null, options?:BatchOptions):Promise<UploadReport>
 	{
 		return this.scheduler.task('Upload', async (task) => {
@@ -269,25 +403,21 @@ export class FtpCacher
 							report.file = oldfile;
 							return report;
 						}
-						await this.ftpDelete(path, task).then(() => this.ftpmgr.mkdir(task, ftppath));
+						await this.ftpDelete(path, task);
 					}
-					else
-					{
-						await this.ftpmgr.mkdir(task, ftppath);
-					}
+					await this.ftpmgr.mkdir(task, ftppath);
 	
 					const dir = this.fs.mkdir(ftppath);
 					dir.lmtimeWithThreshold = dir.lmtime = +stats.mtime;
-					dir.modified = false;
+					dir.remoteModified = false;
 					report.file = dir;
 					return report;
 				}
 				else
 				{
-					const parentFtpPath = this.toFtpPath(path.parent());
 					try
 					{
-						await this.ftpmgr.upload(task, ftppath, path);
+						await this._upload(task, ftppath, path);
 					}
 					catch(e)
 					{
@@ -301,6 +431,7 @@ export class FtpCacher
 	
 					const file = this.fs.createFromPath(ftppath);
 					file.lmtimeWithThreshold = file.lmtime = +stats.mtime;
+					file.remoteModified = false;
 					file.size = stats.size;
 					report.file = file;
 					return report;
@@ -333,7 +464,7 @@ export class FtpCacher
 				}
 			}
 	
-			if (oldfile.modified)
+			if (oldfile.remoteModified)
 			{
 				switch (noptions.whenRemoteModed)
 				{
@@ -347,10 +478,10 @@ export class FtpCacher
 					throw 'MODIFIED';
 				case 'diff':
 				default:
-					var diffFile:File;
+					var diffDoc:TemporalDocument;
 					try
 					{
-						diffFile = await this.ftpDiff(path, task, true);
+						diffDoc = await this.ftpDiff(path, task, true);
 					}
 					catch (err)
 					{
@@ -362,13 +493,7 @@ export class FtpCacher
 						throw err;
 					}
 					vsutil.info('Remote file modification detected', 'Upload', 'Download').then(async(selected)=>{
-						try
-						{
-							await diffFile.unlink();
-						}
-						catch(err)
-						{
-						}
+						diffDoc.close();
 						switch (selected)
 						{
 						case 'Upload':
@@ -434,33 +559,38 @@ export class FtpCacher
 			file.size = stats.size;
 			file.lmtime = +stats.mtime;
 			file.lmtimeWithThreshold = file.lmtime + this.mainConfig.downloadTimeExtraThreshold;
-			file.modified = false;
+			file.remoteModified = false;
 		}, task);
 	}
 
-	public downloadAsText(ftppath:string, task?:Task|null):Promise<ViewedFile>
-	{
+	public downloadAsBuffer(ftppath:string, task?:Task|null):Promise<ViewedFile> {
 		return this.scheduler.task<ViewedFile>('View', async(task):Promise<ViewedFile>=>{
 			var file:VFSState|undefined = this.fs.getFromPath(ftppath);
 			if (!file)
 			{
 				file = await this.ftpStat(ftppath, task);
-				if (!file)
-				{
-					return {
-						content: '< File not found >\n'+ftppath
-					};
-				}
+				if (!file) throw new FtpError('File not found', ftppath);
 			}
-			if (file.size > this.mainConfig.viewSizeLimit) return {
-				content: '< File is too large >\nYou can change file size limit with "viewSizeLimit" option in ftp-kr.json'
-			};
+			if (file.size > this.mainConfig.viewSizeLimit) {
+				throw new FtpError('< File is too large >', 'You can change file size limit with "viewSizeLimit" option in ftp-kr.json');
+			}
 
 			const content = await this.ftpmgr.view(task, ftppath);
 			return {
 				file,
 				content
 			};
+		}, task);
+	}
+
+	public uploadBuffer(ftppath:string, buffer:Buffer, task?:Task|null):Promise<void> {
+		return this.scheduler.task<void>('Write', async(task):Promise<void>=>{
+			const mtime = +new Date;
+			await this.ftpmgr.write(task, ftppath, buffer);
+			const file = this.fs.createFromPath(ftppath);
+			file.lmtimeWithThreshold = file.lmtime = mtime;
+			file.remoteModified = false;
+			file.size = buffer.length;
 		}, task);
 	}
 
@@ -502,14 +632,16 @@ export class FtpCacher
 		stats = await path.stat();
 		file.lmtime = +stats.mtime;
 		file.lmtimeWithThreshold = file.lmtime + this.mainConfig.downloadTimeExtraThreshold;
-		file.modified = false;
+		file.remoteModified = false;
 	}
 
-	public async ftpStat(ftppath:string, task:Task, options?:BatchOptions):Promise<VFSState|undefined>
+	public async ftpStat(ftppath:string, task?:Task, options?:BatchOptions):Promise<VFSState|undefined>
 	{
-		const parent = ftp_path.dirname(ftppath);
-		const dir = await this.ftpList(parent, task, options);
-		return dir.item(ftp_path.basename(ftppath));
+		return this.scheduler.task('Stat', async(task)=>{
+			const parent = ftp_path.dirname(ftppath);
+			const dir = await this.ftpList(parent, task, options);
+			return dir.item(ftp_path.basename(ftppath));
+		}, task);
 	}
 
 	public ftpTargetStat(linkfile:VFSState, task?:Task|null):Promise<VFSState|undefined>
@@ -527,9 +659,9 @@ export class FtpCacher
 		}, task);
 	}
 
-	public ftpDiff(file:File, task?:Task|null, sameCheck?:boolean):Promise<File>
+	public ftpDiff(file:File, task?:Task|null, sameCheck?:boolean):Promise<TemporalDocument>
 	{
-		return this.scheduler.task('Diff', async(task)=>{
+		return this.scheduler.task<TemporalDocument>('Diff', async(task)=>{
 			await this.init(task);
 			const basename = file.basename();
 			const diffFile:File = await this.workspace.child('.vscode/ftp-kr.diff.'+basename).findEmptyIndex();
@@ -541,7 +673,7 @@ export class FtpCacher
 			}
 			catch (err)
 			{
-				if (err.ftpCode !== FILE_NOT_FOUND) throw err;
+				if (err.ftpCode !== FtpErrorCode.FILE_NOT_FOUND) throw err;
 				await diffFile.create("");
 				title += ' (NOT FOUND)';
 			}
@@ -555,8 +687,8 @@ export class FtpCacher
 					throw 'SAME';
 				}
 			}
-			vsutil.diff(diffFile, file, title).then(()=>diffFile.quietUnlink());
-			return diffFile;
+			const doc = await vsutil.diff(diffFile, file, title);
+			return doc;
 		}, task);
 	}
 
@@ -646,12 +778,12 @@ export class FtpCacher
 						case 'from':{
 							const ftppath = this.toFtpPath(path);
 							const localpath = path.parent().child(relpath);
-							await this.ftpmgr.upload(task, ftppath, localpath);
+							await this._upload(task, ftppath, localpath);
 							break;
 						}
 						case 'to':{
 							const ftppath = ftp_path.normalize(this.toFtpPath(path.parent())+'/'+relpath);
-							await this.ftpmgr.upload(task, ftppath, path);
+							await this._upload(task, ftppath, path);
 							break;
 						}
 						default:
@@ -715,30 +847,15 @@ export class FtpCacher
 			confirmer = ()=>vsutil.info("Review Operations to perform.", "OK");
 		}
 
-		for (;;)
-		{
-			if (isEmptyObject(tasks)) 
-			{
+		for (;;) {
+			if (isEmptyObject(tasks)) {
 				vsutil.info("Nothing to DO");
 				return;
 			}
-			if (confirmer)
-			{
-				const taskFile = this.workspace.child(".vscode/ftp-kr.task.json");
-				try
-				{
-					await taskFile.create(JSON.stringify(tasks, null, 1));
-					await vsutil.open(taskFile);
-					const res = await confirmer();
-					if (res === undefined) return;
-					const editor = await vsutil.open(taskFile);
-					if (editor) await editor.document.save();
-					const data = await taskFile.json();
-				}
-				finally
-				{
-					await taskFile.quietUnlink();
-				}
+			if (confirmer) {
+				const newtasks = await this.confirm.confirm(tasks, confirmer());
+				if (newtasks === null) break;
+				tasks = newtasks;
 			}
 
 			this.logger.show();
@@ -750,37 +867,38 @@ export class FtpCacher
 				whenRemoteModed:'upload'
 			};
 			const failed = await this.scheduler.task(taskName, task=>this.runTaskJson(parentDirectory, tasks, task, options));
-			if (!failed) 
-			{
-				const passedTime = Date.now() - startTime;
-				if (passedTime > 1000) {
-					vsutil.info(taskname + " completed");
-				}
-				this.logger.show();
-				this.logger.message(taskname + ' completed');
-				return;
+			if (failed) {
+				tasks = failed.tasks;
+				confirmer = () => this.logger.errorConfirm("ftp-kr Task failed, more information in the output", "Retry");
+				continue;
 			}
-
-			tasks = failed.tasks;
-			confirmer = () => this.logger.errorConfirm("ftp-kr Task failed, more information in the output", "Retry");
+			const passedTime = Date.now() - startTime;
+			if (passedTime > 1000) {
+				vsutil.info(taskname + " completed");
+			}
+			this.logger.show();
+			this.logger.message(taskname + ' completed');
+			break;
 		}
 	}
 
 	public uploadAll(path: File|File[], task?:Task|null, options?:BatchOptions): Promise<void>
 	{
 		return this.scheduler.task('Upload All', async (task) => {
-			const tasks = await this._makeUploadTask(path, task);
+			if (options == null) options = {};
+			const tasks = await this._makeUploadTask(path, task, options);
 			await Promise.resolve();
-			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, options || {});
+			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, options); // seperated task
 		}, task);
 	}
 
 	public downloadAll(path: File|File[], task?:Task|null, options?:BatchOptions): Promise<void>
 	{
 		return this.scheduler.task('Download All', async(task) => {
-			const tasks = await this._makeDownloadTask(path, task)
+			if (options == null) options = {};
+			const tasks = await this._makeDownloadTask(path, task, options)
 			await Promise.resolve();
-			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, options || {});
+			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, options); // seperated task
 		}, task);
 	}
 
@@ -789,7 +907,7 @@ export class FtpCacher
 		return this.scheduler.task('Delete All', async(task) => {
 			const tasks = await this._makeDeleteTask(path, task)
 			await Promise.resolve();
-			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, options || {});
+			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, options || {}); // seperated task
 		}, task);
 	}
 
@@ -798,7 +916,7 @@ export class FtpCacher
 		return this.scheduler.task('Clean All', async(task) => {
 			const tasks = await this._makeCleanTask(path, task);
 			await Promise.resolve();
-			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, options || {});
+			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, options || {}); // seperated task
 		}, task);
 	}
 
@@ -811,7 +929,7 @@ export class FtpCacher
 			pick.item('Download '+file.name, ()=>this.ftpDownload(npath));
 			pick.item('Upload '+file.name, ()=>this.ftpUpload(npath, null, {whenRemoteModed: this.mainConfig.ignoreRemoteModification?'upload':'diff'}));
 			pick.item('Delete '+file.name, ()=>this.ftpDelete(npath));
-			pick.item('View '+file.name, ()=>vsutil.openUri(file.getUrl()));
+			pick.item('View '+file.name, ()=>vsutil.openUri(file.getUri()));
 			pick.item('Diff '+file.name, ()=>this.ftpDiff(npath));
 			pick.oncancel = ()=>this.list(path);
 			return pick.open();
@@ -889,7 +1007,7 @@ export class FtpCacher
 		await pick.open();
 	}
 	
-	private async _makeUploadTask(path:File|File[], task:Task):Promise<TaskList>
+	private async _makeUploadTask(path:File|File[], task:Task, options:BatchOptions):Promise<TaskList>
 	{
 		await this.init(task);
 
@@ -901,7 +1019,15 @@ export class FtpCacher
 			if (await p.isDirectory())
 			{
 				const list:{[key:string]:Stats} = {};
-				await this._getUpdatedFile(this.home, p, list);
+				if (!this.mainConfig.checkIgnorePath(p)) {
+					try
+					{
+						await this._getUpdatedFileInDir(this.home instanceof VFSDirectory ? this.home : undefined, p, list, options);
+					}
+					catch(err)
+					{
+					}
+				}
 				for(const workpath in list)
 				{
 					const path = this.mainConfig.fromWorkpath(workpath, this.mainConfig.basePath);
@@ -909,7 +1035,7 @@ export class FtpCacher
 					const st = list[workpath];
 					
 					const file = await this.ftpStat(ftppath, task);
-					if (!await isSameFile(file, st))
+					if (options.skipModCheck || !await isSameFile(file, st))
 					{
 						output[workpath] = "upload";
 					}
@@ -925,7 +1051,7 @@ export class FtpCacher
 		return output;
 	}
 
-	private async _makeDownloadTask(path:File|File[], task:Task):Promise<TaskList>
+	private async _makeDownloadTask(path:File|File[], task:Task, options:BatchOptions):Promise<TaskList>
 	{
 		await this.init(task);
 
@@ -940,7 +1066,7 @@ export class FtpCacher
 				if (!nfile) return;
 				ftpfile = nfile;
 			}
-			if (!await isSameFile(ftpfile, file))
+			if (options.skipModCheck || !await isSameFile(ftpfile, file))
 			{
 				list[this.mainConfig.workpath(file)] = 'download';
 			}
@@ -1118,7 +1244,7 @@ export class FtpCacher
 		return list;
 	}
 
-	private async _getUpdatedFileInDir(cmp:VFSDirectory|undefined, path:File, list:{[key:string]:Stats}):Promise<void>
+	private async _getUpdatedFileInDir(cmp:VFSDirectory|undefined, path:File, list:{[key:string]:Stats}, options:BatchOptions):Promise<void>
 	{
 		const files = await path.children();
 		for (const child of files)
@@ -1129,18 +1255,18 @@ export class FtpCacher
 				const file = cmp.item(child.basename());
 				if (file) childfile = file;
 			}
-			await this._getUpdatedFile(childfile, child, list);
+			await this._getUpdatedFile(childfile, child, list, options);
 		}
 	}
 	
-	private async _getUpdatedFile(cmp:VFSState|undefined, path:File, list:{[key:string]:Stats}):Promise<void>
+	private async _getUpdatedFile(cmp:VFSState|undefined, path:File, list:{[key:string]:Stats}, options:BatchOptions):Promise<void>
 	{
 		if (this.mainConfig.checkIgnorePath(path)) return;
 		try
 		{
 			const st = await path.lstat();
-			if (st.isDirectory()) await this._getUpdatedFileInDir(cmp instanceof VFSDirectory ? cmp : undefined, path, list);
-			if (await isSameFile(cmp, st)) return;
+			if (st.isDirectory()) await this._getUpdatedFileInDir(cmp instanceof VFSDirectory ? cmp : undefined, path, list, options);
+			if (!options.skipModCheck && await isSameFile(cmp, st)) return;
 			list[this.mainConfig.workpath(path)] = st;
 		}
 		catch(err)

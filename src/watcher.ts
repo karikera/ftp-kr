@@ -57,6 +57,7 @@ export class WorkspaceWatcher implements WorkspaceItem
 		this.config = this.workspace.query(Config);
 		this.scheduler = this.workspace.query(Scheduler);
 		this.ftp = this.workspace.query(FtpSyncManager);
+		this.attachWatcher(WatcherMode.CONFIG);
 
 		this.config.onLoad(async(task)=>{
 			await this.ftp.onLoadConfig(task);

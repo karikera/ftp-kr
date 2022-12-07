@@ -1,13 +1,13 @@
 
 import FtpClientO = require('ftp');
-import * as stream from 'stream';
 import { File } from 'krfile';
+import * as stream from 'stream';
 
-import * as util from '../util/util';
 import { FileInfo } from '../util/fileinfo';
+import * as util from '../util/util';
 
-import { FileInterface, NOT_CREATED, FILE_NOT_FOUND, DIRECTORY_NOT_FOUND } from "./fileinterface";
 import { printMappedError } from '../util/sm';
+import { FileInterface, FtpErrorCode, NOT_CREATED } from "./fileinterface";
 
 
 class FtpClient extends FtpClientO
@@ -171,6 +171,14 @@ export class FtpConnection extends FileInterface
 				this.client.terminate();
 				this.client = null;
 			}
+			switch (err.code) {
+			case 530:
+				err.ftpCode = FtpErrorCode.AUTH_FAILED;
+				break;
+			case 'ECONNREFUSED':
+				err.ftpCode = FtpErrorCode.CONNECTION_REFUSED;
+				break;
+			}
 			throw err;
 		}
 	}
@@ -220,17 +228,37 @@ export class FtpConnection extends FileInterface
 		if (!client) return Promise.reject(Error(NOT_CREATED));
 
 		return FtpConnection.wrapToPromise<void>(callback=>client.rmdir(ftppath, recursive, callback))
-		.catch(e=>{
-			if (e.code === 550) e.ftpCode = FILE_NOT_FOUND;
-			throw e;
+		.catch(err=>{
+			if (err.code === 'ECONNRESET') err.ftpCode = FtpErrorCode.REUQEST_RECONNECT_AND_RETRY_ONCE;
+			else if (err.code === 550) err.ftpCode = FtpErrorCode.FILE_NOT_FOUND;
+			throw err;
 		});
 	}
 
-	_mkdir(ftppath:string, recursive:boolean):Promise<void>
-	{
+	_mkdirSingle(ftppath:string):Promise<void> {
 		const client = this.client;
 		if (!client) return Promise.reject(Error(NOT_CREATED));
-		return FtpConnection.wrapToPromise<void>(callback=>client.mkdir(ftppath, recursive, callback));
+
+		return FtpConnection.wrapToPromise<void>(callback=>client.mkdir(ftppath, callback))
+		.catch(err=>{
+			if (err.code === 521) return;
+			throw err;
+		});
+	}
+
+	async _mkdir(ftppath:string):Promise<void>
+	{
+		var idx = 0;
+		for (;;)
+		{
+			const find = ftppath.indexOf('/', idx);
+			if (find === -1) break;
+			idx = find+1;
+			const parentpath = ftppath.substr(0, find);
+			if (!parentpath) continue;
+			await this._mkdirSingle(parentpath);
+		}
+		await this._mkdirSingle(ftppath);
 	}
 
 	_delete(ftppath:string):Promise<void>
@@ -239,7 +267,7 @@ export class FtpConnection extends FileInterface
 		if (!client) return Promise.reject(Error(NOT_CREATED));
 		return FtpConnection.wrapToPromise<void>(callback=>client.delete(ftppath, callback))
 		.catch(e=>{
-			if (e.code === 550) e.ftpCode = FILE_NOT_FOUND;
+			if (e.code === 550) e.ftpCode = FtpErrorCode.FILE_NOT_FOUND;
 			throw e;
 		});
 	}
@@ -249,10 +277,26 @@ export class FtpConnection extends FileInterface
 		const client = this.client;
 		if (!client) return Promise.reject(Error(NOT_CREATED));
 		return FtpConnection.wrapToPromise<void>(callback=>client.put(localpath.fsPath, ftppath, callback))
-		.catch(e=>{
-			if (e.code === 553) e.ftpCode = DIRECTORY_NOT_FOUND;
-			else if (e.code === 550) e.ftpCode = DIRECTORY_NOT_FOUND;
-			throw e;
+		.catch(err=>{
+			if (err.code === 'ECONNRESET') err.ftpCode = FtpErrorCode.REUQEST_RECONNECT_AND_RETRY_ONCE;
+			else if (err.code === 451) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
+			else if (err.code === 553) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
+			else if (err.code === 550) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
+			throw err;
+		});
+	}
+
+	_write(buffer:Buffer, ftppath:string):Promise<void>
+	{
+		const client = this.client;
+		if (!client) return Promise.reject(Error(NOT_CREATED));
+		return FtpConnection.wrapToPromise<void>(callback=>client.put(buffer, ftppath, callback))
+		.catch(err=>{
+			if (err.code === 'ECONNRESET') err.ftpCode = FtpErrorCode.REUQEST_RECONNECT_AND_RETRY_ONCE;
+			else if (err.code === 451) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
+			else if (err.code === 553) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
+			else if (err.code === 550) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
+			throw err;
 		});
 	}
 
@@ -261,12 +305,10 @@ export class FtpConnection extends FileInterface
 		const client = this.client;
 		if (!client) return Promise.reject(Error(NOT_CREATED));
 		return FtpConnection.wrapToPromise<NodeJS.ReadableStream>(callback=>client.get(ftppath, callback))
-		.catch(e=>{
-			if (e.code === 550)
-			{
-				e.ftpCode = FILE_NOT_FOUND;
-			}
-			throw e;
+		.catch(err=>{
+			if (err.code === 'ECONNRESET') err.ftpCode = FtpErrorCode.REUQEST_RECONNECT_AND_RETRY_ONCE;
+			else if (err.code === 550) err.ftpCode = FtpErrorCode.FILE_NOT_FOUND;
+			throw err;
 		});
 	}
 
@@ -283,9 +325,10 @@ export class FtpConnection extends FileInterface
 			to.size = +from.size;
 			to.link = from.target;
 			return to;
-		}), e=>{
-			if (e.code === 550) return [];
-			throw e;
+		}), err=>{
+			if (err.code === 550) return [];
+			if (err.code === 'ECONNRESET') err.ftpCode = FtpErrorCode.REUQEST_RECONNECT_AND_RETRY_ONCE;
+			throw err;
 		});
 	}
 
@@ -295,4 +338,13 @@ export class FtpConnection extends FileInterface
 		return Promise.resolve(fileinfo.link);
 	}
 
+	_rename(ftppathFrom:string, ftppathTo:string):Promise<void> {
+		const client = this.client;
+		if (!client) return Promise.reject(Error(NOT_CREATED));
+		return FtpConnection.wrapToPromise<void>(callback=>client.rename(ftppathFrom, ftppathTo, callback))
+		.catch(err=>{
+			if (err.code === 'ECONNRESET') err.ftpCode = FtpErrorCode.REUQEST_RECONNECT_AND_RETRY_ONCE;
+			throw err;
+		});
+	}
 }

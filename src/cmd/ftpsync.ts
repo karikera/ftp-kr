@@ -7,7 +7,7 @@ import { FtpSyncManager } from '../ftpsync';
 import { ftpTree } from '../ftptree';
 import { openSshTerminal } from '../sshmgr';
 import { Command, CommandArgs } from '../vsutil/cmd';
-import { Logger } from '../vsutil/log';
+import { Logger, StringError } from '../vsutil/log';
 import { vsutil } from '../vsutil/vsutil';
 import { Scheduler } from '../vsutil/work';
 import { Workspace } from '../vsutil/ws';
@@ -55,8 +55,8 @@ async function getInfoToTransfer(args: CommandArgs):Promise<{workspace:Workspace
 	{
 		if (!args.file)
 		{
-			await vsutil.info('File is not selected');
-			throw 'IGNORE';
+			vsutil.info('File is not selected');
+			throw StringError.IGNORE;
 		}
 		if (!args.workspace) throw Error('workspace is not defined');
 		workspace = args.workspace;
@@ -89,7 +89,7 @@ async function isFileCountOver(files:(File[]|File), count:number):Promise<boolea
 	try
 	{
 		if (!(files instanceof Array)) files = [files];
-		checkFiles(files);
+		await checkFiles(files);
 		return false;
 	}
 	catch (err)
@@ -134,7 +134,8 @@ export const commands:Command = {
 		await config.loadTest();
 
 		const bo:BatchOptions = {
-			whenRemoteModed:config.ignoreRemoteModification?'upload':'diff'
+			whenRemoteModed:config.ignoreRemoteModification?'upload':'diff',
+			skipModCheck: config.includeAllAlwaysForAllCommand,
 		};
 		if (files.length === 1 && !await files[0].isDirectory())
 		{
@@ -167,16 +168,17 @@ export const commands:Command = {
 		
 		await config.loadTest();
 
+		const bo:BatchOptions = {
+			skipModCheck: config.includeAllAlwaysForAllCommand,
+		};
 		if (files.length === 1 && !await files[0].isDirectory())
 		{
-			await taskTimer('Download', server.ftpDownload(files[0], null, {}));
+			await taskTimer('Download', server.ftpDownload(files[0], null, bo));
 		}
 		else
 		{
 			const confirmFirst = await isFileCountOver(files, config.noticeFileCount);
-			const bo:BatchOptions = {
-				doNotRefresh: true
-			};
+			bo.doNotRefresh = true;
 			if (confirmFirst)
 			{
 				bo.confirmFirst = true;
@@ -257,7 +259,8 @@ export const commands:Command = {
 		await server.uploadAll(config.basePath, null, {
 			confirmFirst: true, 
 			doNotRefresh: true,
-			whenRemoteModed:config.ignoreRemoteModification?'upload':'error'
+			whenRemoteModed:config.ignoreRemoteModification?'upload':'error',
+			skipModCheck: config.includeAllAlwaysForAllCommand,
 		});
 	},
 	async 'ftpkr.downloadAll' (args: CommandArgs)
@@ -280,7 +283,8 @@ export const commands:Command = {
 		if (server === undefined) return;
 		await server.downloadAll(config.basePath, null, {
 			confirmFirst: true,
-			doNotRefresh: true
+			doNotRefresh: true,
+			skipModCheck: config.includeAllAlwaysForAllCommand,
 		});
 	},
 	async 'ftpkr.cleanAll' (args: CommandArgs)
@@ -303,7 +307,7 @@ export const commands:Command = {
 		
 		await server.cleanAll(config.basePath, null, {
 			confirmFirst: true,
-			doNotRefresh: true
+			doNotRefresh: true,
 		});
 	},
 	async 'ftpkr.refresh' (args: CommandArgs)
@@ -413,9 +417,9 @@ export const commands:Command = {
 		await vscode.workspace.saveAll();
 		
 		const path = args.file;
-		ftp.runTaskJson('ftpkr.runtask', path, {
+		scheduler.task('ftpkr.runtask', task=>ftp.runTaskJson('ftpkr.runtask', path, {
 			whenRemoteModed:config.ignoreRemoteModification?'upload':'error'
-		});
+		}));
 	},
 	
 	async 'ftpkr.target'(args: CommandArgs)

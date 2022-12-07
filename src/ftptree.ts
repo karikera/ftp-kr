@@ -1,36 +1,20 @@
 
-import { TreeDataProvider, TextDocumentContentProvider, TreeItem, TreeItemCollapsibleState, Uri, CancellationToken, ProviderResult, EventEmitter, Event } from "vscode";
-import { File } from 'krfile';
+import { CancellationToken, Disposable, Event, EventEmitter, FileChangeEvent, FileStat, FileSystemError, FileSystemProvider, FileType as VSCodeFileType, TreeDataProvider, TreeItem, Uri } from "vscode";
 
-import { VFSState, VFSDirectory, VirtualFileSystem, VFSServer, VFSSymLink } from "./util/filesystem";
+import { VFSState } from "./util/filesystem";
 
-import { Workspace } from "./vsutil/ws";
-import { Scheduler, PRIORITY_NORMAL } from "./vsutil/work";
+import { FtpCacher } from "./ftpcacher";
+import { FileType } from "./util/fileinfo";
 import { processError } from "./vsutil/error";
-import { Logger, defaultLogger } from "./vsutil/log";
-import { FtpCacher, ViewedFile } from "./ftpcacher";
-import { vsutil } from "./vsutil/vsutil";
 import { FtpTreeItem, FtpTreeServer } from "./vsutil/ftptreeitem";
+import { defaultLogger } from "./vsutil/log";
 
-// private readonly viewCache:Map<string, ViewCache> = new Map;
+const toVSCodeFileType:Record<FileType, VSCodeFileType> = Object.create(null);
+toVSCodeFileType['-'] = VSCodeFileType.File;
+toVSCodeFileType['d'] = VSCodeFileType.Directory;
+toVSCodeFileType['l'] = VSCodeFileType.SymbolicLink;
 
-const cacheMap = new Map<string, Promise<ViewedFile>>();
-
-function cache(path:string, cb:()=>Promise<ViewedFile>):Promise<ViewedFile>
-{
-	var cached = cacheMap.get(path);
-	if (cached) return cached;
-
-	setTimeout(()=>{
-		cacheMap.delete(path);
-	}, 500);
-
-	const newcached = cb();
-	cacheMap.set(path, newcached);
-	return newcached;
-}
-
-export class FtpContentProvider implements TextDocumentContentProvider
+export class FtpContentProvider
 {
 	readonly _onDidChange: EventEmitter<Uri> = new EventEmitter<Uri>();
 	readonly onDidChange: Event<Uri> = this._onDidChange.event;
@@ -38,20 +22,13 @@ export class FtpContentProvider implements TextDocumentContentProvider
 	constructor(public readonly scheme:string)
 	{
 	}
-	
+
 	public async provideTextDocumentContent(uri: Uri, token: CancellationToken): Promise<string | null>
 	{
 		var logger = defaultLogger;
 		try
 		{
-			const server = ftpTree.getServerFromUri(uri);
-			logger = server.logger;
-
-			const ftppath = uri.path;
-			const viewed = await server.downloadAsText(ftppath);
-			
-			if (viewed.file) viewed.file.contentCached = true;
-			return viewed.content;
+			return '';
 		}
 		catch(err)
 		{
@@ -62,39 +39,117 @@ export class FtpContentProvider implements TextDocumentContentProvider
 
 }
 
-export class FtpTree implements TreeDataProvider<FtpTreeItem>
+export class FtpTree implements TreeDataProvider<FtpTreeItem>, FileSystemProvider
 {
 	private readonly _onDidChangeTreeData: EventEmitter<FtpTreeItem> = new EventEmitter<FtpTreeItem>();
 	readonly onDidChangeTreeData: Event<FtpTreeItem> = this._onDidChangeTreeData.event;
 	
-	private readonly map = new Map<FtpCacher, FtpTreeServer>();
-	private readonly contentProviders = new Map<string, FtpContentProvider>();
+	private readonly _onDidChangeFile = new EventEmitter<FileChangeEvent[]>();
+	readonly onDidChangeFile = this._onDidChangeFile.event;
 
-	constructor()
-	{
+	private readonly map = new Map<FtpCacher, FtpTreeServer>();
+
+	watch(uri: Uri, options: { recursive: boolean; excludes: string[]; }): Disposable {
+		try {
+			const server = ftpTree.getServerFromUri(uri);
+			const ftppath = uri.path;
+			const stat = server.ftp.toFtpFileFromFtpPath(ftppath);
+			if (stat === undefined) {
+				return new Disposable(()=>{});
+			}
+			const watcher = stat.watch((to, from, type)=>{
+				const data:FileChangeEvent[] = [
+					{
+						type,
+						uri: to.getUri(),
+					},
+				];
+				this._onDidChangeFile.fire(data);
+			}, options);
+			return watcher;
+		} catch(err) {
+			return new Disposable(()=>{});
+		}
+	}
+	
+	async readFile(uri: Uri): Promise<Buffer> {
+		const server = ftpTree.getServerFromUri(uri);
+		const ftppath = uri.path;
+		const viewed = await server.ftp.downloadAsBuffer(ftppath);
+		
+		if (viewed.file) viewed.file.contentCached = true;
+		return viewed.content;
 	}
 
-	public getContentProvider(scheme:string):FtpContentProvider
-	{
-		var cp = this.contentProviders.get(scheme);
-		if (cp) return cp;
-		cp = new FtpContentProvider(scheme);
-		this.contentProviders.set(scheme, cp);
-		return cp;
+	async writeFile(uri: Uri, content: Uint8Array, options: { create: boolean; overwrite: boolean; }): Promise<void> {
+		const server = ftpTree.getServerFromUri(uri);
+		const ftppath = uri.path;
+		await server.ftp.uploadBuffer(ftppath, Buffer.from(content));
+	}
+
+	async delete(uri: Uri, options: { recursive: boolean; }): Promise<void> {
+		const server = ftpTree.getServerFromUri(uri);
+		const ftppath = uri.path;
+		await server.ftp.ftpDelete(server.ftp.fromFtpPath(ftppath));
+	}
+
+	async createDirectory(uri: Uri):Promise<void> {
+		const server = ftpTree.getServerFromUri(uri);
+		const ftppath = uri.path;
+		await server.ftp.ftpMkdir(server.ftp.fromFtpPath(ftppath));
+	}
+
+	async readDirectory(uri: Uri): Promise<[string, VSCodeFileType][]> {
+		const server = ftpTree.getServerFromUri(uri);
+		const ftppath = uri.path;
+		const dir = await server.ftp.ftpList(ftppath);
+		const out:[string, VSCodeFileType][] = [];
+		for (const child of dir.children()) {
+			out.push([child.name, toVSCodeFileType[child.type]]);
+		}
+		return out;
+	}
+	
+	async stat(uri: Uri): Promise<FileStat> {
+		try {
+
+			FileSystemError.FileNotFound(uri);
+		} catch (err) {
+
+		}
+		const server = ftpTree.getServerFromUri(uri);
+		const ftppath = uri.path;
+		const stat = await server.ftp.ftpStat(ftppath);
+		if (stat === undefined) throw Error('File not found');
+
+		return {
+			type: toVSCodeFileType[stat.type],
+			ctime: stat.date,
+			mtime: stat.date,
+			size: stat.size,
+		};
+	}
+
+	async rename(oldUri: Uri, newUri: Uri, options: { overwrite: boolean; }): Promise<void> {
+		const server = ftpTree.getServerFromUri(oldUri);
+		const newServer = ftpTree.getServerFromUri(newUri);
+		if (server !== newServer) {
+			throw Error(`Cross-server moving is not supported yet`);
+		} else {
+			await server.ftp.ftpRename(
+				server.ftp.fromFtpPath(oldUri.path),
+				server.ftp.fromFtpPath(newUri.path));
+		}
 	}
 
 	public refreshContent(target:VFSState):void
 	{
-		defaultLogger.verbose('refreshContent '+target.getUrl());
-		const uri = Uri.parse(target.getUrl());
-		const cp = this.contentProviders.get(uri.scheme);
-		if (!cp) return;
-		cp._onDidChange.fire();
+		defaultLogger.verbose('refreshContent '+target.getUri());
+		target.refreshContent();
 	}
 
-	public refreshTree(target?:VFSState):void
-	{
-		defaultLogger.verbose('refreshTree '+(target ? target.getUrl() : "all"));
+	public refreshTree(target?:VFSState):void {
+		defaultLogger.verbose('refreshTree '+(target ? target.getUri() : "all"));
 		if (!target)
 		{
 			FtpTreeItem.clear();
@@ -128,14 +183,12 @@ export class FtpTree implements TreeDataProvider<FtpTreeItem>
 
 	public getServerFromUri(uri:Uri):FtpTreeServer
 	{
+		const hostUri = `${uri.scheme}://${uri.authority}`;
 		for (const server of this.map.values())
 		{
-			if (uri.scheme + '://' + uri.authority === server.config.hostUrl)
+			if (hostUri === server.ftp.fs.hostUri)
 			{
-				if (uri.path === server.ftp.remotePath || uri.path.startsWith(server.ftp.remotePath + '/'))
-				{
-					return server;
-				}
+				return server;
 			}
 		}
 		throw Error('Server not found: '+uri);

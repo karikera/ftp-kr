@@ -1,9 +1,9 @@
 
 import { File } from 'krfile';
 
+import { Logger, StringError } from './vsutil/log';
 import { PRIORITY_IDLE, Scheduler } from './vsutil/work';
-import { WorkspaceItem, Workspace } from './vsutil/ws';
-import { Logger } from './vsutil/log';
+import { Workspace, WorkspaceItem } from './vsutil/ws';
 
 import { Config } from './config';
 import { FtpSyncManager } from './ftpsync';
@@ -82,7 +82,7 @@ export class FtpDownloader implements WorkspaceItem
 			null, 
 			PRIORITY_IDLE
 		);
-		if (!this.enabled) throw 'IGNORE';
+		if (!this.enabled) throw StringError.IGNORE;
 		for (var child of list.children())
 		{
 			const childFile = dir.child(child.name);
@@ -114,7 +114,7 @@ export class FtpDownloader implements WorkspaceItem
 						null,
 						PRIORITY_IDLE
 					);
-					if (!this.enabled) throw 'IGNORE';
+					if (!this.enabled) throw StringError.IGNORE;
 				}
 			}
 			catch(err)

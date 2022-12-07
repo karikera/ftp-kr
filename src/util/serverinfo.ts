@@ -61,6 +61,7 @@ export interface FtpKrConfigProperties extends ServerConfig
 	ignoreRemoteModification:boolean;
 	ignoreJsonUploadCaution:boolean;
 	noticeFileCount:number;
+	includeAllAlwaysForAllCommand:boolean;
 }
 
 export namespace FtpKrConfigProperties {

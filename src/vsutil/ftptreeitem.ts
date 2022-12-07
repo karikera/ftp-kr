@@ -1,13 +1,13 @@
 
-import { TreeItemCollapsibleState, TreeItem, Uri } from "vscode";
+import { TreeItem, TreeItemCollapsibleState } from "vscode";
 
-import { VFSSymLink, VFSState } from "../util/filesystem";
+import { VFSState, VFSSymLink } from "../util/filesystem";
 import { ServerConfig } from "../util/serverinfo";
 
-import { PRIORITY_NORMAL, Scheduler } from "./work";
-import { Workspace } from "./ws";
-import { FtpCacher, ViewedFile } from "../ftpcacher";
+import { FtpCacher } from "../ftpcacher";
 import { Logger } from "./log";
+import { Scheduler } from "./work";
+import { Workspace } from "./ws";
 
 const ftpTreeItemFromFile = new Map<VFSState, FtpTreeItem[]>();
 
@@ -94,7 +94,7 @@ export class FtpTreeItem extends TreeItem
 				this.command = {
 					command: 'ftpkr.view',
 					title: 'View This',
-					arguments: [Uri.parse(ftpFile.getUrl())]
+					arguments: [ftpFile.getUri()]
 				};
 			}
 		}
@@ -162,16 +162,5 @@ export class FtpTreeServer extends FtpTreeItem
 		}
 		files.sort((a,b)=>a.compare(b));
 		return files;
-	}
-
-	public async getChildren():Promise<FtpTreeItem[]>
-	{
-		await this.ftp.init();
-		return await super.getChildren();
-	}
-
-	public downloadAsText(ftppath:string):Promise<ViewedFile>
-	{
-		return this.ftp.downloadAsText(ftppath);
 	}
 }

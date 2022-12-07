@@ -1,7 +1,6 @@
 
-import { Logger } from './log';
-import { WorkspaceItem, Workspace } from './ws';
-import { Deferred } from '../util/util';
+import { Logger, StringError } from './log';
+import { Workspace, WorkspaceItem } from './ws';
 
 const resolvedPromise:Promise<void> = Promise.resolve();
 
@@ -96,7 +95,7 @@ class TaskImpl<T> implements Task
 			clearTimeout(this.timeout);
 		}
 		
-		if (this.cancelled) throw 'CANCELLED';
+		if (this.cancelled) throw StringError.TASK_CANCEL;
 
 		this.logger.verbose(`[TASK:${this.name}] started`);
 		const prom = this.task(this);
@@ -104,10 +103,10 @@ class TaskImpl<T> implements Task
 			this.logger.verbose(`[TASK:${this.name}] done`);
 			this.resolve(v);
 		}, err=>{
-			if (err === 'CANCELLED')
+			if (err === StringError.TASK_CANCEL)
 			{
 				this.logger.verbose(`[TASK:${this.name}] cancelled`);
-				this.reject('IGNORE');
+				this.reject(StringError.IGNORE);
 			}
 			else
 			{
@@ -130,7 +129,7 @@ class TaskImpl<T> implements Task
 		this.cancelled = true;
 		if (this.state === TaskState.WAIT)
 		{
-			this.reject('IGNORE');
+			this.reject(StringError.IGNORE);
 		}
 		this.fireCancel();
 	}
@@ -142,9 +141,9 @@ class TaskImpl<T> implements Task
 			return Promise.reject(Error('Task.with must call in task'));
 		}
 
-		if (this.cancelled) return Promise.reject('CANCELLED');
+		if (this.cancelled) return Promise.reject(StringError.TASK_CANCEL);
 		return new Promise((resolve, reject)=>{
-			this.oncancel(()=>reject('CANCELLED'));
+			this.oncancel(()=>reject(StringError.TASK_CANCEL));
 			waitWith.then(v=>{
 				if (this.cancelled) return;
 				this.removeCancelListener(reject);
@@ -178,7 +177,7 @@ class TaskImpl<T> implements Task
 
 	public checkCanceled():void
 	{
-		if (this.cancelled) throw 'CANCELLED';
+		if (this.cancelled) throw StringError.TASK_CANCEL;
 	}
 
 	private fireCancel():void

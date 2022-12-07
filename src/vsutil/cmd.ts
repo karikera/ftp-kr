@@ -1,14 +1,11 @@
 
-import { commands, ExtensionContext, Uri, window } from 'vscode';
 import { File } from 'krfile';
+import { commands, ExtensionContext, Uri, window } from 'vscode';
 
-import { VFSState } from '../util/filesystem';
-
-import { vsutil } from './vsutil';
 import { processError } from './error';
+import { FtpTreeItem } from './ftptreeitem';
 import { defaultLogger, Logger } from './log';
 import { Workspace } from './ws';
-import { FtpTreeItem } from './ftptreeitem';
 
 export interface CommandArgs
 {

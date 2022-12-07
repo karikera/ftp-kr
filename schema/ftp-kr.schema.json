@@ -101,6 +101,11 @@
 				"type": "string",
 				"description": "Ignore file or directory"
 			}
+		},
+		"includeAllAlwaysForAllCommand": {
+			"type":"boolean",
+			"description": "Always put all files for Download All & Upload All. It skips the modification check",
+			"default:": false
 		}
     }
 }

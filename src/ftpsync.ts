@@ -1,7 +1,7 @@
 
 import { File } from "krfile";
 
-import { VirtualFileSystem } from "./util/filesystem";
+import { VFSServerList } from "./util/filesystem";
 import { ServerConfig } from "./util/serverinfo";
 
 import { WorkspaceItem, Workspace } from "./vsutil/ws";
@@ -21,7 +21,7 @@ export class FtpSyncManager implements WorkspaceItem
 	private readonly scheduler:Scheduler;
 	private readonly cacheFile:File;
 	public readonly servers:Map<ServerConfig, FtpCacher> = new Map;
-	private readonly fs:VirtualFileSystem = new VirtualFileSystem;
+	private readonly fs:VFSServerList = new VFSServerList;
 	public targetServer:FtpCacher = <any>null;
 	public mainServer:FtpCacher = <any>null;
 	

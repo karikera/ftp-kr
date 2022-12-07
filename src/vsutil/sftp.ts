@@ -1,10 +1,11 @@
 
 import { File } from 'krfile';
 import { Client, ConnectConfig, SFTPWrapper } from 'ssh2';
+import { LoadError } from '../ftpmgr';
 import { FileInfo } from '../util/fileinfo';
 import { ServerConfig } from '../util/serverinfo';
 import { merge, promiseErrorWrap } from '../util/util';
-import { DIRECTORY_NOT_FOUND, FileInterface, FILE_NOT_FOUND, NOT_CREATED } from './fileinterface';
+import { FileInterface, FtpErrorCode, NOT_CREATED } from './fileinterface';
 import { Workspace } from './ws';
 
 
@@ -67,6 +68,20 @@ export class SftpConnection extends FileInterface
 			{
 				this.client.destroy();
 				this.client = null;
+			}
+			switch (err.code)
+			{
+			case 'ECONNREFUSED':
+				err.ftpCode = FtpErrorCode.CONNECTION_REFUSED;
+				break;
+			default:
+				switch (err.message)
+				{
+				case 'Login incorrect.':
+				case 'All configured authentication methods failed':
+					err.ftpCode = FtpErrorCode.AUTH_FAILED;
+					break;
+				}
 			}
 			throw err;
 		}
@@ -159,7 +174,7 @@ export class SftpConnection extends FileInterface
 			return sftp.rmdir(ftppath, (err) => {
 				if (err)
 				{
-					if (err.code === 2) err.ftpCode = FILE_NOT_FOUND;
+					if (err.code === 2) err.ftpCode = FtpErrorCode.FILE_NOT_FOUND;
 					reject(err);
 				}
 				else
@@ -206,7 +221,7 @@ export class SftpConnection extends FileInterface
 		.then(sftp=>new Promise<void>((resolve, reject) => {
 			sftp.unlink(ftppath, (err) => {
 				if (err) {
-					if (err.code === 2) err.ftpCode = FILE_NOT_FOUND;
+					if (err.code === 2) err.ftpCode = FtpErrorCode.FILE_NOT_FOUND;
 					reject(err);
 					return false;
 				}
@@ -254,7 +269,23 @@ export class SftpConnection extends FileInterface
 			sftp.fastPut(localpath.fsPath, ftppath, (err) => {
 				if (err)
 				{
-					if (err.code === 2) err.ftpCode = DIRECTORY_NOT_FOUND;
+					if (err.code === 2) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
+					reject(err);
+					return;
+				}
+				resolve();
+			});
+		}));
+	}
+
+	_write(buffer:Buffer, ftppath:string):Promise<void>
+	{
+		return this._getSftp()
+		.then(sftp=>new Promise<void>((resolve, reject) => {
+			sftp.writeFile(ftppath, buffer, (err) => {
+				if (err)
+				{
+					if (err.code === 2) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
 					reject(err);
 					return;
 				}
@@ -271,8 +302,8 @@ export class SftpConnection extends FileInterface
 			resolve(stream);
 		}))
 		.catch(err=>{
-			if (err.code === 2) err.ftpCode = FILE_NOT_FOUND;
-			else if(err.code === 550) err.ftpCode = FILE_NOT_FOUND;
+			if (err.code === 2) err.ftpCode = FtpErrorCode.FILE_NOT_FOUND;
+			else if(err.code === 550) err.ftpCode = FtpErrorCode.FILE_NOT_FOUND;
 			throw err;
 		});
 	}
@@ -286,7 +317,7 @@ export class SftpConnection extends FileInterface
 					if (err.code === 2) return resolve([]);
 					else if(err.code === 550) return resolve([]);
 					else reject(err);
-					return false;
+					return;
 				}
 
 				if (!ftppath.endsWith('/')) ftppath += '/';
@@ -329,6 +360,17 @@ export class SftpConnection extends FileInterface
 				if (err) return reject(err);
 				fileinfo.link = target;
 				resolve(target);
+			});
+		}));
+	}
+
+	_rename(ftppathFrom:string, ftppathTo:string):Promise<void>
+	{
+		return this._getSftp()
+		.then(sftp=>new Promise<void>((resolve, reject) => {
+			sftp.rename(ftppathFrom, ftppathTo, (err) => {
+				if (err) reject(err);
+				else resolve();
 			});
 		}));
 	}

@@ -1,3 +1,12 @@
+# 1.4.1
+* editable tree view
+
+# 1.3.30
+* new option - includeAllAlwaysForAllCommand
+* auto close tasks.json
+* reconnect on ECONNRESET
+* several bugfix
+
 # 1.3.22
 * update npm packages
 

@@ -197,7 +197,7 @@ class FtpKrConfigClass extends ConfigContainer<FtpKrConfigProperties>
 			config.logLevel = 'NORMAL';
 			break;
 		}
-		config.dontOpenOutput = !!config.dontOpenOutput;
+		config.dontOpenOutput = config.dontOpenOutput === true;
 		config.viewSizeLimit = Number(config.viewSizeLimit || 1024*1024*4)
 		config.downloadTimeExtraThreshold = Number(config.downloadTimeExtraThreshold || 1000);
 		config.ignoreRemoteModification = config.ignoreRemoteModification === true;
@@ -209,6 +209,8 @@ class FtpKrConfigClass extends ConfigContainer<FtpKrConfigProperties>
 			else if (!isFinite(config.noticeFileCount)) config.noticeFileCount = 10;
 			else config.noticeFileCount = Math.floor(config.noticeFileCount);
 		}
+		config.ignoreJsonUploadCaution = config.ignoreJsonUploadCaution === true;
+		config.includeAllAlwaysForAllCommand = config.includeAllAlwaysForAllCommand === true;
 
 		delete config.name;
 
@@ -389,7 +391,7 @@ class FtpKrConfigClass extends ConfigContainer<FtpKrConfigProperties>
 			data = JSON.stringify(obj, null, 4);
 			await this.path.create(data);
 		}
-		this.set(data);
+		// this.set(data); // no need to call. the watcher will catch it.
 	}
 
 	public async readJson():Promise<void>

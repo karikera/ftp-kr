@@ -18,11 +18,11 @@ export async function getTsPosition(js:File, line:number, column:number):Promise
 	}
 }
 
-export async function getMappedStack(err:any):Promise<string>
+export async function getMappedStack(err:any):Promise<string|null>
 {
-	if (!err) return err;
+	if (!err) return null;
 	const stack = err.stack;
-	if (typeof stack !== 'string') return err;
+	if (typeof stack !== 'string') return null;
 	
 	return replaceErrorUrlAsync(stack, async(path, line, column)=>{
 		const pos = await getTsPosition(new File(path), line, column);
@@ -38,5 +38,6 @@ export async function getMappedStack(err:any):Promise<string>
 
 export async function printMappedError(err:any):Promise<void>
 {
-	console.error(await getMappedStack(err));
+	const stack = await getMappedStack(err);
+	console.error(stack || err);
 }

@@ -2,11 +2,12 @@
 
 import { File } from 'krfile';
 import 'krjson';
+import { getLoadErrorMessage, LoadError } from './ftpmgr';
 import { Event } from './util/event';
 import { FtpKrConfig } from './util/ftpkr_config';
 import { FtpKrConfigProperties } from './util/serverinfo';
 import { processError } from './vsutil/error';
-import { Logger } from './vsutil/log';
+import { Logger, StringError } from './vsutil/log';
 import { vsutil } from './vsutil/vsutil';
 import { Scheduler, Task } from './vsutil/work';
 import { Workspace, WorkspaceItem } from './vsutil/ws';
@@ -109,7 +110,7 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 
 	public init():void
 	{
-		this.loadWrap('init', async(task)=>{
+		this.runTask('init', async(task)=>{
 			await this.initJson();
 			vsutil.open(this.path);
 		});
@@ -125,7 +126,7 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 
 	public load():void
 	{
-		this.loadWrap('config loading', task=>this.readJson());
+		this.loadAndRunTask('config loading', task=>this.readJson());
 	}
 
 	private fireNotFound():Promise<void>
@@ -146,35 +147,36 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 		return this.onInvalid.fire();
 	}
 
-	private fireLoad(task:Task):Promise<void>
-	{
-		return this.onLoad.fire(task).then(()=>{
-			this.logger.message('/.vscode/ftp-kr.json: loaded');
-			if (this.state !== ConfigState.LOADED)
-			{
-				vsutil.info('');
-			}
-			this.setState(ConfigState.LOADED, null);
-		});
-	}
-
 	private async onLoadError(err:any):Promise<void>
 	{
 		switch (err)
 		{
-		case 'NOTFOUND':
-			this.logger.message('/.vscode/ftp-kr.json: not found');
+		case LoadError.NOTFOUND:
+			this.logger.message('/.vscode/ftp-kr.json: Not found');
 			await this.fireNotFound();
-			throw 'IGNORE';
-		case 'PASSWORD_CANCEL':
-			vsutil.info('ftp-kr Login Request', 'Login').then(confirm=>{
-				if (confirm === 'Login')
+			throw StringError.IGNORE;
+		case LoadError.CONNECTION_FAILED:
+			vsutil.info('ftp-kr Connection Failed', 'Retry').then(confirm=>{
+				if (confirm === 'Retry')
 				{
-					this.loadWrap('login', task=>Promise.resolve());
+					this.loadAndRunTask('login');
 				}
 			});
 			await this.fireInvalid(err);
-			throw 'IGNORE';
+			throw StringError.IGNORE;
+		case LoadError.PASSWORD_CANCEL:
+			vsutil.info('ftp-kr Login Request', 'Login').then(confirm=>{
+				if (confirm === 'Login')
+				{
+					this.loadAndRunTask('login');
+				}
+			});
+			await this.fireInvalid(err);
+			throw StringError.IGNORE;
+		case LoadError.AUTH_FAILED:
+			this.logger.message(getLoadErrorMessage(err));
+			await this.fireInvalid(err);
+			throw StringError.IGNORE;
 		default:
 			if (err instanceof Error) err.file = this.path;
 			await this.fireInvalid(err);
@@ -188,7 +190,7 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 		{
 			if (this.state === ConfigState.NOTFOUND)
 			{
-				return Promise.reject('Config is not loaded. Retry it after load');
+				return Promise.reject("ftp-kr is not ready");
 			}
 			return this.onLoadError(this.lastError);
 		} 
@@ -227,7 +229,30 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 		}
 	}
 
-	private async loadWrap(name:string, onwork:(task:Task)=>Promise<void>):Promise<void>
+	private async runTask(name:string, onwork:(task:Task)=>Promise<void>):Promise<void> {
+		await this.scheduler.cancel();
+		try
+		{
+			await this.scheduler.taskMust(name, async(task)=>{
+				await onwork(task);
+
+				this.ignorePatterns = null;
+				if (this.localBasePath)
+				{
+					this.basePath = this.workspace.child(this.localBasePath);
+				}
+				else
+				{
+					this.basePath = this.workspace;
+				}
+			});
+		}
+		catch (err)
+		{
+			processError(this.logger, err);
+		}
+	}
+	private async loadAndRunTask(name:string, taskBefore?:(task:Task)=>Promise<void>):Promise<void>
 	{
 		await this.scheduler.cancel();
 		try
@@ -235,7 +260,8 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 			await this.scheduler.taskMust(name, async(task)=>{
 				try
 				{
-					await onwork(task);
+					this.logger.message('/.vscode/ftp-kr.json: Loading');
+					if (taskBefore !== undefined) await taskBefore(task);
 	
 					this.ignorePatterns = null;
 					if (this.localBasePath)
@@ -250,7 +276,9 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 					this.logger.dontOpen = this.dontOpenOutput;
 					this.logger.setLogLevel(this.logLevel);
 	
-					await this.fireLoad(task);
+					await this.onLoad.fire(task);
+					this.logger.message('/.vscode/ftp-kr.json: Loaded successfully');
+					this.setState(ConfigState.LOADED, null);
 				}
 				catch (err)
 				{
@@ -261,7 +289,7 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 		}
 		catch (err)
 		{
-			await processError(this.logger, err);
+			processError(this.logger, err);
 		}
 	}
 }

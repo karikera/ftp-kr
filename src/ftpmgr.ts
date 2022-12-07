@@ -1,20 +1,19 @@
 
-import { window } from 'vscode';
 import { File } from 'krfile';
+import { window } from 'vscode';
 
 import { FileInfo } from './util/fileinfo';
 import { ServerConfig } from './util/serverinfo';
 
-import { FileInterface } from './vsutil/fileinterface';
-import { SftpConnection } from './vsutil/sftp';
+import { FileInterface, FtpErrorCode } from './vsutil/fileinterface';
 import { FtpConnection } from './vsutil/ftp';
+import { Logger, StringError } from './vsutil/log';
+import { SftpConnection } from './vsutil/sftp';
 import { vsutil } from './vsutil/vsutil';
-import { Logger } from './vsutil/log';
-import { Workspace } from './vsutil/ws';
 import { Task } from './vsutil/work';
+import { Workspace } from './vsutil/ws';
 
 import { Config } from './config';
-import { ftp_path } from './util/ftp_path';
 import { promiseErrorWrap } from './util/util';
 
 function createClient(workspace:Workspace, config:ServerConfig):FileInterface
@@ -28,6 +27,22 @@ function createClient(workspace:Workspace, config:ServerConfig):FileInterface
 	default: throw Error(`Invalid protocol ${config.protocol}`);
 	}
 	return newclient;
+}
+
+export enum LoadError {
+	NOTFOUND='NOTFOUND',
+	CONNECTION_FAILED='CONNECTION_FAILED',
+	PASSWORD_CANCEL='PASSWORD_CANCEL',
+	AUTH_FAILED='AUTH_FAILED',
+}
+
+export function getLoadErrorMessage(err:LoadError):string {
+	switch (err) {
+	case LoadError.NOTFOUND: return 'Not Found';
+	case LoadError.CONNECTION_FAILED: return 'Connection Failed';
+	case LoadError.PASSWORD_CANCEL: return 'Password Cancel';
+	case LoadError.AUTH_FAILED: return 'Authentication Failed. Invalid username or password';
+	}
 }
 
 export class FtpManager
@@ -104,7 +119,9 @@ export class FtpManager
 					this.cancelBlockedCommand = null;
 					this.currentTask = null;
 					blockTimeout = null;
-					reject('BLOCKED');
+					const timeoutError = Error('timeout');
+					timeoutError.ftpCode = FtpErrorCode.REUQEST_RECONNECT_AND_RETRY;
+					reject(timeoutError);
 				}
 			}, this.config.blockDetectingDuration);
 			const stopTimeout = ()=>{
@@ -120,7 +137,7 @@ export class FtpManager
 			};
 			this.currentTask = task;
 			this.cancelBlockedCommand = ()=>{
-				if (stopTimeout()) reject('CANCELLED');
+				if (stopTimeout()) reject(StringError.TASK_CANCEL);
 			};
 			
 			prom.then(t=>{
@@ -134,8 +151,9 @@ export class FtpManager
 	private _blockTestWrap<T>(task:Task, callback:(client:FileInterface)=>Promise<T>)
 	{
 		return promiseErrorWrap(this.connect(task).then(async(client)=>{
-			for (;;)
-			{
+			let tryCount = 0;
+			for (;;) {
+				tryCount = tryCount+1|0;
 				this._cancelDestroyTimeout();
 				try
 				{
@@ -146,9 +164,17 @@ export class FtpManager
 				catch(err)
 				{
 					this._updateDestroyTimeout();
-					if (err !== 'BLOCKED') throw err;
-					this.terminate();
-					client = await this.connect(task);
+					if (err.ftpCode === FtpErrorCode.REUQEST_RECONNECT_AND_RETRY_ONCE) {
+						this.terminate();
+						client = await this.connect(task);
+						if (tryCount >= 2) throw StringError.TASK_CANCEL;
+					}
+					else if (err.ftpCode === FtpErrorCode.REUQEST_RECONNECT_AND_RETRY) {
+						this.terminate();
+						client = await this.connect(task);
+					} else {
+						throw err;
+					}
 				}
 			}
 		}));
@@ -206,80 +232,74 @@ export class FtpManager
 		const usepk = config.protocol === 'sftp' && !!config.privateKey;
 	
 		async function tryToConnect(password:string|undefined):Promise<void> {
-			for (;;)
-			{
-				const client = createClient(that.workspace, config);
-				try
-				{
-					that.logger.message(`Trying to connect to ${config.url} with user ${config.username}`);
-					await that._blockTestWith(task, client.connect(password));
-					client.log('Connected');
-					that.client = client;
-					return;
-				}
-				catch (err)
-				{
-					if (err !== 'BLOCKED') throw err;
-					client.terminate();
-				}
-			}
-		}
-	
-		async function tryToConnectOrErrorMessage(password:string|undefined):Promise<string|undefined>
-		{
-			try
-			{
-				await tryToConnect(password);
-				return undefined;
-			}
-			catch(err)
-			{
-				var error:string;
-				switch (err.code)
-				{
-				case 530:
-					error = 'Authentication failed';
-					break;
-				default:
-					switch (err.message)
-					{
-					case 'Login incorrect.':
-					case 'All configured authentication methods failed':
-						error = 'Authentication failed';
-						break;
-					default:
-						that.terminate();
-						throw err;
+			try {
+				for (;;) {
+					const client = createClient(that.workspace, config);
+					try {
+						that.logger.message(`Trying to connect to ${config.url} with user ${config.username}`);
+						await that._blockTestWith(task, client.connect(password));
+						client.log('Connected');
+						that.client = client;
+						return;
+					} catch (err) {
+						switch (err.ftpCode) {
+						case FtpErrorCode.REUQEST_RECONNECT_AND_RETRY:
+							client.terminate();
+							break;
+						case FtpErrorCode.CONNECTION_REFUSED:
+							throw LoadError.CONNECTION_FAILED;
+						case FtpErrorCode.AUTH_FAILED:
+							throw LoadError.AUTH_FAILED;
+						default:
+							throw err;
+						}
 					}
-					break;
 				}
-				that.logger.message(error);
-				return error;
+			} catch (err) {
+				that.terminate();
+				throw err;
 			}
 		}
 	
 		if (!usepk && config.password === undefined) {
-			var errorMessage:string|undefined;
 			if (this.config.passwordInMemory !== undefined) {
-				errorMessage = await tryToConnectOrErrorMessage(this.config.passwordInMemory);
-				if (errorMessage !== undefined) throw Error(errorMessage);
-			} else for (;;) {
-				const promptedPassword = await window.showInputBox({
-					prompt:'ftp-kr: '+(config.protocol||'').toUpperCase()+" Password Request",
-					password: true,
-					ignoreFocusOut: true,
-					placeHolder: errorMessage
-				});
-				if (promptedPassword === undefined) {
+				await tryToConnect(this.config.passwordInMemory);
+				if (task.cancelled) {
 					this.terminate();
-					throw 'PASSWORD_CANCEL';
+					throw StringError.TASK_CANCEL;
 				}
-				errorMessage = await tryToConnectOrErrorMessage(promptedPassword);
-				if (errorMessage === undefined) {
-					if (config.keepPasswordInMemory) {
-						this.config.passwordInMemory = promptedPassword;
+			} else {
+				let errorMessage:string|undefined;
+				for (;;) {
+					const promptedPassword = await window.showInputBox({
+						prompt:'ftp-kr: '+(config.protocol||'').toUpperCase()+" Password Request",
+						password: true,
+						ignoreFocusOut: true,
+						placeHolder: errorMessage
+					});
+					if (task.cancelled) {
+						this.terminate();
+						throw StringError.TASK_CANCEL;
 					}
-					break;
+					if (promptedPassword === undefined) {
+						this.terminate();
+						throw LoadError.PASSWORD_CANCEL;
+					}
+					try {
+						await tryToConnect(promptedPassword);
+						if (config.keepPasswordInMemory) {
+							this.config.passwordInMemory = promptedPassword;
+						}
+						break;
+					} catch (err) {
+						switch (err) {
+						case LoadError.AUTH_FAILED:
+							errorMessage = getLoadErrorMessage(err);
+							break;
+						default:
+							throw err;
+						}
+					}
 				}
 			}
 		}
@@ -338,9 +358,14 @@ export class FtpManager
 		return this._blockTestWrap(task, client=>client.download(localpath, ftppath));
 	}
 	
-	public view(task:Task, ftppath:string):Promise<string>
+	public view(task:Task, ftppath:string):Promise<Buffer>
 	{
 		return this._blockTestWrap(task, client=>client.view(ftppath));
+	}
+	
+	public write(task:Task, ftppath:string, content:Buffer):Promise<void>
+	{
+		return this._blockTestWrap(task, client=>client.write(ftppath, content));
 	}
 	
 	public list(task:Task, ftppath:string):Promise<FileInfo[]>
@@ -351,5 +376,10 @@ export class FtpManager
 	public readlink(task:Task, fileinfo:FileInfo, ftppath:string):Promise<string>
 	{
 		return this._blockTestWrap(task, client=>client.readlink(fileinfo, ftppath));
+	}
+
+	public rename(task:Task, ftppathFrom:string, ftppathTo:string):Promise<void>
+	{
+		return this._blockTestWrap(task, client=>client.rename(ftppathFrom, ftppathTo));
 	}
 }

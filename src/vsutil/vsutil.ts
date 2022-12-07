@@ -3,6 +3,7 @@ import { commands, StatusBarItem, window, workspace, Uri, TextEditor, TextDocume
 import { File } from 'krfile';
 
 import { Workspace, WorkspaceItem } from './ws';
+import { TemporalDocument } from './tmpfile';
 
 
 var context:ExtensionContext|null = null;
@@ -138,15 +139,17 @@ export const vsutil = {
 		});
 	},
 
-	info(info:string, ...items:string[]):Thenable<string|undefined>
-	{
-		return window.showInformationMessage(info, ...items);
+	makeFolder(uri:Uri, name:string):void {
+		const folders = workspace.workspaceFolders;
+		if (folders === undefined) throw Error(`workspaceFolders not found`);
+		workspace.updateWorkspaceFolders(folders.length, 0, { uri, name });
 	},
 
-	openWithError(path:File, message:string, line?:number, column?:number):Promise<TextEditor>
+	info(info:string, ...items:string[]):Thenable<string|undefined>
 	{
-		window.showErrorMessage(path + ": " + message);
-		return vsutil.open(path, line, column);
+		return window.showInformationMessage(info, {
+			modal: true
+		}, ...items);
 	},
 
 	async openUri(uri:Uri|string):Promise<void>
@@ -179,22 +182,13 @@ export const vsutil = {
 		return doc;
 	},
 
-	diff(left:File, right:File, title?:string):Thenable<void>
+	diff(left:File, right:File, title?:string):Thenable<TemporalDocument>
 	{
 		return new Promise(resolve=>{
 			const leftUri = Uri.file(left.fsPath);
 			const rightUri = Uri.file(right.fsPath);
-			var options:TextDocumentShowOptions;
 			commands.executeCommand('vscode.diff', leftUri, rightUri, title).then((res)=>{
-				
-				const dispose = workspace.onDidCloseTextDocument(e=>{
-					if (e.uri.fsPath === left.fsPath)
-					{
-						dispose.dispose();
-						resolve();
-						return;
-					}
-				});
+				resolve(new TemporalDocument(right, left));
 			});
 		});
 	},

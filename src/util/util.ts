@@ -35,7 +35,7 @@ export class Deferred<T> implements Promise<T>
 
 export function isEmptyObject(obj:Object):boolean
 {
-	for(var p in obj) return false;
+	for(const p in obj) return false;
 	return true;
 }
 
@@ -65,43 +65,43 @@ export function addOptions(args:string[], options:{[key:string]:any}):void
 	}
 }
 
-export function merge<T>(original:T, overrider?:T, access?:T):T
+export function merge<T extends Record<string, any>>(original:T, overrider?:T, access?:T):T
 {
-	if (!overrider) return original;
+	if (overrider === undefined) return original;
 
     const conststr:string[] = [];
     const arrlist:string[][] = [];
-	var nex:T;
+	let nex:T;
 
-    if(!access)
+    if(access === undefined)
     {
         nex = original;
     }
     else
     {
 		nex = access;
-        for(var p in original) access[p] = original[p];
+        for(const p in original) access[p] = original[p];
     }
 
     function convert(value:any):any
     {
         if (typeof value !== "string") return value;
         
-        var nvalue = "";
-        var i = 0;
+        let nvalue = "";
+        let i = 0;
         for(;;)
         {
-            var j = value.indexOf("%", i);
+            let j = value.indexOf("%", i);
             if (j === -1) break;
-            var tx = value.substring(i, j);
+            const tx = value.substring(i, j);
             j++;
-            var k = value.indexOf("%", j);
+            const k = value.indexOf("%", j);
             if (k === -1) break;
             nvalue += tx;
-            var varname = value.substring(j, k);
+            const varname = value.substring(j, k);
             if (varname in nex)
             {
-                var val = nex[<keyof T>varname];
+                const val = nex[varname];
                 if (val instanceof Array)
                 {
                     if (val.length === 1)
@@ -126,14 +126,14 @@ export function merge<T>(original:T, overrider?:T, access?:T):T
         if (arrlist.length !== 0)
         {
             conststr.push(nvalue);
-            var from:string[][] = [conststr];
-            var to:string[][] = [];
-            for(var j=0;j<arrlist.length;j++)
+            let from:string[][] = [conststr];
+            let to:string[][] = [];
+            for(let j=0;j<arrlist.length;j++)
             {
                 const list = arrlist[j];
-                for(var i=0; i<list.length;i++)
+                for(let i=0; i<list.length;i++)
                 {
-                    for(var k=0;k<from.length;k++)
+                    for(let k=0;k<from.length;k++)
                     {
                         const cs = from[k];
                         const ncs = cs.slice(1, cs.length);
@@ -141,7 +141,7 @@ export function merge<T>(original:T, overrider?:T, access?:T):T
                         to.push(ncs);
                     }
                 }
-                var t = to;
+                const t = to;
                 to = from;
                 from = t;
                 to.length = 0;
@@ -151,11 +151,11 @@ export function merge<T>(original:T, overrider?:T, access?:T):T
         return nvalue;
     }
 
-    var out:T = <T>{};
+    const out:T = <T>{};
 
-    for(var p in overrider)
+    for(const p in overrider)
     {
-        var value = overrider[p];
+        const value = overrider[p] as any;
 		if (value instanceof Array)
         {
             const nvalue:any[] = [];
@@ -169,7 +169,7 @@ export function merge<T>(original:T, overrider?:T, access?:T):T
         }
 		else if (value instanceof Object)
 		{
-			const ori = original[p];
+			const ori = original[p] as any;
 			if (ori instanceof Object)
 			{
 				out[p] = merge(ori, value, <any>nex[p]);
@@ -195,8 +195,8 @@ export function merge<T>(original:T, overrider?:T, access?:T):T
 export function getFilePosition(content:string, index:number):{line:number,column:number}
 {
 	const front = content.substring(0, index);
-	var line = 1;
-	var lastidx = 0;
+	let line = 1;
+	let lastidx = 0;
 	for (;;)
 	{
 		const idx = front.indexOf('\n', lastidx);
@@ -216,7 +216,7 @@ export function clone<T>(value:T):T
 	if (value instanceof Array)
 	{
 		const arr = new Array(value.length);
-		for (var i=0;i<arr.length;i++)
+		for (let i=0;i<arr.length;i++)
 		{
 			arr[i] = clone(value[i]);
 		}
@@ -241,7 +241,7 @@ export function clone<T>(value:T):T
 
 	for (const p in value)
 	{
-		nobj[p] = value[p];
+		nobj[p] = (value as any)[p];
 	}
 	return <any>nobj;
 }
@@ -266,9 +266,9 @@ export function promiseErrorWrap<T>(prom:Promise<T>):Promise<T>
 export function replaceErrorUrl(stack:string, foreach:(path:string, line:number, column:number)=>string):string
 {
 	const regexp = /^\tat ([^(\n]+) \(([^)\n]+)\:([0-9]+)\:([0-9]+)\)$/gm;
-	var arr:RegExpExecArray|null;
-	var lastIndex = 0;
-	var out = '';
+	let arr:RegExpExecArray|null;
+	let lastIndex = 0;
+	let out = '';
 	while (arr = regexp.exec(stack))
 	{
 		out += stack.substring(lastIndex, arr.index);
@@ -286,9 +286,9 @@ export function replaceErrorUrl(stack:string, foreach:(path:string, line:number,
 export async function replaceErrorUrlAsync(stack:string, foreach:(path:string, line:number, column:number)=>Promise<string>):Promise<string>
 {
 	const regexp = /^\tat ([^(\n]+) \(([^)\n]+)\:([0-9]+)\:([0-9]+)\)$/gm;
-	var arr:RegExpExecArray|null;
-	var lastIndex = 0;
-	var out = '';
+	let arr:RegExpExecArray|null;
+	let lastIndex = 0;
+	let out = '';
 	while (arr = regexp.exec(stack))
 	{
 		out += stack.substring(lastIndex, arr.index);

@@ -11,8 +11,14 @@ import { ServerConfig } from '../util/serverinfo';
 import { promiseErrorWrap } from '../util/util';
 
 export const NOT_CREATED = 'not created connection access';
-export const DIRECTORY_NOT_FOUND = 1;
-export const FILE_NOT_FOUND = 2;
+export enum FtpErrorCode {
+	REQUEST_MKDIR = 1,
+	FILE_NOT_FOUND = 2,
+	REUQEST_RECONNECT_AND_RETRY = 3,
+	REUQEST_RECONNECT_AND_RETRY_ONCE = 4,
+	CONNECTION_REFUSED = 5,
+	AUTH_FAILED = 6,
+}
 
 declare global
 {
@@ -25,13 +31,13 @@ declare global
 export abstract class FileInterface
 {
 	protected readonly logger:Logger;
-	protected readonly state:StateBar;
+	protected readonly stateBar:StateBar;
 	public oninvalidencoding:(errfiles:string[])=>void = ()=>{};
 	
 	constructor(public readonly workspace:Workspace, protected readonly config:ServerConfig)
 	{
 		this.logger = workspace.query(Logger);
-		this.state = workspace.query(StateBar);
+		this.stateBar = workspace.query(StateBar);
 	}
 
 	public connect(password?:string):Promise<void>
@@ -59,7 +65,7 @@ export abstract class FileInterface
 	private logWithState(command:string):void
 	{
 		const message = this.config.name ? this.config.name+"> "+command : command;
-		this.state.set(message);
+		this.stateBar.set(message);
 		this.logger.message(message);
 	}
 
@@ -73,10 +79,10 @@ export abstract class FileInterface
 	{
 		this.logWithState(name+' '+ftppath);
 		return promiseErrorWrap(callback(this.str2bin(ftppath)).then(v=>{
-			this.state.close();
+			this.stateBar.close();
 			return v;
 		}, (err):T=>{
-			this.state.close();
+			this.stateBar.close();
 			if (err.ftpCode === ignorecode) return defVal;
 			this.log(name+" fail: "+ftppath);
 			throw err;
@@ -88,21 +94,17 @@ export abstract class FileInterface
 		this.logWithState('upload '+ftppath);
 		const binpath = this.str2bin(ftppath);
 
-		return promiseErrorWrap(this._put(localpath, binpath)
-		.catch(err=>{
-			if (err.ftpCode !== DIRECTORY_NOT_FOUND) throw err;
-			const idx = ftppath.lastIndexOf("/");
-			if (idx <= 0) throw err;
-			return this._mkdir(ftppath.substr(0, idx), true)
-			.then(()=>this._put(localpath, binpath));
-		})
-		.then(()=>{
-			this.state.close();
-		}, err=>{
-			this.state.close();
-			this.log("upload fail: "+ftppath);
-			throw err;
-		}));
+		let errorMessageOverride:string|undefined;
+
+		return promiseErrorWrap(
+			this._put(localpath, binpath).then(()=>{
+				this.stateBar.close();
+			}, err=>{
+				this.stateBar.close();
+				this.log(`upload fail: ${ftppath}, ${errorMessageOverride || err.message || err}`);
+				throw err;
+			})
+		);
 	}
 
 	download(localpath:File, ftppath:string):Promise<void>
@@ -113,45 +115,59 @@ export abstract class FileInterface
 		.then((stream)=>{
 			return new Promise<void>((resolve, reject)=>{
 				stream.once('close', ()=>{
-					this.state.close();
+					this.stateBar.close();
 					resolve();
 				});
 				stream.once('error', (err:any)=>{
-					this.state.close();
+					this.stateBar.close();
 					reject(err);
 				});
 				stream.pipe(localpath.createWriteStream());
 			});
 		}, err=>{
-			this.state.close();
+			this.stateBar.close();
 			this.log("download fail: "+ftppath);
 			throw err;
 		}));
 	}
 
-	view(ftppath:string):Promise<string>
+	view(ftppath:string):Promise<Buffer>
 	{
 		this.logWithState('view '+ftppath);
 
 		return promiseErrorWrap(this._get(this.str2bin(ftppath))
 		.then((stream)=>{
-			return new Promise<string>((resolve, reject)=>{
-				var str = '';
+			return new Promise<Buffer>((resolve, reject)=>{
+				const buffers:Buffer[] = [];
 				stream.once('close', ()=>{
-					this.state.close();
-					resolve(str);
+					this.stateBar.close();
+					resolve(Buffer.concat(buffers));
 				});
 				stream.once('error', (err:any)=>{
-					this.state.close();
+					this.stateBar.close();
 					reject(err);
 				});
-				stream.on('data', (data:any)=>{
-					str += data.toString('utf-8');
+				stream.on('data', (data:Buffer)=>{
+					buffers.push(data);
 				});
 			});
 		}, err=>{
-			this.state.close();
+			this.stateBar.close();
 			this.log("view fail: "+ftppath);
+			throw err;
+		}));
+	}
+
+	write(ftppath:string, content:Buffer):Promise<void>
+	{
+		this.logWithState('write '+ftppath);
+
+		return promiseErrorWrap(this._write(content, this.str2bin(ftppath))
+		.then((stream)=>{
+			this.stateBar.close();
+		}, err=>{
+			this.stateBar.close();
+			this.log("write fail: "+ftppath);
 			throw err;
 		}));
 	}
@@ -163,7 +179,7 @@ export abstract class FileInterface
 
 		return promiseErrorWrap(this._list(this.str2bin(ftppath))
 		.then((list)=>{
-			this.state.close();
+			this.stateBar.close();
 
 			const errfiles:string[] = [];
 			for (var i = 0; i<list.length; i++)
@@ -182,20 +198,20 @@ export abstract class FileInterface
 			}
 			return list;
 		}, err=>{
-			this.state.close();
-			this.log("list fail: "+ftppath);
+			this.stateBar.close();
+			this.log(`list fail: ${ftppath}, ${err.message || err}`);
 			throw err;
 		}));
 	}
 
 	rmdir(ftppath:string):Promise<void>
 	{
-		return this._callWithName("rmdir", ftppath, FILE_NOT_FOUND, undefined, binpath=>this._rmdir(binpath, true));
+		return this._callWithName("rmdir", ftppath, FtpErrorCode.FILE_NOT_FOUND, undefined, binpath=>this._rmdir(binpath, true));
 	}
 
 	delete(ftppath:string):Promise<void>
 	{
-		return this._callWithName("delete", ftppath, FILE_NOT_FOUND, undefined, binpath=>this._delete(binpath));
+		return this._callWithName("delete", ftppath, FtpErrorCode.FILE_NOT_FOUND, undefined, binpath=>this._delete(binpath));
 	}
 
 	mkdir(ftppath:string):Promise<void>
@@ -212,11 +228,23 @@ export abstract class FileInterface
 			if (v.startsWith('/')) v = ftp_path.normalize(v);
 			else v = ftp_path.normalize(ftppath + '/../' + v);
 			fileinfo.link = v;
-			this.state.close();
+			this.stateBar.close();
 			return v;
 		}, (err)=>{
-			this.state.close();
-			this.log("readlink fail: "+fileinfo.name);
+			this.stateBar.close();
+			this.log(`readlink fail: ${fileinfo.name}, ${err.message || err}`);
+			throw err;
+		}));
+	}
+
+	rename(ftppathFrom:string, ftppathTo:string):Promise<void> {
+		this.logWithState(`rename ${ftppathFrom} ${ftppathTo}`);
+		return promiseErrorWrap(this._rename(this.str2bin(ftppathFrom), this.str2bin(ftppathTo))
+		.then(()=>{
+			this.stateBar.close();
+		}, (err)=>{
+			this.stateBar.close();
+			this.log(`rename fail: ${ftppathFrom} ${ftppathTo}, ${err.message || err}`);
 			throw err;
 		}));
 	}
@@ -226,7 +254,9 @@ export abstract class FileInterface
 	abstract _rmdir(path:string, recursive:boolean):Promise<void>;
 	abstract _delete(ftppath:string):Promise<void>;
 	abstract _put(localpath:File, ftppath:string):Promise<void>;
+	abstract _write(buffer:Buffer, ftppath:string):Promise<void>;
 	abstract _get(ftppath:string):Promise<NodeJS.ReadableStream>;
 	abstract _list(ftppath:string):Promise<Array<FileInfo>>;
 	abstract _readlink(fileinfo:FileInfo, ftppath:string):Promise<string>;
+	abstract _rename(ftppathFrom:string, ftppathTo:string):Promise<void>;
 }

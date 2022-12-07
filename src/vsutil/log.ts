@@ -16,6 +16,10 @@ enum LogLevelEnum
 	ERROR,
 }
 
+export enum StringError {
+	TASK_CANCEL='TASK_CANCEL',
+	IGNORE='IGNORE',
+}
 
 export class Logger implements WorkspaceItem
 {
@@ -25,6 +29,16 @@ export class Logger implements WorkspaceItem
 	private workspace:Workspace|null = null;
 	public static all:Set<Logger> = new Set;
 	private task:Promise<void> = Promise.resolve();
+	private readonly _onError = async(err:unknown)=>{
+		const stack = await getMappedStack(err);
+		if (stack !== null) {
+			console.error(stack);
+			this.logRaw(LogLevelEnum.ERROR, stack);
+		} else {
+			console.error(err);
+			this.logRaw(LogLevelEnum.ERROR, err+'');
+		}
+	};
 
 	constructor(name:string|Workspace)
 	{
@@ -53,7 +67,7 @@ export class Logger implements WorkspaceItem
 	}
 	private log(level:LogLevelEnum, ...message:string[]):Promise<void>
 	{
-		return this.task = this.task.then(()=>this.logRaw(level, ...message));
+		return this.task = this.task.then(()=>this.logRaw(level, ...message)).catch(this._onError);
 	}
 	
 	public setLogLevel(level:LogLevel):void
@@ -84,18 +98,19 @@ export class Logger implements WorkspaceItem
 		this.log(LogLevelEnum.VERBOSE, ... message);
 	}
 		
-	public error(err:any):Promise<void> {
+	public error(err:unknown):Promise<void> {
 		return this.task = this.task.then(async()=>{
-			if (err === 'IGNORE') return;
-			var stack = await getMappedStack(err);
-			if (stack) {
+			if (err === StringError.IGNORE) return;
+			let stack = await getMappedStack(err);
+			if (stack !== null) {
+				const error = err as any;
 				console.error(stack);
 				this.logRaw(LogLevelEnum.ERROR, stack);
-				const res = await window.showErrorMessage(err.message, 'Detail');
+				const res = await window.showErrorMessage(error.message, {modal: true}, 'Detail');
 				if (res !== 'Detail') return;
 				var output = '[ftp-kr Reporting]\n';
-				if (err.task) {
-					output += `Task: ${err.task}\n`;
+				if (error.task) {
+					output += `Task: ${error.task}\n`;
 				}
 				const pathRemap:string[] = [];
 				pathRemap.push(new File(__dirname).parent().parent().fsPath, '[ftp-kr]');
@@ -104,12 +119,12 @@ export class Logger implements WorkspaceItem
 				}
 				output += `platform: ${os.platform()}\n`;
 				output += `arch: ${os.arch()}\n\n`;
-				output += `[${err.constructor.name}]\nmessage: ${err.message}`;
-				if (err.code) {
-					output += `\ncode: ${err.code}`;
+				output += `[${error.constructor.name}]\nmessage: ${error.message}`;
+				if (error.code) {
+					output += `\ncode: ${error.code}`;
 				}
-				if (err.errno) {
-					output += `\nerrno: ${err.errno}`;
+				if (error.errno) {
+					output += `\nerrno: ${error.errno}`;
 				}
 				
 				function repath(path:string):string {
@@ -193,11 +208,11 @@ export class Logger implements WorkspaceItem
 			else
 			{
 				console.error(err);
-				const errString = err.toString();
+				const errString = err+'';
 				this.logRaw(LogLevelEnum.ERROR, errString);
-				window.showErrorMessage(errString);
+				await window.showErrorMessage(errString, {modal: true});
 			}
-		});
+		}).catch(this._onError);
 	}
 
 	public errorConfirm(err:Error|string, ...items:string[]):Thenable<string|undefined>
@@ -216,10 +231,14 @@ export class Logger implements WorkspaceItem
 		}
 		
 		this.task = this.task
-		.then(()=>getMappedStack(error))
-		.then(stack=>this.logRaw(LogLevelEnum.ERROR, stack));
+		.then(async()=>{
+			const stack = await getMappedStack(error);
+			this.logRaw(LogLevelEnum.ERROR, stack || error+'');
+		});
 
-		return window.showErrorMessage(msg, ...items);
+		return window.showErrorMessage(msg, {
+			modal: true,
+		}, ...items);
 	}
 
 	public wrap(func:()=>void):void

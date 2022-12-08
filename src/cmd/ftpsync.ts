@@ -12,17 +12,6 @@ import { vsutil } from '../vsutil/vsutil';
 import { Scheduler } from '../vsutil/work';
 import { Workspace } from '../vsutil/ws';
 
-function taskTimer<T>(taskname: string, taskpromise: Promise<T>): Promise<T> {
-	const startTime = Date.now();
-	return taskpromise.then(res => {
-		const passedTime = Date.now() - startTime;
-		if (passedTime > 1000) {
-			vsutil.info(taskname + " completed");
-		}
-		return res;
-	});
-}
-
 async function getInfoToTransfer(args: CommandArgs):Promise<{workspace:Workspace, server:FtpCacher, file:File, files:File[]}>
 {
 	var workspace:Workspace;
@@ -139,7 +128,7 @@ export const commands:Command = {
 		};
 		if (files.length === 1 && !await files[0].isDirectory())
 		{
-			await taskTimer('Upload', server.ftpUpload(files[0], null, bo));
+			await config.reportTaskCompletionPromise('Upload', server.ftpUpload(files[0], null, bo));
 		}
 		else
 		{
@@ -152,7 +141,7 @@ export const commands:Command = {
 			}
 			else
 			{
-				await taskTimer('Upload', server.uploadAll(files, null, bo));
+				await config.reportTaskCompletionPromise('Upload', server.uploadAll(files, null, bo));
 			}
 		}
 	},
@@ -173,7 +162,7 @@ export const commands:Command = {
 		};
 		if (files.length === 1 && !await files[0].isDirectory())
 		{
-			await taskTimer('Download', server.ftpDownload(files[0], null, bo));
+			await config.reportTaskCompletionPromise('Download', server.ftpDownload(files[0], null, bo));
 		}
 		else
 		{
@@ -186,7 +175,7 @@ export const commands:Command = {
 			}
 			else
 			{
-				await taskTimer('Download', server.downloadAll(files, null, bo));
+				await config.reportTaskCompletionPromise('Download', server.downloadAll(files, null, bo));
 			}
 		}
 	},
@@ -204,7 +193,7 @@ export const commands:Command = {
 		
 		if (files.length === 1 && !await files[0].isDirectory())
 		{
-			await taskTimer('Delete', server.ftpDelete(files[0], null, {}));
+			await config.reportTaskCompletionPromise('Delete', server.ftpDelete(files[0], null, {}));
 		}
 		else
 		{
@@ -215,7 +204,7 @@ export const commands:Command = {
 			}
 			else
 			{
-				await taskTimer('Delete', server.deleteAll(files, null, {}));
+				await config.reportTaskCompletionPromise('Delete', server.deleteAll(files, null, {}));
 			}
 		}
 	},

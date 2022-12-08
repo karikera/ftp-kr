@@ -872,12 +872,7 @@ export class FtpCacher
 				confirmer = () => this.logger.errorConfirm("ftp-kr Task failed, more information in the output", "Retry");
 				continue;
 			}
-			const passedTime = Date.now() - startTime;
-			if (passedTime > 1000) {
-				vsutil.info(taskname + " completed");
-			}
-			this.logger.show();
-			this.logger.message(taskname + ' completed');
+			this.mainConfig.reportTaskCompletion(taskname, startTime);
 			break;
 		}
 	}

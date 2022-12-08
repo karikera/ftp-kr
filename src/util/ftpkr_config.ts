@@ -211,6 +211,15 @@ class FtpKrConfigClass extends ConfigContainer<FtpKrConfigProperties>
 		}
 		config.ignoreJsonUploadCaution = config.ignoreJsonUploadCaution === true;
 		config.includeAllAlwaysForAllCommand = config.includeAllAlwaysForAllCommand === true;
+		switch (typeof config.showReportMessage) {
+		case 'number': break;
+		case 'boolean': 
+			if ((config.showReportMessage as any) === true) config.showReportMessage = 1000;
+			break;
+		default:
+			config.showReportMessage = 1000;
+			break;
+		}
 
 		delete config.name;
 

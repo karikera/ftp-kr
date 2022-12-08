@@ -106,6 +106,14 @@
 			"type":"boolean",
 			"description": "Always put all files for Download All & Upload All. It skips the modification check",
 			"default:": false
+		},
+		"showReportMessage": {
+			"type":[
+				"number",
+				"boolean"
+			],
+			"description": "Report the completion message with the modal if the task time is longer than 1000 ms. if it's a number it changes the timeout duration.",
+			"default:": true
 		}
     }
 }

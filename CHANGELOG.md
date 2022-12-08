@@ -1,3 +1,6 @@
+# 1.4.2
+* new option - showReportMessage
+
 # 1.4.1
 * editable tree view
 

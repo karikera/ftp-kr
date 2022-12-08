@@ -292,4 +292,27 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 			processError(this.logger, err);
 		}
 	}
+
+	public reportTaskCompletion(taskname:string, startTime:number):void {
+		if (this.showReportMessage !== false) {
+			const passedTime = Date.now() - startTime;
+			if (passedTime >= this.showReportMessage) {
+				vsutil.info(taskname + " completed");
+			}
+		}
+		this.logger.show();
+		this.logger.message(taskname + ' completed');
+	}
+	
+	public async reportTaskCompletionPromise<T>(taskname: string, taskpromise: Promise<T>): Promise<T> {
+		const startTime = Date.now();
+		const res = await taskpromise;
+		if (this.showReportMessage !== false) {
+			const passedTime = Date.now() - startTime;
+			if (passedTime >= this.showReportMessage) {
+				vsutil.info(taskname + " completed");
+			}
+		}
+		return res;
+	}
 }

@@ -1,4 +1,7 @@
-- ftp explorer bug fix
+# 1.4.3
+
+- ftp explorer - New File / New Directory
+- ftp explorer - bug fix
 
 # 1.4.2
 

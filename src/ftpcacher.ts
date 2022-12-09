@@ -4,8 +4,8 @@ import {
 	VFSDirectory,
 	VFSFile,
 	VFSServer,
-	VFSState,
 	VFSServerList,
+	VFSState,
 } from './util/filesystem';
 import { ftp_path } from './util/ftp_path';
 import { ServerConfig } from './util/serverinfo';
@@ -139,7 +139,6 @@ class TaskFileConfirm {
 				this.tmpDoc.close();
 				this.tmpDoc = null;
 			}
-			await this.taskFile.quietUnlink();
 		}
 		return tasks;
 	}
@@ -250,15 +249,19 @@ export class FtpCacher {
 	}
 
 	public ftpDelete(
-		path: File,
+		ftppathOrFile: string | File,
 		task?: Task | null,
 		options?: BatchOptions
 	): Promise<void> {
+		const ftppath =
+			ftppathOrFile instanceof File
+				? this.toFtpPath(ftppathOrFile)
+				: ftppathOrFile;
+		if (ftppath === '/') throw Error('Invalid task');
 		return this.scheduler.task(
 			'Delete',
 			async (task) => {
 				await this.init(task);
-				const ftppath = this.toFtpPath(path);
 
 				const deleteTest = async (file: VFSState): Promise<void> => {
 					if (file instanceof VFSDirectory)
@@ -313,40 +316,40 @@ export class FtpCacher {
 		);
 	}
 
-	public ftpMkdir(path: File, task?: Task | null): Promise<void> {
+	public ftpMkdir(
+		ftppathOrFile: string | File,
+		task?: Task | null
+	): Promise<void> {
+		const ftppath =
+			ftppathOrFile instanceof File
+				? this.toFtpPath(ftppathOrFile)
+				: ftppathOrFile;
 		return this.scheduler.task(
 			'Mkdir',
 			async (task) => {
 				await this.init(task);
 
 				const mtime = Date.now();
-				const ftppath = this.toFtpPath(path);
+				const parentFtpPath = ftp_path.dirname(ftppath);
+				const filedir = this.fs.getDirectoryFromPath(parentFtpPath);
 
 				let oldfile: VFSState | undefined = undefined;
-
-				const next = async (): Promise<void> => {
-					if (oldfile) {
-						if (oldfile instanceof VFSDirectory) {
-							oldfile.lmtimeWithThreshold = oldfile.lmtime = mtime;
-							return;
-						}
-						await this.ftpDelete(path, task);
+				if (filedir) {
+					oldfile = await this.ftpStat(ftppath, task);
+				}
+				if (oldfile) {
+					if (oldfile instanceof VFSDirectory) {
+						oldfile.lmtimeWithThreshold = oldfile.lmtime = mtime;
+						return;
 					}
-					await this.ftpmgr.mkdir(task, ftppath);
+					await this.ftpDelete(ftppath, task);
+				}
+				await this.ftpmgr.mkdir(task, ftppath);
 
-					const dir = this.fs.mkdir(ftppath);
-					dir.lmtimeWithThreshold = dir.lmtime = mtime;
-					dir.remoteModified = false;
-					return;
-				};
-
-				const parentFtpPath = this.toFtpPath(path.parent());
-				const filedir = this.fs.getDirectoryFromPath(parentFtpPath);
-				if (!filedir) return await next();
-
-				oldfile = await this.ftpStat(ftppath, task);
-				if (!oldfile) return await next();
-				return await next();
+				const dir = this.fs.mkdir(ftppath);
+				dir.lmtimeWithThreshold = dir.lmtime = mtime;
+				dir.remoteModified = false;
+				return;
 			},
 			task
 		);
@@ -407,7 +410,7 @@ export class FtpCacher {
 								report.file = oldfile;
 								return report;
 							}
-							await this.ftpDelete(path, task);
+							await this.ftpDelete(ftppath, task);
 						}
 						await this.ftpmgr.mkdir(task, ftppath);
 
@@ -428,6 +431,7 @@ export class FtpCacher {
 						}
 
 						const file = this.fs.createFromPath(ftppath);
+						file.date = 0;
 						file.lmtimeWithThreshold = file.lmtime = +stats.mtime;
 						file.remoteModified = false;
 						file.size = stats.size;
@@ -552,9 +556,6 @@ export class FtpCacher {
 					await this.ftpmgr.download(task, path, ftppath);
 				}
 				const stats = await path.stat();
-				if (file.type === '-' && file.size !== stats.size) {
-					file.refreshContent();
-				}
 				file.size = stats.size;
 				file.lmtime = +stats.mtime;
 				file.lmtimeWithThreshold =
@@ -602,10 +603,11 @@ export class FtpCacher {
 		return this.scheduler.task<void>(
 			'Write',
 			async (task): Promise<void> => {
-				const mtime = +new Date();
+				const mtime = Date.now();
 				await this.ftpmgr.write(task, ftppath, buffer);
 				const file = this.fs.createFromPath(ftppath);
 				file.lmtimeWithThreshold = file.lmtime = mtime;
+				file.date = 0;
 				file.remoteModified = false;
 				file.size = buffer.length;
 			},
@@ -652,16 +654,21 @@ export class FtpCacher {
 	}
 
 	public async ftpStat(
-		ftppath: string,
+		ftppathOrFile: string | File,
 		task?: Task,
-		options?: BatchOptions
+		options: BatchOptions = {}
 	): Promise<VFSState | undefined> {
+		const ftppath =
+			ftppathOrFile instanceof File
+				? this.toFtpPath(ftppathOrFile)
+				: ftppathOrFile;
 		return this.scheduler.task(
 			'Stat',
 			async (task) => {
 				const parent = ftp_path.dirname(ftppath);
-				const dir = await this.ftpList(parent, task, options);
-				return dir.item(ftp_path.basename(ftppath));
+				const target = ftp_path.basename(ftppath);
+				const dir = await this._list(parent, target, task, options);
+				return dir.item(target);
 			},
 			task
 		);
@@ -728,43 +735,62 @@ export class FtpCacher {
 		);
 	}
 
+	private async _list(
+		ftppath: string,
+		targetFile: string | null,
+		task: Task,
+		options: BatchOptions
+	): Promise<VFSDirectory> {
+		const latest = this.refreshed.get(ftppath);
+		if (latest) {
+			let useLatest = true;
+			if (options && options.doNotRefresh) {
+				useLatest = true;
+			} else if (!options || !options.forceRefresh) {
+				if (latest.accessTime + this.mainConfig.refreshTime > Date.now())
+					useLatest = true;
+			}
+			_needToRefresh: if (useLatest) {
+				const dir = await latest;
+				if (targetFile === null) {
+					for (const file of dir.children()) {
+						if (file.date === 0) break _needToRefresh;
+					}
+				} else {
+					const item = dir.item(targetFile);
+					if (item !== undefined && item.date === 0) break _needToRefresh;
+				}
+				return latest;
+			}
+		}
+		const deferred = new RefreshedData();
+		this.refreshed.set(ftppath, deferred);
+
+		await this.ftpmgr.connect(task);
+
+		try {
+			const ftpfiles = await this.ftpmgr.list(task, ftppath);
+			const dir = this.fs.refresh(ftppath, ftpfiles);
+			deferred.resolve(dir);
+			return dir;
+		} catch (err) {
+			deferred.catch(() => {});
+			deferred.reject(err);
+			if (this.refreshed.get(ftppath) === deferred) {
+				this.refreshed.delete(ftppath);
+			}
+			throw err;
+		}
+	}
+
 	public ftpList(
 		ftppath: string,
 		task?: Task | null,
-		options?: BatchOptions
+		options: BatchOptions = {}
 	): Promise<VFSDirectory> {
 		return this.scheduler.task(
 			'List',
-			(task) => {
-				const latest = this.refreshed.get(ftppath);
-				if (latest) {
-					if (options && options.doNotRefresh) return latest;
-					if (!options || !options.forceRefresh) {
-						if (latest.accessTime + this.mainConfig.refreshTime > Date.now())
-							return latest;
-					}
-				}
-				const deferred = new RefreshedData();
-				this.refreshed.set(ftppath, deferred);
-
-				return (async () => {
-					await this.ftpmgr.connect(task);
-
-					try {
-						const ftpfiles = await this.ftpmgr.list(task, ftppath);
-						const dir = this.fs.refresh(ftppath, ftpfiles);
-						deferred.resolve(dir);
-						return dir;
-					} catch (err) {
-						deferred.catch(() => {});
-						deferred.reject(err);
-						if (this.refreshed.get(ftppath) === deferred) {
-							this.refreshed.delete(ftppath);
-						}
-						throw err;
-					}
-				})();
-			},
+			(task) => this._list(ftppath, null, task, options),
 			task
 		);
 	}
@@ -1023,18 +1049,15 @@ export class FtpCacher {
 		const dir = await this.ftpList(ftppath);
 
 		const pick = new QuickPick();
-		if (path.fsPath !== this.mainConfig.getBasePath().fsPath) {
-			pick.item('Current Directory Action', () => {
-				const pick = new QuickPick();
-				pick.item('Download Current VFSDirectory', () =>
-					this.downloadAll(path)
-				);
-				pick.item('Upload Current VFSDirectory', () => this.uploadAll(path));
-				pick.item('Delete Current VFSDirectory', () => this.ftpDelete(path));
-				pick.oncancel = () => this.list(path);
-				return pick.open();
-			});
-		}
+		pick.item(`Action for ${ftppath}`, () => {
+			const pick = new QuickPick();
+			pick.item(`Download ${ftppath}`, () => this.downloadAll(path));
+			pick.item(`Upload ${ftppath}`, () => this.uploadAll(path));
+			if (ftppath !== '/')
+				pick.item(`Delete ${ftppath}`, () => this.ftpDelete(ftppath));
+			pick.oncancel = () => this.list(path);
+			return pick.open();
+		});
 
 		let files: VFSState[] = [];
 		let dirs: VFSState[] = [];
@@ -1365,5 +1388,33 @@ export class FtpCacher {
 		const dir = this.fs.getDirectoryFromPath(ftppath);
 		if (dir) this._deletedir(dir, ftppath);
 		this.fs.deleteFromPath(ftppath);
+	}
+
+	/**
+	 * return false if files not contains directory
+	 */
+	async isFileCountOver(files: File[] | File, count: number): Promise<boolean> {
+		const checkFiles = async (files: File[]): Promise<void> => {
+			for (const file of files) {
+				const ftppath = this.toFtpPath(file);
+				const ftpfile = await this.ftpStat(ftppath);
+				if (ftpfile !== undefined && ftpfile.type === 'd') {
+					const dir = await this.ftpList(ftppath);
+					count -= dir.fileCount;
+				}
+				count--;
+				if (count <= 0) throw 'OVER';
+				await checkFiles(files);
+			}
+		};
+
+		try {
+			if (!(files instanceof Array)) files = [files];
+			await checkFiles(files);
+			return false;
+		} catch (err) {
+			if (err === 'OVER') return true;
+			throw err;
+		}
 	}
 }

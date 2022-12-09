@@ -74,7 +74,9 @@ export class WorkspaceWatcher implements WorkspaceItem {
 								this.config.updateIgnorePath();
 								for (const server of this.ftp.servers.values()) {
 									await server.ftpDelete(
-										this.config.getBasePath().child('.vscode'),
+										server.toFtpPath(
+											this.config.getBasePath().child('.vscode')
+										),
 										task
 									);
 								}
@@ -271,7 +273,10 @@ export class WorkspaceWatcher implements WorkspaceItem {
 				.then(() => {
 					return this.processWatcher(
 						path,
-						(task, path) => this.ftp.targetServer.ftpDelete(path, task),
+						(task, path) => {
+							const server = this.ftp.targetServer;
+							return server.ftpDelete(path, task);
+						},
 						'remove',
 						!!config.autoDelete
 					);

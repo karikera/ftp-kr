@@ -28,7 +28,6 @@ export class FtpSyncManager implements WorkspaceItem {
 		this.scheduler = workspace.query(Scheduler);
 		this.cacheFile = this.workspace.child('.vscode/ftp-kr.sync.cache.json');
 
-		this.fs.onRefreshContent((file) => ftpTree.refreshContent(file));
 		this.fs.onRefreshTree((file) => ftpTree.refreshTree(file));
 	}
 

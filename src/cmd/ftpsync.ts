@@ -6,6 +6,7 @@ import { BatchOptions, FtpCacher } from '../ftpcacher';
 import { FtpSyncManager } from '../ftpsync';
 import { ftpTree } from '../ftptree';
 import { openSshTerminal } from '../sshmgr';
+import { ftp_path } from '../util/ftp_path';
 import { Command, CommandArgs } from '../vsutil/cmd';
 import { Logger, StringError } from '../vsutil/log';
 import { vsutil } from '../vsutil/vsutil';
@@ -68,9 +69,10 @@ async function isFileCountOver(
 			if (await file.isDirectory()) {
 				const files = await file.children();
 				count -= files.length;
-				if (count <= 0) throw 'OVER';
-				await checkFiles(files);
 			}
+			count--;
+			if (count <= 0) throw 'OVER';
+			await checkFiles(files);
 		}
 	}
 
@@ -100,7 +102,56 @@ function removeChildren(files: File[]): File[] {
 	return <File[]>sorted.filter((file) => file !== null);
 }
 
+async function getFileNameFromInput(
+	server: FtpCacher,
+	files: File[]
+): Promise<string> {
+	if (files.length !== 1)
+		throw Error(`Invalid selected file count: ${files.length}`);
+
+	const file = files[0];
+	const ftppath = server.toFtpPath(file);
+	const stat = await server.ftpStat(ftppath);
+
+	let parentFtppath = '';
+	if (stat === undefined) throw Error(`File not found: ${ftppath}`);
+	if (stat.type === 'd') {
+		parentFtppath = ftppath;
+		vscode.commands.executeCommand('list.expand');
+	} else {
+		parentFtppath = ftp_path.dirname(ftppath);
+	}
+	if (parentFtppath === '/') parentFtppath = '';
+	const fileName = await vscode.window.showInputBox({
+		prompt: 'File Name',
+	});
+	if (fileName === undefined) throw StringError.IGNORE;
+	return parentFtppath + '/' + fileName;
+}
+
 export const commands: Command = {
+	async 'ftpkr.new'(args: CommandArgs) {
+		const { workspace, server, files } = await getSelectedFiles(args);
+		const logger = workspace.query(Logger);
+		const config = workspace.query(Config);
+
+		await config.loadTest();
+
+		const ftppath = await getFileNameFromInput(server, files);
+		logger.show();
+		await server.uploadBuffer(ftppath, Buffer.alloc(0));
+	},
+	async 'ftpkr.mkdir'(args: CommandArgs) {
+		const { workspace, server, files } = await getSelectedFiles(args);
+		const logger = workspace.query(Logger);
+		const config = workspace.query(Config);
+
+		await config.loadTest();
+
+		const ftppath = await getFileNameFromInput(server, files);
+		logger.show();
+		await server.ftpMkdir(ftppath);
+	},
 	async 'ftpkr.upload'(args: CommandArgs) {
 		const { workspace, server, files: files_ } = await getSelectedFiles(args);
 		const files = removeChildren(files_);
@@ -109,7 +160,6 @@ export const commands: Command = {
 		const config = workspace.query(Config);
 
 		logger.show();
-
 		await config.loadTest();
 
 		const bo: BatchOptions = {
@@ -148,23 +198,31 @@ export const commands: Command = {
 		const bo: BatchOptions = {
 			skipModCheck: config.includeAllAlwaysForAllCommand,
 		};
-		if (files.length === 1 && !(await files[0].isDirectory())) {
-			await config.reportTaskCompletionPromise(
-				'Download',
-				server.ftpDownload(files[0], null, bo)
-			);
-		} else {
-			const confirmFirst = await isFileCountOver(files, config.noticeFileCount);
-			bo.doNotRefresh = true;
-			if (confirmFirst) {
-				bo.confirmFirst = true;
-				await server.downloadAll(files, null, bo);
-			} else {
+		if (files.length === 1) {
+			const ftppath = server.toFtpPath(files[0]);
+			const ftpFile = await server.ftpStat(ftppath);
+			if (ftpFile === undefined) throw Error(`file not found: ${ftppath}`);
+			if (ftpFile.type !== 'd') {
 				await config.reportTaskCompletionPromise(
 					'Download',
-					server.downloadAll(files, null, bo)
+					server.ftpDownload(files[0], null, bo)
 				);
+				return;
 			}
+		}
+		const confirmFirst = await server.isFileCountOver(
+			files,
+			config.noticeFileCount
+		);
+		bo.doNotRefresh = true;
+		if (confirmFirst) {
+			bo.confirmFirst = true;
+			await server.downloadAll(files, null, bo);
+		} else {
+			await config.reportTaskCompletionPromise(
+				'Download',
+				server.downloadAll(files, null, bo)
+			);
 		}
 	},
 	async 'ftpkr.delete'(args: CommandArgs) {
@@ -180,21 +238,29 @@ export const commands: Command = {
 		const opts: BatchOptions = {
 			skipIgnoreChecking: true,
 		};
-		if (files.length === 1 && !(await files[0].isDirectory())) {
-			await config.reportTaskCompletionPromise(
-				'Delete',
-				server.ftpDelete(files[0], null, opts)
-			);
-		} else {
-			const confirmFirst = await isFileCountOver(files, config.noticeFileCount);
-			if (confirmFirst) {
-				await server.deleteAll(files, null, { confirmFirst });
-			} else {
+		if (files.length === 1) {
+			const ftppath = server.toFtpPath(files[0]);
+			const ftpFile = await server.ftpStat(ftppath);
+			if (ftpFile === undefined) throw Error(`file not found: ${ftppath}`);
+			if (ftpFile.type !== 'd') {
 				await config.reportTaskCompletionPromise(
 					'Delete',
-					server.deleteAll(files, null, opts)
+					server.ftpDelete(ftppath, null, opts)
 				);
+				return;
 			}
+		}
+		const confirmFirst = await server.isFileCountOver(
+			files,
+			config.noticeFileCount
+		);
+		if (confirmFirst) {
+			await server.deleteAll(files, null, { confirmFirst });
+		} else {
+			await config.reportTaskCompletionPromise(
+				'Delete',
+				server.deleteAll(files, null, opts)
+			);
 		}
 	},
 	async 'ftpkr.diff'(args: CommandArgs) {
@@ -281,7 +347,6 @@ export const commands: Command = {
 			const server = ftpTree.getServerFromUri(args.uri).ftp;
 			const ftpFile = server.toFtpFileFromFtpPath(args.uri.path);
 			if (ftpFile) {
-				ftpFile.refreshContent();
 				ftpTree.refreshTree(ftpFile);
 			}
 		} else if (args.treeItem && args.treeItem.ftpFile) {
@@ -290,7 +355,6 @@ export const commands: Command = {
 			await workspace.query(Config).loadTest();
 
 			tree.ftp.refresh(args.treeItem.ftpFile);
-			args.treeItem.ftpFile.refreshContent();
 			ftpTree.refreshTree(args.treeItem.ftpFile);
 		} else
 			for (const workspace of Workspace.all()) {
@@ -298,7 +362,6 @@ export const commands: Command = {
 
 				const ftp = workspace.query(FtpSyncManager);
 				for (const server of ftp.servers.values()) {
-					await server.fs.refreshContent();
 					server.refresh();
 				}
 				ftpTree.refreshTree();

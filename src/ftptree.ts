@@ -68,8 +68,6 @@ export class FtpTree
 		const server = ftpTree.getServerFromUri(uri);
 		const ftppath = uri.path;
 		const viewed = await server.ftp.downloadAsBuffer(ftppath);
-
-		if (viewed.file) viewed.file.contentCached = true;
 		return viewed.content;
 	}
 
@@ -89,7 +87,7 @@ export class FtpTree
 		const server = ftpTree.getServerFromUri(uri);
 		const ftppath = uri.path;
 		options.recursive; // TODO: check
-		await server.ftp.ftpDelete(server.ftp.fromFtpPath(ftppath));
+		await server.ftp.ftpDelete(ftppath);
 	}
 
 	async createDirectory(uri: Uri): Promise<void> {
@@ -144,11 +142,6 @@ export class FtpTree
 				server.ftp.fromFtpPath(newUri.path)
 			);
 		}
-	}
-
-	public refreshContent(target: VFSState): void {
-		defaultLogger.verbose('refreshContent ' + target.getUri());
-		target.refreshContent();
 	}
 
 	public refreshTree(target?: VFSState): void {

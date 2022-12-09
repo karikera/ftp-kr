@@ -1,10 +1,10 @@
 import { File } from 'krfile';
 
+import { Disposable, FileChangeType, Uri } from 'vscode';
 import { Event } from './event';
-import { FileInfo, FileType } from './fileinfo';
+import { FileInfo } from './fileinfo';
 import { ftp_path } from './ftp_path';
 import minimatch = require('minimatch');
-import { Disposable, FileChangeType, Uri } from 'vscode';
 
 interface FileNameSet {
 	dir: string;
@@ -33,14 +33,10 @@ export function splitFileName(path: string): FileNameSet {
 }
 
 export abstract class VFSState extends FileInfo {
-	public type: FileType = '';
-	public size = 0;
-	public date = 0;
 	public lmtime = 0;
 	public lmtimeWithThreshold = 0;
 	public remoteModified = false;
 
-	public contentCached = false; // If it is set, fire refresh in next modification
 	public treeCached = false; // If it is set, fire refresh in next modification
 
 	public readonly fs: VFSServerList;
@@ -123,25 +119,21 @@ export abstract class VFSState extends FileInfo {
 		return watcher;
 	}
 	public fireWatcher(from: VFSState | undefined, type: FileChangeType): void {
-		const filePath = this.getPath();
-		for (const watcher of this.directWatcher) {
-			watcher.fire(this, from, filePath, type);
-		}
-
-		let parent: VFSState | undefined = this;
-		for (;;) {
-			for (const watcher of parent.recursiveWatcher) {
+		process.nextTick(() => {
+			const filePath = this.getPath();
+			for (const watcher of this.directWatcher) {
 				watcher.fire(this, from, filePath, type);
 			}
-			parent = parent.parent;
-			if (parent === undefined) break;
-		}
-		this.refreshContent();
-	}
-	public refreshContent(): Promise<void> {
-		if (!this.contentCached) return Promise.resolve();
-		this.contentCached = false;
-		return this.fs.onRefreshContent.fire(this);
+
+			let parent: VFSState | undefined = this;
+			for (;;) {
+				for (const watcher of parent.recursiveWatcher) {
+					watcher.fire(this, from, filePath, type);
+				}
+				parent = parent.parent;
+				if (parent === undefined) break;
+			}
+		});
 	}
 }
 
@@ -192,12 +184,6 @@ export class VFSDirectory extends VFSState {
 		this.files.set('', this);
 		this.files.set('.', this);
 		if (this.parent) this.files.set('..', this.parent);
-	}
-
-	public async refreshContent(): Promise<void> {
-		for (const child of this.children()) {
-			await child.refreshContent();
-		}
 	}
 
 	public serialize(): SerializedState {
@@ -323,7 +309,7 @@ export class VFSDirectory extends VFSState {
 	}
 
 	public get fileCount(): number {
-		return this.files.size;
+		return this.files.size - 3; // ignores '', '.', '..'
 	}
 
 	public setItem(name: string, item: VFSState): void {
@@ -497,15 +483,6 @@ export class VFSSymLink extends VFSState {
 		}
 		return link;
 	}
-	public refreshContent(): Promise<void> {
-		if (this.link) {
-			const target = this.getLinkTarget();
-			if (!target) return Promise.resolve();
-			else return target.refreshContent();
-		} else {
-			return super.refreshContent();
-		}
-	}
 
 	public serialize(): SerializedState {
 		return {
@@ -544,7 +521,6 @@ export class VFSFile extends VFSState {
 }
 
 export class VFSServerList extends VFSDirectory {
-	public readonly onRefreshContent = Event.make<VFSState>(false);
 	public readonly onRefreshTree = Event.make<VFSState>(false);
 	/// ftpList -> fire onRefreshTree -> refreshTree -> readTreeNode -> ftpList
 

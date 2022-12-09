@@ -41,23 +41,21 @@ export class TemporalDocument {
 		this.editorFileUri = Uri.file(this.editorFile.fsPath);
 		this.onClose = new Promise((resolve) =>
 			listen(this.editorFileUri.fsPath, () => {
-				this._close();
+				if (this.closed) return;
+				this.closed = true;
+				this.targetFile.quietUnlink();
 				resolve();
 			})
 		);
 	}
 
-	private _close(): void {
-		if (this.closed) return;
-		this.closed = true;
-		this.targetFile.quietUnlink();
-	}
-
 	close(): void {
 		if (this.closed) return;
-		this._close();
-		commands.executeCommand('vscode.open', this.editorFileUri);
+		this.closed = true;
+		// commands.executeCommand('vscode.open', this.editorFileUri);
+		commands.executeCommand('workbench.action.focusActiveEditorGroup');
 		commands.executeCommand('workbench.action.closeActiveEditor');
+		this.targetFile.quietUnlink();
 		fireListen(this.editorFileUri.fsPath);
 	}
 }

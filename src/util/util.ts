@@ -262,3 +262,7 @@ export async function replaceErrorUrlAsync(
 	out += stack.substr(lastIndex);
 	return out;
 }
+
+export function timeout(ms?: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}

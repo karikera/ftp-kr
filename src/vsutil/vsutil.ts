@@ -140,14 +140,15 @@ export const vsutil = {
 		workspace.updateWorkspaceFolders(folders.length, 0, { uri, name });
 	},
 
-	info(info: string, ...items: string[]): Thenable<string | undefined> {
-		return window.showInformationMessage(
+	async info(info: string, ...items: string[]): Promise<string | undefined> {
+		const res = await window.showInformationMessage(
 			info,
 			{
 				modal: true,
 			},
 			...items
 		);
+		return res;
 	},
 
 	async openUri(uri: Uri | string): Promise<void> {

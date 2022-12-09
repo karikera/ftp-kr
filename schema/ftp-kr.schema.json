@@ -1,7 +1,7 @@
 {
-	"allOf": [{"$ref": "server.schema.json"}],
+	"allOf": [{ "$ref": "server.schema.json" }],
 	"type": "object",
-    "properties": {
+	"properties": {
 		"closure": {
 			"deprecationMessage": "Closure Compiler feature is splitted. If you want to use, Please download Closure Compiler extension."
 		},
@@ -13,10 +13,10 @@
 			"description": "alternate servers. It has similar properties with root manifest",
 			"items": {
 				"type": "object",
-				"allOf": [{"$ref": "server.schema.json"}],
+				"allOf": [{ "$ref": "server.schema.json" }],
 				"properties": {
-					"name":{
-						"type":"string",
+					"name": {
+						"type": "string",
 						"description": "Display name for alternate server"
 					}
 				}
@@ -27,25 +27,25 @@
 			"description": "Create ftp-kr.cache.json file to save remote modification (default: true)",
 			"default": true
 		},
-		"followLink":{
+		"followLink": {
 			"type": "boolean",
-			"description":"If it is true, extension will access symlink target or ignore symlink (default: false)",
+			"description": "If it is true, extension will access symlink target or ignore symlink (default: false)",
 			"default": false
 		},
-		"localBasePath":{
+		"localBasePath": {
 			"type": "string",
 			"desciption": "Set local directory to sync (default: workspace root)"
 		},
-        "autoUpload": {
-            "type": "boolean",
-            "description": "Upload file by watcher (default: false)",
+		"autoUpload": {
+			"type": "boolean",
+			"description": "Upload file by watcher (default: false)",
 			"default": false
-        },
-        "autoDelete": {
-            "type": "boolean",
-            "description": "Delete FTP file on delete in workspace (default: false)",
+		},
+		"autoDelete": {
+			"type": "boolean",
+			"description": "Delete FTP file on delete in workspace (default: false)",
 			"default": false
-        },
+		},
 		"autoDownload": {
 			"type": "boolean",
 			"description": "It will check modification of every opening and download if it modified (default: false)",
@@ -72,26 +72,23 @@
 			"default": false
 		},
 		"ignoreJsonUploadCaution": {
-			"type":"boolean",
+			"type": "boolean",
 			"description": "ignore caution when ftp-kr.json is uploaded",
 			"default:": false
 		},
 		"noticeFileCount": {
-			"type":"number",
+			"type": "number",
 			"description": "Notice with task.json if upload/download file is too many",
 			"default": 10
 		},
 		"logLevel": {
-			"enum": [
-				"VERBOSE",
-				"NORMAL"
-			],
-            "description": "Log level setting for debug (default: NORMAL)",
+			"enum": ["VERBOSE", "NORMAL"],
+			"description": "Log level setting for debug (default: NORMAL)",
 			"default": "NORMAL"
 		},
 		"dontOpenOutput": {
 			"type": "boolean",
-            "description": "Open the output window with some commands (default: false)",
+			"description": "Open the output window with some commands (default: false)",
 			"default": false
 		},
 		"ignore": {
@@ -103,17 +100,14 @@
 			}
 		},
 		"includeAllAlwaysForAllCommand": {
-			"type":"boolean",
+			"type": "boolean",
 			"description": "Always put all files for Download All & Upload All. It skips the modification check",
 			"default:": false
 		},
 		"showReportMessage": {
-			"type":[
-				"number",
-				"boolean"
-			],
+			"type": ["number", "boolean"],
 			"description": "Report the completion message with the modal if the task time is longer than 1000 ms. if it's a number it changes the timeout duration.",
 			"default:": true
 		}
-    }
+	}
 }

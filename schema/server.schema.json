@@ -1,12 +1,19 @@
 {
-	"type":"object",
-	"properties": {	
+	"type": "object",
+	"properties": {
 		"protocol": {
-			"enum": ["ftp","sftp","ftps"],
+			"enum": ["ftp", "sftp", "ftps"],
 			"description": "Connection protocol"
 		},
 		"sslProtocol": {
-			"enum": ["SSLv23_method", "TLSv1_2_method", "TLSv1_1_method", "TLSv1_method", "SSLv3_method", "SSLv2_method"],
+			"enum": [
+				"SSLv23_method",
+				"TLSv1_2_method",
+				"TLSv1_1_method",
+				"TLSv1_method",
+				"SSLv3_method",
+				"SSLv2_method"
+			],
 			"default": "SSLv23_method",
 			"description": " Optional SSL method to use, default is \"SSLv23_method\". The possible values are listed as https://www.openssl.org/docs/man1.0.2/ssl/ssl.html#DEALING-WITH-PROTOCOL-METHODS , use the function names as strings. For example, \"SSLv3_method\" to force SSL version 3."
 		},
@@ -25,12 +32,12 @@
 			"type": "string",
 			"description": "FTP/SFTP password"
 		},
-		"secure":{
+		"secure": {
 			"type": "boolean",
 			"default": false,
 			"description": "Set to true for both control and data connection encryption. (default: false)"
 		},
-		"keepPasswordInMemory":{
+		"keepPasswordInMemory": {
 			"type": "boolean",
 			"default": false,
 			"description": "Keep password into internal variable for reconnection (default: false)"

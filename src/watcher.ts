@@ -1,4 +1,3 @@
-
 import { File } from 'krfile';
 import { Disposable, workspace } from 'vscode';
 import { Config } from './config';
@@ -16,71 +15,78 @@ enum WatcherMode {
 	FULL,
 }
 
-function ignoreVsCodeDir(config:FtpKrConfigProperties):void
-{
-	for (var i=0;i<config.ignore.length;)
-	{
+function ignoreVsCodeDir(config: FtpKrConfigProperties): void {
+	for (let i = 0; i < config.ignore.length; ) {
 		const ignore = config.ignore[i];
-		if (ignore === '/.vscode')
-		{
+		if (ignore === '/.vscode') {
 			config.ignore.splice(i, 1);
-		}
-		else if(ignore.startsWith('/.vscode/'))
-		{
+		} else if (ignore.startsWith('/.vscode/')) {
 			config.ignore.splice(i, 1);
-		}
-		else
-		{
+		} else {
 			i++;
 		}
 	}
 	config.ignore.push('/.vscode');
 }
 
-export class WorkspaceWatcher implements WorkspaceItem
-{
-	private watcherQueue : Promise<void> = Promise.resolve();
+export class WorkspaceWatcher implements WorkspaceItem {
+	private watcherQueue: Promise<void> = Promise.resolve();
 	private watcher: LazyWatcher | null = null;
 	private openWatcher: Disposable | null = null;
-	
-	private watcherMode:WatcherMode = WatcherMode.NONE;
-	private openWatcherMode = false;
-	
-	private readonly logger:Logger
-	private readonly config:Config;
-	private readonly scheduler:Scheduler;
-	private readonly ftp:FtpSyncManager;
 
-	constructor(public readonly workspace:Workspace)
-	{
+	private watcherMode: WatcherMode = WatcherMode.NONE;
+	private openWatcherMode = false;
+
+	private readonly logger: Logger;
+	private readonly config: Config;
+	private readonly scheduler: Scheduler;
+	private readonly ftp: FtpSyncManager;
+
+	constructor(public readonly workspace: Workspace) {
 		this.logger = this.workspace.query(Logger);
 		this.config = this.workspace.query(Config);
 		this.scheduler = this.workspace.query(Scheduler);
 		this.ftp = this.workspace.query(FtpSyncManager);
 		this.attachWatcher(WatcherMode.CONFIG);
 
-		this.config.onLoad(async(task)=>{
-			await this.ftp.onLoadConfig(task);
-			this.attachWatcher(this.config.autoUpload || this.config.autoDelete ? WatcherMode.FULL : WatcherMode.CONFIG);
+		this.config.onLoad(async (task) => {
+			await this.ftp.onLoadConfig();
+			this.attachWatcher(
+				this.config.autoUpload || this.config.autoDelete
+					? WatcherMode.FULL
+					: WatcherMode.CONFIG
+			);
 			this.attachOpenWatcher(this.config.autoDownload);
-			
-			if (!this.config.ignoreJsonUploadCaution && !this.config.checkIgnorePath(this.config.path))
-			{
-				this.logger.errorConfirm("ftp-kr CAUTION: ftp-kr.json will be uploaded to remote. Are you sure?", "Delete and Ignore /.vscode path", "It's OK").then(async(selected)=>{
-					switch (selected)
-					{
-					case "Delete and Ignore /.vscode path":
-						this.config.updateIgnorePath();
-						for(const server of this.ftp.servers.values()) {
-							await server.ftpDelete(this.config.basePath.child('.vscode'), task);
+
+			if (
+				!this.config.ignoreJsonUploadCaution &&
+				!this.config.checkIgnorePath(this.config.path)
+			) {
+				this.logger
+					.errorConfirm(
+						'ftp-kr CAUTION: ftp-kr.json will be uploaded to remote. Are you sure?',
+						'Delete and Ignore /.vscode path',
+						"It's OK"
+					)
+					.then(async (selected) => {
+						switch (selected) {
+							case 'Delete and Ignore /.vscode path':
+								this.config.updateIgnorePath();
+								for (const server of this.ftp.servers.values()) {
+									await server.ftpDelete(
+										this.config.getBasePath().child('.vscode'),
+										task
+									);
+								}
+								await this.config.modifySave((cfg) => ignoreVsCodeDir(cfg));
+								break;
+							case "It's OK":
+								await this.config.modifySave(
+									(cfg) => (cfg.ignoreJsonUploadCaution = true)
+								);
+								break;
 						}
-						await this.config.modifySave(cfg=>ignoreVsCodeDir(cfg));
-						break;
-					case "It's OK":
-						await this.config.modifySave(cfg=>cfg.ignoreJsonUploadCaution = true);
-						break;
-					}
-				});
+					});
 			}
 			if (this.ftp.mainServer === null) throw Error('MainServer not found');
 			return this.ftp.mainServer.init(task);
@@ -94,28 +100,26 @@ export class WorkspaceWatcher implements WorkspaceItem
 			this.attachOpenWatcher(false);
 			this.attachWatcher(WatcherMode.NONE);
 		});
-		
-		this.config.path.exists().then(exists=>{
-			if (exists)
-			{
+
+		this.config.path.exists().then((exists) => {
+			if (exists) {
 				this.attachWatcher(WatcherMode.CONFIG);
 				this.config.load();
 			}
 		});
 	}
 
-	dispose():void {
+	dispose(): void {
 		this.attachWatcher(WatcherMode.NONE);
 	}
 
 	async processWatcher(
-		path: File, 
-		workFunc: (task:Task, path: File) => Promise<any>, 
+		path: File,
+		workFunc: (task: Task, path: File) => Promise<unknown>,
 		workName: string,
-		autoSync: boolean): Promise<void>
-	{
-		try
-		{
+		autoSync: boolean
+	): Promise<void> {
+		try {
 			if (path.fsPath == this.config.path.fsPath) {
 				this.logger.show();
 				this.config.load();
@@ -123,13 +127,12 @@ export class WorkspaceWatcher implements WorkspaceItem
 			}
 			if (!autoSync) return;
 			if (this.config.checkIgnorePath(path)) return;
-			if (!path.in(this.config.basePath)) return;
+			if (!path.in(this.config.getBasePath())) return;
 			await this.scheduler.taskMust(
-				workName+' '+this.config.workpath(path), 
-				task => workFunc(task, path)
+				workName + ' ' + this.config.workpath(path),
+				(task) => workFunc(task, path)
 			);
-		}
-		catch (err) {
+		} catch (err) {
 			processError(this.logger, err);
 		}
 	}
@@ -138,37 +141,32 @@ export class WorkspaceWatcher implements WorkspaceItem
 		if (this.openWatcherMode === mode) return;
 		this.openWatcherMode = mode;
 		if (mode) {
-			this.openWatcher = workspace.onDidOpenTextDocument(e => {
+			this.openWatcher = workspace.onDidOpenTextDocument((e) => {
 				try {
 					const path = new File(e.uri.fsPath);
-					var workspace:Workspace;
-					try
-					{
+					let workspace: Workspace;
+					try {
 						workspace = Workspace.fromFile(path);
-					}
-					catch (err)
-					{
+					} catch (err) {
 						return;
 					}
 					const config = workspace.query(Config);
 					const scheduler = workspace.query(Scheduler);
-					const logger = workspace.query(Logger);
-	
+					// const logger = workspace.query(Logger);
+
 					if (!config.autoDownload) return;
 					if (config.checkIgnorePath(path)) return;
-					if (!path.in(this.config.basePath)) return;
-					scheduler.taskMust(
-						'download '+config.workpath(path),
-						task => this.ftp.targetServer.ftpDownloadWithCheck(path, task))
-						.catch(err=>processError(this.logger, err)
-					);
-				}
-				catch (err) {
+					if (!path.in(this.config.getBasePath())) return;
+					scheduler
+						.taskMust('download ' + config.workpath(path), (task) =>
+							this.ftp.targetServer.ftpDownloadWithCheck(path, task)
+						)
+						.catch((err) => processError(this.logger, err));
+				} catch (err) {
 					processError(this.logger, err);
 				}
 			});
-		}
-		else {
+		} else {
 			if (this.openWatcher) {
 				this.openWatcher.dispose();
 				this.openWatcher = null;
@@ -176,33 +174,31 @@ export class WorkspaceWatcher implements WorkspaceItem
 		}
 	}
 
-	async uploadCascade(path: File):Promise<void>
-	{
+	async uploadCascade(path: File): Promise<void> {
 		const workspace = Workspace.fromFile(path);
 		const config = workspace.query(Config);
 
-		this.processWatcher(path, 
-			(task, path)=>this.ftp.targetServer.ftpUpload(
-				path, task, {ignoreNotExistFile: true, cancelWhenLatest: true}
-			), 
-			'upload', !!config.autoUpload
+		this.processWatcher(
+			path,
+			(task, path) =>
+				this.ftp.targetServer.ftpUpload(path, task, {
+					ignoreNotExistFile: true,
+					cancelWhenLatest: true,
+				}),
+			'upload',
+			!!config.autoUpload
 		);
-		try
-		{
+		try {
 			if (!(await path.isDirectory())) return;
-		}
-		catch(err)
-		{
-			if (err.code === 'ENOENT')
-			{
+		} catch (err) {
+			if (err.code === 'ENOENT') {
 				// already deleted
 				return;
 			}
 			throw err;
 		}
 
-		for(const cs of await path.children())
-		{
+		for (const cs of await path.children()) {
 			await this.uploadCascade(cs);
 		}
 	}
@@ -214,56 +210,73 @@ export class WorkspaceWatcher implements WorkspaceItem
 			this.watcher = null;
 		}
 		this.watcherMode = mode;
-		this.logger.verbose('watcherMode = '+WatcherMode[mode]);
+		this.logger.verbose('watcherMode = ' + WatcherMode[mode]);
 
-		var watcherPath:string;
+		let watcherPath: string;
 		switch (this.watcherMode) {
-			case WatcherMode.FULL: watcherPath = this.workspace.fsPath + "/**/*"; break;
-			case WatcherMode.CONFIG: watcherPath = this.config.path.fsPath; break;
-			case WatcherMode.NONE: this.watcher = null; return;
-			default: return;
+			case WatcherMode.FULL:
+				watcherPath = this.workspace.fsPath + '/**/*';
+				break;
+			case WatcherMode.CONFIG:
+				watcherPath = this.config.path.fsPath;
+				break;
+			case WatcherMode.NONE:
+				this.watcher = null;
+				return;
+			default:
+				return;
 		}
 
 		this.watcher = new LazyWatcher(watcherPath);
 
-		this.watcher.onDidChange(uri => {
-			this.logger.verbose('watcher.onDidChange: '+uri.fsPath);
-			this.watcherQueue = this.watcherQueue.then(()=>{
-				const path = new File(uri.fsPath);
-				return this.processWatcher(path, 
-					(task, path) => this.ftp.targetServer.ftpUpload(
-						path, task, {
-							ignoreNotExistFile: true, 
-							cancelWhenLatest:true, 
-							whenRemoteModed: this.config.ignoreRemoteModification? 'upload' : 'diff'
-						}
-					),
-					'upload',
-					!!this.config.autoUpload);
-			}).catch(err=>this.logger.error(err));
+		this.watcher.onDidChange((uri) => {
+			this.logger.verbose('watcher.onDidChange: ' + uri.fsPath);
+			this.watcherQueue = this.watcherQueue
+				.then(() => {
+					const path = new File(uri.fsPath);
+					return this.processWatcher(
+						path,
+						(task, path) =>
+							this.ftp.targetServer.ftpUpload(path, task, {
+								ignoreNotExistFile: true,
+								cancelWhenLatest: true,
+								whenRemoteModed: this.config.ignoreRemoteModification
+									? 'upload'
+									: 'diff',
+							}),
+						'upload',
+						!!this.config.autoUpload
+					);
+				})
+				.catch((err) => this.logger.error(err));
 		});
-		this.watcher.onDidCreate(uri => {
+		this.watcher.onDidCreate((uri) => {
 			const path = new File(uri.fsPath);
 			const workspace = Workspace.fromFile(path);
 			const logger = workspace.query(Logger);
-			logger.verbose('watcher.onDidCreate: '+uri.fsPath);
-			this.watcherQueue = this.watcherQueue.then(()=>{
-				return this.uploadCascade(path);
-			}).catch(err=>logger.error(err));
+			logger.verbose('watcher.onDidCreate: ' + uri.fsPath);
+			this.watcherQueue = this.watcherQueue
+				.then(() => {
+					return this.uploadCascade(path);
+				})
+				.catch((err) => logger.error(err));
 		});
-		this.watcher.onDidDelete(uri => {
+		this.watcher.onDidDelete((uri) => {
 			const path = new File(uri.fsPath);
 			const workspace = Workspace.fromFile(path);
 			const logger = workspace.query(Logger);
 			const config = workspace.query(Config);
-			logger.verbose('watcher.onDidDelete: '+uri.fsPath);
-			this.watcherQueue = this.watcherQueue.then(()=>{
-				return this.processWatcher(path, 
-					(task, path)=>this.ftp.targetServer.ftpDelete(path, task), 
-					'remove',
-					!!config.autoDelete);
-			}).catch(err=>logger.error(err));
+			logger.verbose('watcher.onDidDelete: ' + uri.fsPath);
+			this.watcherQueue = this.watcherQueue
+				.then(() => {
+					return this.processWatcher(
+						path,
+						(task, path) => this.ftp.targetServer.ftpDelete(path, task),
+						'remove',
+						!!config.autoDelete
+					);
+				})
+				.catch((err) => logger.error(err));
 		});
 	}
-
 }

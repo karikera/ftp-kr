@@ -1,84 +1,84 @@
 {
 	"type": "object",
 	"properties": {
-		"host":{
+		"host": {
 			"type": "string",
 			"description": "Hostname or IP address of the server."
 		},
-		"port":{
+		"port": {
 			"type": "number",
 			"description": "Port number of the server."
 		},
-		"forceIPv4":{
+		"forceIPv4": {
 			"type": "boolean",
 			"description": "Only connect via resolved IPv4 address for `host`."
 		},
-		"forceIPv6":{
+		"forceIPv6": {
 			"type": "boolean",
 			"description": "Only connect via resolved IPv6 address for `host`."
 		},
-		"hostHash":{
-			"enum": ["md5","sha1"],
+		"hostHash": {
+			"enum": ["md5", "sha1"],
 			"description": "The host's key is hashed using this method and passed to `hostVerifier`."
 		},
-		"username":{
+		"username": {
 			"type": "string",
 			"description": "Username for authentication."
 		},
-		"password":{
+		"password": {
 			"type": "string",
 			"description": "Password for password-based user authentication."
 		},
-		"agent":{
+		"agent": {
 			"type": "string",
 			"description": "Path to ssh-agent's UNIX socket for ssh-agent-based user authentication (or 'pageant' when using Pagent on Windows)."
 		},
-		"privateKey":{
+		"privateKey": {
 			"type": "string",
 			"description": "Buffer or string that contains a private key for either key-based or hostbased user authentication (OpenSSH format)."
 		},
-		"passphrase":{
+		"passphrase": {
 			"type": "string",
 			"description": "For an encrypted private key, this is the passphrase used to decrypt it."
 		},
-		"localHostname":{
+		"localHostname": {
 			"type": "string",
 			"description": "Along with `localUsername` and `privateKey`, set this to a non-empty string for hostbased user authentication."
 		},
-		"localUsername":{
+		"localUsername": {
 			"type": "string",
 			"description": "Along with `localHostname` and `privateKey`, set this to a non-empty string for hostbased user authentication."
 		},
-		"tryKeyboard":{
+		"tryKeyboard": {
 			"type": "boolean",
 			"description": "Try keyboard-interactive user authentication if primary user authentication method fails."
 		},
-		"keepaliveInterval":{
+		"keepaliveInterval": {
 			"type": "number",
 			"description": "How often (in milliseconds) to send SSH-level keepalive packets to the server. Set to 0 to disable."
 		},
-		"keepaliveCountMax":{
+		"keepaliveCountMax": {
 			"type": "number",
 			"description": "How many consecutive, unanswered SSH-level keepalive packets that can be sent to the server before disconnection."
 		},
-		"readyTimeout":{
+		"readyTimeout": {
 			"type": "number",
 			"description": "* How long (in milliseconds) to wait for the SSH handshake to complete."
 		},
-		"strictVendor":{
+		"strictVendor": {
 			"type": "boolean",
 			"description": "Performs a strict server vendor check before sending vendor-specific requests."
 		},
-		"agentForward":{
+		"agentForward": {
 			"type": "boolean",
 			"description": "Set to `true` to use OpenSSH agent forwarding (`auth-agent@openssh.com`) for the life of the connection."
 		},
-		"algorithms":{
+		"algorithms": {
 			"type": "object",
 			"description": "Explicit overrides for the default transport layer algorithms used for the connection.",
 			"properties": {
-				"kex":{
-					"type":"array",
+				"kex": {
+					"type": "array",
 					"items": {
 						"enum": [
 							"ecdh-sha2-nistp256",
@@ -92,8 +92,8 @@
 					},
 					"description": "Key exchange algorithms."
 				},
-				"cipher":{
-					"type":"array",
+				"cipher": {
+					"type": "array",
 					"items": {
 						"enum": [
 							"aes128-ctr",
@@ -116,8 +116,8 @@
 					},
 					"description": "Ciphers."
 				},
-				"serverHostKey":{
-					"type":"array",
+				"serverHostKey": {
+					"type": "array",
 					"items": {
 						"enum": [
 							"ssh-rsa",
@@ -129,8 +129,8 @@
 					},
 					"description": "Server host key formats. In server mode, this list must agree with the host private keys set in the hostKeys config setting."
 				},
-				"hmac":{
-					"type":"array",
+				"hmac": {
+					"type": "array",
 					"items": {
 						"enum": [
 							"hmac-sha2-256",
@@ -146,14 +146,10 @@
 					},
 					"description": "(H)MAC algorithms."
 				},
-				"compress":{
-					"type":"array",
+				"compress": {
+					"type": "array",
 					"items": {
-						"enum":[
-							"none",
-							"zlib@openssh.com",
-							"zlib"
-						]
+						"enum": ["none", "zlib@openssh.com", "zlib"]
 					},
 					"description": "Compression algorithms."
 				}

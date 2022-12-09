@@ -1,17 +1,15 @@
 {
-    "entry": {
-        "./src/index.ts": "./out/index.bundle.js",
+	"entry": {
+		"./src/index.ts": "./out/index.bundle.js",
 		"./src/tool/schema_to_md.ts": "./out/schema_to_md.js"
-    },
+	},
 	"compileOnSave": true,
 	"bundlerOptions": {
 		"bundleExternals": true,
-        "externals": ["vscode"]
+		"externals": ["vscode"]
 	},
 	"compilerOptions": {
-		"lib": [
-			"ES2018"
-		],
+		"lib": ["ES2018"],
 		"module": "commonjs",
 		"target": "ES2018",
 		"outDir": "out",

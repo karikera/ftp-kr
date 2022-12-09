@@ -1,154 +1,132 @@
-
 import { File } from 'krfile';
 import { Client, ConnectConfig, SFTPWrapper } from 'ssh2';
-import { LoadError } from '../ftpmgr';
 import { FileInfo } from '../util/fileinfo';
 import { ServerConfig } from '../util/serverinfo';
 import { merge, promiseErrorWrap } from '../util/util';
 import { FileInterface, FtpErrorCode, NOT_CREATED } from './fileinterface';
 import { Workspace } from './ws';
 
+export class SftpConnection extends FileInterface {
+	private client: Client | null = null;
+	private sftp: SFTPWrapper | null = null;
 
-export class SftpConnection extends FileInterface
-{
-	private client:Client|null = null;
-	private sftp:SFTPWrapper|null = null;
-
-	constructor(workspace:Workspace, config:ServerConfig)
-	{
+	constructor(workspace: Workspace, config: ServerConfig) {
 		super(workspace, config);
 	}
-	
-	connected():boolean
-	{
+
+	connected(): boolean {
 		return this.client !== null;
 	}
 
-	async _connect(password?:string):Promise<void>
-	{
-		try
-		{
+	async _connect(password?: string): Promise<void> {
+		try {
 			if (this.client) throw Error('Already created');
-			const client = this.client = new Client;
-			if (this.config.showGreeting)
-			{
-				client.on('banner', (msg:string)=>this.log(msg));
+			const client = (this.client = new Client());
+			if (this.config.showGreeting) {
+				client.on('banner', (msg: string) => this.log(msg));
 			}
 
-			var options:ConnectConfig = {};
+			let options: ConnectConfig = {};
 			const config = this.config;
-			if (config.privateKey)
-			{
-				var keyPath = config.privateKey;
-				const keybuf = await this.workspace.child('.vscode',keyPath).open();
+			if (config.privateKey) {
+				const keyPath = config.privateKey;
+				const keybuf = await this.workspace.child('.vscode', keyPath).open();
 				options.privateKey = keybuf;
 				options.passphrase = config.passphrase;
-			}
-			else
-			{
+			} else {
 				options.password = password;
 			}
 			options.host = config.host;
-			options.port = config.port ? config.port : 22,
-			options.username = config.username;
+			(options.port = config.port ? config.port : 22),
+				(options.username = config.username);
 			// options.hostVerifier = (keyHash:string) => false;
-			
+
 			options = merge(options, config.sftpOverride);
-	
+
 			return await new Promise<void>((resolve, reject) => {
-				client.on('ready', resolve)
-				.on('error', reject)
-				.connect(options);
+				client.on('ready', resolve).on('error', reject).connect(options);
 			});
-		}
-		catch(err)
-		{
+		} catch (err) {
 			this._endSftp();
-			if (this.client)
-			{
+			if (this.client) {
 				this.client.destroy();
 				this.client = null;
 			}
-			switch (err.code)
-			{
-			case 'ECONNREFUSED':
-				err.ftpCode = FtpErrorCode.CONNECTION_REFUSED;
-				break;
-			default:
-				switch (err.message)
-				{
-				case 'Login incorrect.':
-				case 'All configured authentication methods failed':
-					err.ftpCode = FtpErrorCode.AUTH_FAILED;
+			switch (err.code) {
+				case 'ECONNREFUSED':
+					err.ftpCode = FtpErrorCode.CONNECTION_REFUSED;
 					break;
-				}
+				default:
+					switch (err.message) {
+						case 'Login incorrect.':
+						case 'All configured authentication methods failed':
+							err.ftpCode = FtpErrorCode.AUTH_FAILED;
+							break;
+					}
 			}
 			throw err;
 		}
 	}
-	
-	disconnect():void
-	{
+
+	disconnect(): void {
 		this._endSftp();
-		if (this.client)
-		{
+		if (this.client) {
 			this.client.end();
 			this.client = null;
 		}
 	}
 
-	terminate():void
-	{
+	terminate(): void {
 		this._endSftp();
-		if (this.client)
-		{
+		if (this.client) {
 			this.client.destroy();
 			this.client = null;
 		}
 	}
 
-	exec(command:string):Promise<string>
-	{
-		return promiseErrorWrap(new Promise((resolve, reject)=>{
-			if (!this.client) return reject(Error(NOT_CREATED));
-			this._endSftp();
-			this.client.exec(command, (err, stream)=>{
-				if (err) return reject(err);
-				var data = '';
-				var errs = '';
-				stream.on('data', (stdout:string|undefined, stderr:string|undefined)=>{
-					if (stdout) data += stdout;
-					if (stderr) errs += stderr;
-				})
-				.on('error', (err:any)=>reject(err))
-				.on('exit', (code, signal)=>{
-					if (errs) reject(Error(errs));
-					else resolve(data.trim());
-					stream.end();
+	exec(command: string): Promise<string> {
+		return promiseErrorWrap(
+			new Promise((resolve, reject) => {
+				if (!this.client) return reject(Error(NOT_CREATED));
+				this._endSftp();
+				this.client.exec(command, (err, stream) => {
+					if (err) return reject(err);
+					let data = '';
+					let errs = '';
+					stream
+						.on(
+							'data',
+							(stdout: string | undefined, stderr: string | undefined) => {
+								if (stdout) data += stdout;
+								if (stderr) errs += stderr;
+							}
+						)
+						.on('error', (err: any) => reject(err))
+						.on('exit', () => {
+							if (errs) reject(Error(errs));
+							else resolve(data.trim());
+							stream.end();
+						});
 				});
-			});
-		}));
+			})
+		);
 	}
 
-	pwd():Promise<string>
-	{
+	pwd(): Promise<string> {
 		return this.exec('pwd');
 	}
 
-	private _endSftp():void
-	{
-		if (this.sftp)
-		{
+	private _endSftp(): void {
+		if (this.sftp) {
 			this.sftp.end();
 			this.sftp = null;
 		}
 	}
-	private _getSftp():Promise<SFTPWrapper>
-	{
-		return new Promise((resolve, reject)=>{
+	private _getSftp(): Promise<SFTPWrapper> {
+		return new Promise((resolve, reject) => {
 			if (this.sftp) return resolve(this.sftp);
 			if (!this.client) return reject(Error(NOT_CREATED));
-			this.client.sftp((err, sftp)=>{
+			this.client.sftp((err, sftp) => {
 				this.sftp = sftp;
 				if (err) reject(err);
 				else resolve(sftp);
@@ -156,105 +134,95 @@ export class SftpConnection extends FileInterface
 		});
 	}
 
-	private _readLink(ftppath:string):Promise<string>
-	{
-		return this._getSftp()
-		.then(sftp=>new Promise<string>((resolve, reject)=>{
-			sftp.readlink(ftppath, (err, target)=>{
-				if (err) return reject(err);
-				resolve(target);
-			});
-		}));
+	private _readLink(ftppath: string): Promise<string> {
+		return this._getSftp().then(
+			(sftp) =>
+				new Promise<string>((resolve, reject) => {
+					sftp.readlink(ftppath, (err, target) => {
+						if (err) return reject(err);
+						resolve(target);
+					});
+				})
+		);
 	}
 
-	private _rmdirSingle(ftppath:string):Promise<void>
-	{
-		return this._getSftp()
-		.then(sftp=>new Promise<void>((resolve, reject) => {
-			return sftp.rmdir(ftppath, (err) => {
-				if (err)
-				{
-					if (err.code === 2) err.ftpCode = FtpErrorCode.FILE_NOT_FOUND;
-					reject(err);
-				}
-				else
-				{
-					resolve();
-				}
-			});
-		}));
+	private _rmdirSingle(ftppath: string): Promise<void> {
+		return this._getSftp().then(
+			(sftp) =>
+				new Promise<void>((resolve, reject) => {
+					return sftp.rmdir(ftppath, (err) => {
+						if (err) {
+							if (err.code === 2) err.ftpCode = FtpErrorCode.FILE_NOT_FOUND;
+							reject(err);
+						} else {
+							resolve();
+						}
+					});
+				})
+		);
 	}
 
-	async _rmdir(ftppath:string):Promise<void>
-	{
+	async _rmdir(ftppath: string): Promise<void> {
 		const list = await this.list(ftppath);
-		if (list.length === 0)
-		{
+		if (list.length === 0) {
 			return await this._rmdirSingle(ftppath);
 		}
 
 		const parentPath = ftppath.endsWith('/') ? ftppath : ftppath + '/';
-		
-		for (const item of list)
-		{
-			const name = item.name;
-			const subPath:string = name[0] === '/' ? name : parentPath + name;
 
-			if (item.type === 'd')
-			{
-				if (name !== '.' && name !== '..')
-				{
+		for (const item of list) {
+			const name = item.name;
+			const subPath: string = name[0] === '/' ? name : parentPath + name;
+
+			if (item.type === 'd') {
+				if (name !== '.' && name !== '..') {
 					await this.rmdir(subPath);
 				}
-			}
-			else
-			{
+			} else {
 				await this.delete(subPath);
 			}
 		}
 		return this.rmdir(ftppath);
 	}
 
-	_delete(ftppath:string):Promise<void>
-	{
-		return this._getSftp()
-		.then(sftp=>new Promise<void>((resolve, reject) => {
-			sftp.unlink(ftppath, (err) => {
-				if (err) {
-					if (err.code === 2) err.ftpCode = FtpErrorCode.FILE_NOT_FOUND;
-					reject(err);
-					return false;
-				}
-				resolve();
-			});
-		}));	
+	_delete(ftppath: string): Promise<void> {
+		return this._getSftp().then(
+			(sftp) =>
+				new Promise<void>((resolve, reject) => {
+					sftp.unlink(ftppath, (err) => {
+						if (err) {
+							if (err.code === 2) err.ftpCode = FtpErrorCode.FILE_NOT_FOUND;
+							reject(err);
+							return false;
+						}
+						resolve();
+					});
+				})
+		);
 	}
 
-	_mkdirSingle(ftppath:string):Promise<void>
-	{
-		return this._getSftp()
-		.then(sftp=>new Promise<void>((resolve, reject) => {	
-			sftp.mkdir(ftppath, (err) => {
-				if (err)
-				{
-					if (err.code !== 3 && err.code !== 4 && err.code !== 5)
-					{
-						return reject(err);
-					}
-				}
-				resolve();
-			});
-		}));
+	_mkdirSingle(ftppath: string): Promise<void> {
+		return this._getSftp().then(
+			(sftp) =>
+				new Promise<void>((resolve, reject) => {
+					sftp.mkdir(ftppath, (err) => {
+						if (err) {
+							if (err.code !== 3 && err.code !== 4 && err.code !== 5) {
+								return reject(err);
+							}
+						}
+						resolve();
+					});
+				})
+		);
 	}
 
-	async _mkdir(ftppath:string):Promise<void>
-	{
-		var idx = 0;
-		for (;;)
-		{
+	async _mkdir(ftppath: string): Promise<void> {
+		let idx = 0;
+		for (;;) {
 			const find = ftppath.indexOf('/', idx);
 			if (find === -1) break;
-			idx = find+1;
+			idx = find + 1;
 			const parentpath = ftppath.substr(0, find);
 			if (!parentpath) continue;
 			await this._mkdirSingle(parentpath);
@@ -262,116 +230,121 @@ export class SftpConnection extends FileInterface
 		await this._mkdirSingle(ftppath);
 	}
 
-	_put(localpath:File, ftppath:string):Promise<void>
-	{
+	_put(localpath: File, ftppath: string): Promise<void> {
+		return this._getSftp().then(
+			(sftp) =>
+				new Promise<void>((resolve, reject) => {
+					sftp.fastPut(localpath.fsPath, ftppath, (err) => {
+						if (err) {
+							if (err.code === 2) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
+							reject(err);
+							return;
+						}
+						resolve();
+					});
+				})
+		);
+	}
+
+	_write(buffer: Buffer, ftppath: string): Promise<void> {
+		return this._getSftp().then(
+			(sftp) =>
+				new Promise<void>((resolve, reject) => {
+					sftp.writeFile(ftppath, buffer, (err) => {
+						if (err) {
+							if (err.code === 2) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
+							reject(err);
+							return;
+						}
+						resolve();
+					});
+				})
+		);
+	}
+
+	_get(ftppath: string): Promise<NodeJS.ReadableStream> {
 		return this._getSftp()
-		.then(sftp=>new Promise<void>((resolve, reject) => {
-			sftp.fastPut(localpath.fsPath, ftppath, (err) => {
-				if (err)
-				{
-					if (err.code === 2) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
-					reject(err);
-					return;
-				}
-				resolve();
+			.then(
+				(sftp) =>
+					new Promise<NodeJS.ReadableStream>((resolve) => {
+						const stream = sftp.createReadStream(ftppath, {
+							encoding: <any>null,
+						});
+						resolve(stream);
+					})
+			)
+			.catch((err) => {
+				if (err.code === 2) err.ftpCode = FtpErrorCode.FILE_NOT_FOUND;
+				else if (err.code === 550) err.ftpCode = FtpErrorCode.FILE_NOT_FOUND;
+				throw err;
 			});
-		}));
 	}
 
-	_write(buffer:Buffer, ftppath:string):Promise<void>
-	{
-		return this._getSftp()
-		.then(sftp=>new Promise<void>((resolve, reject) => {
-			sftp.writeFile(ftppath, buffer, (err) => {
-				if (err)
-				{
-					if (err.code === 2) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
-					reject(err);
-					return;
-				}
-				resolve();
-			});
-		}));
+	_list(ftppath: string): Promise<FileInfo[]> {
+		return this._getSftp().then(
+			(sftp) =>
+				new Promise<FileInfo[]>((resolve, reject) => {
+					sftp.readdir(ftppath, (err, list) => {
+						if (err) {
+							if (err.code === 2) return resolve([]);
+							else if (err.code === 550) return resolve([]);
+							else reject(err);
+							return;
+						}
+
+						if (!ftppath.endsWith('/')) ftppath += '/';
+
+						// reset file info
+						const nlist: FileInfo[] = new Array(list.length);
+						for (let i = 0; i < list.length; i++) {
+							const item = list[i];
+							const to = new FileInfo();
+							to.type = <any>item.longname.substr(0, 1);
+							to.name = item.filename;
+							to.date = item.attrs.mtime * 1000;
+							to.size = +item.attrs.size;
+							// const reg = /-/gi;
+							// accessTime: item.attrs.atime * 1000,
+							// rights: {
+							// 	user: item.longname.substr(1, 3).replace(reg, ''),
+							// 	group: item.longname.substr(4,3).replace(reg, ''),
+							// 	other: item.longname.substr(7, 3).replace(reg, '')
+							// },
+							// owner: item.attrs.uid,
+							// group: item.attrs.gid
+							nlist[i] = to;
+						}
+						resolve(nlist);
+					});
+				})
+		);
 	}
 
-	_get(ftppath:string):Promise<NodeJS.ReadableStream>
-	{
-		return this._getSftp()
-		.then(sftp=>new Promise<NodeJS.ReadableStream>((resolve) => {
-			const stream = sftp.createReadStream(ftppath, {encoding:<any>null});
-			resolve(stream);
-		}))
-		.catch(err=>{
-			if (err.code === 2) err.ftpCode = FtpErrorCode.FILE_NOT_FOUND;
-			else if(err.code === 550) err.ftpCode = FtpErrorCode.FILE_NOT_FOUND;
-			throw err;
-		});
-	}
-
-	_list(ftppath:string):Promise<FileInfo[]>
-	{
-		return this._getSftp()
-		.then(sftp=>new Promise<FileInfo[]>((resolve, reject) => {
-			sftp.readdir(ftppath, (err, list) => {
-				if (err) {
-					if (err.code === 2) return resolve([]);
-					else if(err.code === 550) return resolve([]);
-					else reject(err);
-					return;
-				}
-
-				if (!ftppath.endsWith('/')) ftppath += '/';
-
-				// reset file info
-				const nlist:FileInfo[] = new Array(list.length);
-				for (var i=0;i<list.length;i++)
-				{
-					const item = list[i];
-					const to = new FileInfo;
-					to.type = <any>item.longname.substr(0, 1);
-					to.name = item.filename;
-					to.date = item.attrs.mtime * 1000;
-					to.size = +item.attrs.size;
-					// const reg = /-/gi;
-					// accessTime: item.attrs.atime * 1000,
-					// rights: {
-					// 	user: item.longname.substr(1, 3).replace(reg, ''),
-					// 	group: item.longname.substr(4,3).replace(reg, ''),
-					// 	other: item.longname.substr(7, 3).replace(reg, '')
-					// },
-					// owner: item.attrs.uid,
-					// group: item.attrs.gid
-					nlist[i] = to;
-				}
-				resolve(nlist);
-			});
-		}));
-	}
-
-	_readlink(fileinfo:FileInfo, ftppath:string):Promise<string>
-	{
-		if (fileinfo.link)
-		{
+	_readlink(fileinfo: FileInfo, ftppath: string): Promise<string> {
+		if (fileinfo.link) {
 			return Promise.resolve(fileinfo.link);
 		}
-		return this._getSftp()
-		.then(sftp=>new Promise<string>((resolve, reject)=>{
-			sftp.readlink(ftppath, (err, target)=>{
-				if (err) return reject(err);
-				fileinfo.link = target;
-				resolve(target);
-			});
-		}));
+		return this._getSftp().then(
+			(sftp) =>
+				new Promise<string>((resolve, reject) => {
+					sftp.readlink(ftppath, (err, target) => {
+						if (err) return reject(err);
+						fileinfo.link = target;
+						resolve(target);
+					});
+				})
+		);
 	}
 
-	_rename(ftppathFrom:string, ftppathTo:string):Promise<void>
-	{
-		return this._getSftp()
-		.then(sftp=>new Promise<void>((resolve, reject) => {
-			sftp.rename(ftppathFrom, ftppathTo, (err) => {
-				if (err) reject(err);
-				else resolve();
-			});
-		}));
+	_rename(ftppathFrom: string, ftppathTo: string): Promise<void> {
+		return this._getSftp().then(
+			(sftp) =>
+				new Promise<void>((resolve, reject) => {
+					sftp.rename(ftppathFrom, ftppathTo, (err) => {
+						if (err) reject(err);
+						else resolve();
+					});
+				})
+		);
 	}
 }

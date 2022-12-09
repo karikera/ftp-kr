@@ -217,7 +217,7 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 		return '/'+workpath;
 	}
 
-	public fromWorkpath(workpath:string, parent:File):File
+	public fromWorkpath(workpath:string, parent?:File):File
 	{
 		if (workpath.startsWith('/'))
 		{
@@ -225,7 +225,7 @@ export class Config extends FtpKrConfig implements WorkspaceItem
 		}
 		else
 		{
-			return parent.child(workpath);
+			return (parent ?? this.basePath).child(workpath);
 		}
 	}
 

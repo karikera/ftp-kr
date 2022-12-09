@@ -111,9 +111,10 @@ class FtpKrConfigClass extends ConfigContainer<FtpKrConfigProperties>
 	private _serverTypeClearing(config:ServerConfig, index:number):void
 	{
 		if (typeof config.remotePath !== 'string') config.remotePath = '.';
-		else if (!config.remotePath) config.remotePath = '.';
-		else if (config.remotePath.endsWith("/"))
-			config.remotePath = ftp_path.normalize(config.remotePath.substr(0, config.remotePath.length-1));
+		else {
+			config.remotePath = ftp_path.normalize(config.remotePath);
+			if (config.remotePath === '/') config.remotePath = '';
+		}
 
 		if (typeof config.protocol !== 'string') config.protocol = "ftp";
 		if (typeof config.fileNameEncoding !== 'string') config.fileNameEncoding = 'utf8';

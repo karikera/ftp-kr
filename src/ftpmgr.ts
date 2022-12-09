@@ -15,6 +15,7 @@ import { Workspace } from './vsutil/ws';
 
 import { Config } from './config';
 import { promiseErrorWrap } from './util/util';
+import { ftp_path } from './util/ftp_path';
 
 function createClient(workspace:Workspace, config:ServerConfig):FileInterface
 {
@@ -180,6 +181,14 @@ export class FtpManager
 		}));
 	}
 
+	public resolvePath(ftppath:string):string {
+		if (ftppath.startsWith('/')) {
+			return ftp_path.normalize(ftppath);
+		} else {
+			return ftp_path.normalize(this.home + '/' + ftppath);
+		}
+	}
+
 	public disconnect():void
 	{
 		this._cancels();
@@ -328,6 +337,7 @@ export class FtpManager
 			});
 		};
 		this.home = await this.client.pwd();
+		if (this.home === '/') this.home = '';
 
 		this._updateDestroyTimeout();
 		return this.client;

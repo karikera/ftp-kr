@@ -12,12 +12,21 @@ import { vsutil } from '../vsutil/vsutil';
 import { Scheduler } from '../vsutil/work';
 import { Workspace } from '../vsutil/ws';
 
-async function getInfoToTransfer(args: CommandArgs):Promise<{workspace:Workspace, server:FtpCacher, file:File, files:File[]}>
+interface SelectedFiles {
+	workspace:Workspace;
+	server:FtpCacher;
+	file:File;
+	files:File[];
+	isFtpExplorer:boolean;
+}
+
+async function getSelectedFiles(args: CommandArgs):Promise<SelectedFiles>
 {
-	var workspace:Workspace;
-	var server:FtpCacher;
-	var file:File;
-	var files:File[];
+	let workspace:Workspace;
+	let server:FtpCacher;
+	let file:File;
+	let files:File[];
+	let isFtpExplorer = false;
 
 	if (args.uri)
 	{
@@ -25,6 +34,7 @@ async function getInfoToTransfer(args: CommandArgs):Promise<{workspace:Workspace
 		workspace = server.workspace;
 		file = server.fromFtpPath(args.uri.path);
 		files = [file];
+		isFtpExplorer = true;
 	}
 	else if (args.treeItem)
 	{
@@ -53,7 +63,7 @@ async function getInfoToTransfer(args: CommandArgs):Promise<{workspace:Workspace
 		file = args.file;
 		files = args.files || [file];
 	}
-	return {workspace, server, file, files};
+	return {workspace, server, file, files, isFtpExplorer};
 }
 
 /**
@@ -111,7 +121,7 @@ function removeChildren(files:File[]):File[]
 export const commands:Command = {
 	async 'ftpkr.upload' (args: CommandArgs)
 	{
-		var {workspace, server, files} = await getInfoToTransfer(args);
+		var {workspace, server, files} = await getSelectedFiles(args);
 		files = removeChildren(files);
 
 		const logger = workspace.query(Logger);
@@ -147,7 +157,7 @@ export const commands:Command = {
 	},
 	async 'ftpkr.download' (args: CommandArgs)
 	{
-		const {workspace, server, files} = await getInfoToTransfer(args);
+		const {workspace, server, files, isFtpExplorer} = await getSelectedFiles(args);
 		
 		const logger = workspace.query(Logger);
 		const config = workspace.query(Config);
@@ -181,7 +191,7 @@ export const commands:Command = {
 	},
 	async 'ftpkr.delete' (args: CommandArgs)
 	{
-		const {workspace, server, files} = await getInfoToTransfer(args);
+		const {workspace, server, files, isFtpExplorer} = await getSelectedFiles(args);
 		
 		const logger = workspace.query(Logger);
 		const config = workspace.query(Config);
@@ -191,9 +201,12 @@ export const commands:Command = {
 		
 		await config.loadTest();
 		
+		const opts:BatchOptions = {
+			skipIgnoreChecking: true,
+		};
 		if (files.length === 1 && !await files[0].isDirectory())
 		{
-			await config.reportTaskCompletionPromise('Delete', server.ftpDelete(files[0], null, {}));
+			await config.reportTaskCompletionPromise('Delete', server.ftpDelete(files[0], null, opts));
 		}
 		else
 		{
@@ -204,13 +217,13 @@ export const commands:Command = {
 			}
 			else
 			{
-				await config.reportTaskCompletionPromise('Delete', server.deleteAll(files, null, {}));
+				await config.reportTaskCompletionPromise('Delete', server.deleteAll(files, null, opts));
 			}
 		}
 	},
 	async 'ftpkr.diff' (args: CommandArgs)
 	{
-		const {workspace, server, file} = await getInfoToTransfer(args);
+		const {workspace, server, file} = await getSelectedFiles(args);
 		
 		const logger = workspace.query(Logger);
 		const config = workspace.query(Config);

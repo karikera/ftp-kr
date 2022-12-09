@@ -1,3 +1,5 @@
+* ftp explorer bug fix
+
 # 1.4.2
 * new option - showReportMessage
 

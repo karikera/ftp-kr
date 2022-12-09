@@ -87,7 +87,7 @@ export abstract class VFSState extends FileInfo
 			file = file.parent;
 		}
 		list.push('');
-		if (list.length === 1) return '/.';
+		if (list.length === 1) return '/';
 		return list.reverse().join('/');
 	}
 

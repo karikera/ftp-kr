@@ -28,6 +28,8 @@ export interface BatchOptions
 	cancelWhenLatest?:boolean; // upload
 	whenRemoteModed?:"upload"|"diff"|"ignore"|"error"; // upload/upload all
 	skipModCheck?:boolean; // upload/download All
+	parentDirectory?:File;
+	skipIgnoreChecking?:boolean; // upload/download/delete All
 }
 
 async function isSameFile(file:VFSState|undefined, local:Stats|File):Promise<boolean>
@@ -198,11 +200,11 @@ export class FtpCacher
 	
 	public init(task?:Task|null):Promise<void>
 	{
-		if (this.remotePath) return Promise.resolve();
+		if (this.remotePath !== undefined) return Promise.resolve();
 		return this.scheduler.task('first connect', async(task) => {
 			await this.ftpList(this.config.remotePath, task);
-			const remotePath = this.config.remotePath;
-			this.remotePath = remotePath.startsWith('/') ? remotePath : ftp_path.normalize(this.ftpmgr.home+'/'+remotePath);
+			this.remotePath = this.ftpmgr.resolvePath(this.config.remotePath);
+			if (this.remotePath === '/') this.remotePath = '';
 			this.home = <VFSDirectory>this.fs.getDirectoryFromPath(this.remotePath, true);
 		}, task);
 	}
@@ -215,13 +217,15 @@ export class FtpCacher
 	public toWorkPathFromFtpPath(ftppath:string):string
 	{
 		ftppath = ftp_path.normalize(ftppath);
-		if (ftppath === this.remotePath) return '.';
+		if (ftppath === '/' && this.remotePath === '') return '/';
+		if (ftppath === '.' && this.remotePath === '.') return '/';
 		if (!ftppath.startsWith(this.remotePath+'/')) throw Error(`${ftppath} is not in remotePath`);
-		return ftppath.substr(this.remotePath.length+1);
+		return ftppath.substr(this.remotePath.length);
 	}
 
 	public toFtpFileFromFtpPath(ftppath:string):VFSState|undefined
 	{
+		if (!ftppath.startsWith(this.remotePath+'/')) throw Error(`${ftppath} is not in remotePath`);
 		return this.fs.getFromPath(ftppath);
 	}
 
@@ -250,7 +254,7 @@ export class FtpCacher
 
 	public fromFtpPath(ftppath:string):File
 	{
-		return this.mainConfig.basePath.child(this.toWorkPathFromFtpPath(ftppath));
+		return this.mainConfig.fromWorkpath(this.toWorkPathFromFtpPath(ftppath));
 	}
 
 	public ftpDelete(path:File, task?:Task|null, options?:BatchOptions):Promise<void>
@@ -263,7 +267,7 @@ export class FtpCacher
 				if (file instanceof VFSDirectory) await this.ftpmgr.rmdir(task, ftppath);
 				else await this.ftpmgr.remove(task, ftppath);
 				this._fsDelete(ftppath);
-			}
+			};
 	
 			var file:VFSState|undefined = this.fs.getFromPath(ftppath);
 			if (file)
@@ -750,7 +754,7 @@ export class FtpCacher
 		}
 	}
 
-	public async runTaskJson(parentDirectory:File, tasklist:TaskList, task:Task, options:BatchOptions):Promise<TaskJsonResult|null>
+	public async runTaskJson(tasklist:TaskList, task:Task, options:BatchOptions):Promise<TaskJsonResult|null>
 	{
 		await this.init(task);
 
@@ -761,7 +765,7 @@ export class FtpCacher
 		for (const workpath in tasklist)
 		{
 			const exec = tasklist[workpath];
-			const path = this.mainConfig.fromWorkpath(workpath, parentDirectory);
+			const path = this.mainConfig.fromWorkpath(workpath, options.parentDirectory);
 			try
 			{
 				switch (exec)
@@ -838,7 +842,7 @@ export class FtpCacher
 		else return null;
 	}
 
-	public async runTaskJsonWithConfirm(taskName:string, tasks: TaskList, taskname: string, parentDirectory:File, options:BatchOptions): Promise<void>
+	public async runTaskJsonWithConfirm(taskName:string, tasks: TaskList, taskname: string, options:BatchOptions): Promise<void>
 	{
 		var confirmer:(()=>Thenable<string|undefined>)|null = null;
 		
@@ -866,7 +870,7 @@ export class FtpCacher
 				doNotRefresh:true, 
 				whenRemoteModed:'upload'
 			};
-			const failed = await this.scheduler.task(taskName, task=>this.runTaskJson(parentDirectory, tasks, task, options));
+			const failed = await this.scheduler.task(taskName, task=>this.runTaskJson(tasks, task, options));
 			if (failed) {
 				tasks = failed.tasks;
 				confirmer = () => this.logger.errorConfirm("ftp-kr Task failed, more information in the output", "Retry");
@@ -877,32 +881,30 @@ export class FtpCacher
 		}
 	}
 
-	public uploadAll(path: File|File[], task?:Task|null, options?:BatchOptions): Promise<void>
+	public uploadAll(path: File|File[], task?:Task|null, options:BatchOptions={}): Promise<void>
 	{
 		return this.scheduler.task('Upload All', async (task) => {
-			if (options == null) options = {};
 			const tasks = await this._makeUploadTask(path, task, options);
 			await Promise.resolve();
-			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, options); // seperated task
+			this.runTaskJsonWithConfirm(task.name, tasks, task.name, options); // seperated task
 		}, task);
 	}
 
-	public downloadAll(path: File|File[], task?:Task|null, options?:BatchOptions): Promise<void>
+	public downloadAll(path: File|File[], task?:Task|null, options:BatchOptions={}): Promise<void>
 	{
 		return this.scheduler.task('Download All', async(task) => {
-			if (options == null) options = {};
 			const tasks = await this._makeDownloadTask(path, task, options)
 			await Promise.resolve();
-			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, options); // seperated task
+			this.runTaskJsonWithConfirm(task.name, tasks, task.name, options); // seperated task
 		}, task);
 	}
 
-	public deleteAll(path:File|File[], task?:Task|null, options?:BatchOptions):Promise<void>
+	public deleteAll(path:File|File[], task?:Task|null, options:BatchOptions={}):Promise<void>
 	{
 		return this.scheduler.task('Delete All', async(task) => {
-			const tasks = await this._makeDeleteTask(path, task)
+			const tasks = await this._makeDeleteTask(path, task, options);
 			await Promise.resolve();
-			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, options || {}); // seperated task
+			this.runTaskJsonWithConfirm(task.name, tasks, task.name, options); // seperated task
 		}, task);
 	}
 
@@ -911,7 +913,7 @@ export class FtpCacher
 		return this.scheduler.task('Clean All', async(task) => {
 			const tasks = await this._makeCleanTask(path, task);
 			await Promise.resolve();
-			this.runTaskJsonWithConfirm(task.name, tasks, task.name, this.mainConfig.basePath, options || {}); // seperated task
+			this.runTaskJsonWithConfirm(task.name, tasks, task.name, options || {}); // seperated task
 		}, task);
 	}
 
@@ -1014,7 +1016,7 @@ export class FtpCacher
 			if (await p.isDirectory())
 			{
 				const list:{[key:string]:Stats} = {};
-				if (!this.mainConfig.checkIgnorePath(p)) {
+				if (options.skipIgnoreChecking || !this.mainConfig.checkIgnorePath(p)) {
 					try
 					{
 						await this._getUpdatedFileInDir(this.home instanceof VFSDirectory ? this.home : undefined, p, list, options);
@@ -1053,7 +1055,7 @@ export class FtpCacher
 		const list:TaskList = {};
 
 		const _make = async(ftpfile:VFSState, file:File, dirlist:File[]):Promise<void>=>{
-			if (this.mainConfig.checkIgnorePath(file)) return;
+			if (!options.skipIgnoreChecking && this.mainConfig.checkIgnorePath(file)) return;
 			if (ftpfile.type === 'l')
 			{
 				if (!this.mainConfig.followLink) return;
@@ -1091,7 +1093,7 @@ export class FtpCacher
 		const dirlist:File[] = [];
 		for(const file of path)
 		{
-			if (this.mainConfig.checkIgnorePath(file)) continue;
+			if (!options.skipIgnoreChecking && this.mainConfig.checkIgnorePath(file)) continue;
 			const ftppath = this.toFtpPath(file);
 			var ftpfile = await this.ftpStat(ftppath, task);
 			if (!ftpfile) continue;
@@ -1116,13 +1118,13 @@ export class FtpCacher
 		return list;
 	}
 
-	private async _makeDeleteTask(path:File|File[], task:Task):Promise<TaskList>
+	private async _makeDeleteTask(path:File|File[], task:Task, options:BatchOptions):Promise<TaskList>
 	{
 		await this.init(task);
 		const list:TaskList = {};
 
 		const _make = async(file:File):Promise<void>=>{
-			if (this.mainConfig.checkIgnorePath(file)) return;
+			if (!options.skipIgnoreChecking && this.mainConfig.checkIgnorePath(file)) return;
 			if (file.fsPath === this.workspace.fsPath)
 			{
 				const ftppath = this.toFtpPath(file);
@@ -1256,7 +1258,7 @@ export class FtpCacher
 	
 	private async _getUpdatedFile(cmp:VFSState|undefined, path:File, list:{[key:string]:Stats}, options:BatchOptions):Promise<void>
 	{
-		if (this.mainConfig.checkIgnorePath(path)) return;
+		if (!options.skipIgnoreChecking && this.mainConfig.checkIgnorePath(path)) return;
 		try
 		{
 			const st = await path.lstat();

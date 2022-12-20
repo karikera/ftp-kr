@@ -43,7 +43,7 @@ class MdWriter {
 	finalize(): string {
 		let md = '';
 		for (const name in this.objects) {
-			md += '## ' + (name || 'ftp-kr.json') + '\n';
+			md += '## ' + (name || 'ftp-kr.json') + '\n\n';
 			md += this.objects[name];
 		}
 		return md;
@@ -66,15 +66,15 @@ class MdWriter {
 	}
 
 	type(obj: any): void {
-		this.md += `* **${this.address}** `;
+		this.md += `- **${this.address}** `;
 		const enumlist = obj.enum;
 		if (enumlist && enumlist.length <= 5) {
-			this.md += `(enum: ${enumlist.join(', ')})`;
+			this.md += `(enum: ${enumlist.join(', ')}) `;
 		} else if (obj.items) {
 			this.md += `(${obj.items.type}[])`;
-		} else if (obj.type) this.md += `(${obj.type})`;
+		} else if (obj.type) this.md += `(${obj.type}) `;
 		if (obj.deprecationMessage) {
-			this.md += ' (**DEPRECATED: ' + obj.deprecationMessage + '**)';
+			this.md += '(**DEPRECATED: ' + obj.deprecationMessage + '**) ';
 		}
 
 		let desc = obj.description || '';
@@ -82,7 +82,7 @@ class MdWriter {
 			this.object(obj);
 			desc += ` [see properties](${this.address.replace(/\./g, '')})`;
 		}
-		if (desc) this.md += ' - ' + desc;
+		if (desc) this.md += '- ' + desc;
 		this.md += '\n';
 	}
 }

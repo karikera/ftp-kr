@@ -15,7 +15,7 @@
 				"SSLv2_method"
 			],
 			"default": "SSLv23_method",
-			"description": " Optional SSL method to use, default is \"SSLv23_method\". The possible values are listed as https://www.openssl.org/docs/man1.0.2/ssl/ssl.html#DEALING-WITH-PROTOCOL-METHODS , use the function names as strings. For example, \"SSLv3_method\" to force SSL version 3."
+			"description": "Optional SSL method to use, default is \"SSLv23_method\". The possible values are listed as https://www.openssl.org/docs/man1.0.2/ssl/ssl.html#DEALING-WITH-PROTOCOL-METHODS , use the function names as strings. For example, \"SSLv3_method\" to force SSL version 3."
 		},
 		"host": {
 			"type": "string",

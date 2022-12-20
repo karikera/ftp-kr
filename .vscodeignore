@@ -5,8 +5,8 @@ tsconfig.json
 
 ../if-tsb
 node_modules
+/ssh2
 src
 out/schema_to_md.js
 
 images/*.psd
-WANTTODO

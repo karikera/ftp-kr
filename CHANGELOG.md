@@ -1,3 +1,9 @@
+# 1.4.4
+
+- wait loading for command.
+- bugfix - mkdir/rmdir
+- bugix - not in remotePath
+
 # 1.4.3
 
 - ftp explorer - New File / New Directory

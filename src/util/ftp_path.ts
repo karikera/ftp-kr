@@ -28,7 +28,10 @@ export const ftp_path = {
 	},
 	dirname(ftppath: string): string {
 		const idx = ftppath.lastIndexOf('/');
-		if (idx === 0) return '/';
+		if (idx === 0) {
+			if (ftppath.length === 1) throw Error('No more parent');
+			return '/';
+		}
 		if (idx !== -1) return ftppath.substr(0, idx);
 		return '.';
 	},

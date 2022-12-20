@@ -11,12 +11,13 @@ import { promiseErrorWrap } from '../util/util';
 
 export const NOT_CREATED = 'not created connection access';
 export enum FtpErrorCode {
-	REQUEST_MKDIR = 1,
+	REQUEST_RECURSIVE = 1,
 	FILE_NOT_FOUND = 2,
 	REUQEST_RECONNECT_AND_RETRY = 3,
 	REUQEST_RECONNECT_AND_RETRY_ONCE = 4,
 	CONNECTION_REFUSED = 5,
 	AUTH_FAILED = 6,
+	UNKNOWN = 7,
 }
 
 declare global {
@@ -232,7 +233,7 @@ export abstract class FileInterface {
 			ftppath,
 			FtpErrorCode.FILE_NOT_FOUND,
 			undefined,
-			(binpath) => this._rmdir(binpath, true)
+			(binpath) => this._rmdir(binpath)
 		);
 	}
 
@@ -248,13 +249,18 @@ export abstract class FileInterface {
 
 	mkdir(ftppath: string): Promise<void> {
 		return this._callWithName('mkdir', ftppath, 0, undefined, (binpath) =>
-			this._mkdir(binpath, true)
+			this._mkdir(binpath)
 		);
 	}
 
 	readlink(fileinfo: FileInfo, ftppath: string): Promise<string> {
 		if (fileinfo.type !== 'l') throw Error(ftppath + ' is not symlink');
+		if (fileinfo.link !== undefined) {
+			return Promise.resolve(fileinfo.link);
+		}
+
 		this.logWithState('readlink ' + fileinfo.name);
+
 		return promiseErrorWrap(
 			this._readlink(fileinfo, this.str2bin(ftppath)).then(
 				(v) => {
@@ -291,8 +297,8 @@ export abstract class FileInterface {
 		);
 	}
 
-	abstract _mkdir(path: string, recursive: boolean): Promise<void>;
-	abstract _rmdir(path: string, recursive: boolean): Promise<void>;
+	abstract _mkdir(path: string): Promise<void>;
+	abstract _rmdir(path: string): Promise<void>;
 	abstract _delete(ftppath: string): Promise<void>;
 	abstract _put(localpath: File, ftppath: string): Promise<void>;
 	abstract _write(buffer: Buffer, ftppath: string): Promise<void>;

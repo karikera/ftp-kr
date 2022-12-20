@@ -134,19 +134,7 @@ export class SftpConnection extends FileInterface {
 		});
 	}
 
-	private _readLink(ftppath: string): Promise<string> {
-		return this._getSftp().then(
-			(sftp) =>
-				new Promise<string>((resolve, reject) => {
-					sftp.readlink(ftppath, (err, target) => {
-						if (err) return reject(err);
-						resolve(target);
-					});
-				})
-		);
-	}
-
-	private _rmdirSingle(ftppath: string): Promise<void> {
+	_rmdir(ftppath: string): Promise<void> {
 		return this._getSftp().then(
 			(sftp) =>
 				new Promise<void>((resolve, reject) => {
@@ -160,29 +148,6 @@ export class SftpConnection extends FileInterface {
 					});
 				})
 		);
-	}
-
-	async _rmdir(ftppath: string): Promise<void> {
-		const list = await this.list(ftppath);
-		if (list.length === 0) {
-			return await this._rmdirSingle(ftppath);
-		}
-
-		const parentPath = ftppath.endsWith('/') ? ftppath : ftppath + '/';
-
-		for (const item of list) {
-			const name = item.name;
-			const subPath: string = name[0] === '/' ? name : parentPath + name;
-
-			if (item.type === 'd') {
-				if (name !== '.' && name !== '..') {
-					await this.rmdir(subPath);
-				}
-			} else {
-				await this.delete(subPath);
-			}
-		}
-		return this.rmdir(ftppath);
 	}
 
 	_delete(ftppath: string): Promise<void> {
@@ -201,13 +166,16 @@ export class SftpConnection extends FileInterface {
 		);
 	}
 
-	_mkdirSingle(ftppath: string): Promise<void> {
+	_mkdir(ftppath: string): Promise<void> {
 		return this._getSftp().then(
 			(sftp) =>
 				new Promise<void>((resolve, reject) => {
 					sftp.mkdir(ftppath, (err) => {
 						if (err) {
 							if (err.code !== 3 && err.code !== 4 && err.code !== 5) {
+								if (err.code === 2) {
+									err.ftpCode = FtpErrorCode.REQUEST_RECURSIVE;
+								}
 								return reject(err);
 							}
 						}
@@ -217,26 +185,13 @@ export class SftpConnection extends FileInterface {
 		);
 	}
 
-	async _mkdir(ftppath: string): Promise<void> {
-		let idx = 0;
-		for (;;) {
-			const find = ftppath.indexOf('/', idx);
-			if (find === -1) break;
-			idx = find + 1;
-			const parentpath = ftppath.substr(0, find);
-			if (!parentpath) continue;
-			await this._mkdirSingle(parentpath);
-		}
-		await this._mkdirSingle(ftppath);
-	}
-
 	_put(localpath: File, ftppath: string): Promise<void> {
 		return this._getSftp().then(
 			(sftp) =>
 				new Promise<void>((resolve, reject) => {
 					sftp.fastPut(localpath.fsPath, ftppath, (err) => {
 						if (err) {
-							if (err.code === 2) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
+							if (err.code === 2) err.ftpCode = FtpErrorCode.REQUEST_RECURSIVE;
 							reject(err);
 							return;
 						}
@@ -252,7 +207,7 @@ export class SftpConnection extends FileInterface {
 				new Promise<void>((resolve, reject) => {
 					sftp.writeFile(ftppath, buffer, (err) => {
 						if (err) {
-							if (err.code === 2) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
+							if (err.code === 2) err.ftpCode = FtpErrorCode.REQUEST_RECURSIVE;
 							reject(err);
 							return;
 						}
@@ -321,9 +276,6 @@ export class SftpConnection extends FileInterface {
 	}
 
 	_readlink(fileinfo: FileInfo, ftppath: string): Promise<string> {
-		if (fileinfo.link) {
-			return Promise.resolve(fileinfo.link);
-		}
 		return this._getSftp().then(
 			(sftp) =>
 				new Promise<string>((resolve, reject) => {

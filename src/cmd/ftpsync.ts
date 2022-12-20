@@ -8,7 +8,7 @@ import { ftpTree } from '../ftptree';
 import { openSshTerminal } from '../sshmgr';
 import { ftp_path } from '../util/ftp_path';
 import { Command, CommandArgs } from '../vsutil/cmd';
-import { Logger, StringError } from '../vsutil/log';
+import { StringError } from '../vsutil/log';
 import { vsutil } from '../vsutil/vsutil';
 import { Scheduler } from '../vsutil/work';
 import { Workspace } from '../vsutil/ws';
@@ -132,7 +132,7 @@ async function getFileNameFromInput(
 export const commands: Command = {
 	async 'ftpkr.new'(args: CommandArgs) {
 		const { workspace, server, files } = await getSelectedFiles(args);
-		const logger = workspace.query(Logger);
+		const logger = args.getLogger();
 		const config = workspace.query(Config);
 
 		await config.loadTest();
@@ -143,7 +143,7 @@ export const commands: Command = {
 	},
 	async 'ftpkr.mkdir'(args: CommandArgs) {
 		const { workspace, server, files } = await getSelectedFiles(args);
-		const logger = workspace.query(Logger);
+		const logger = args.getLogger();
 		const config = workspace.query(Config);
 
 		await config.loadTest();
@@ -156,7 +156,7 @@ export const commands: Command = {
 		const { workspace, server, files: files_ } = await getSelectedFiles(args);
 		const files = removeChildren(files_);
 
-		const logger = workspace.query(Logger);
+		const logger = args.getLogger();
 		const config = workspace.query(Config);
 
 		logger.show();
@@ -172,7 +172,6 @@ export const commands: Command = {
 				server.ftpUpload(files[0], null, bo)
 			);
 		} else {
-			bo.doNotRefresh = true;
 			const confirmFirst = await isFileCountOver(files, config.noticeFileCount);
 			if (confirmFirst) {
 				bo.confirmFirst = true;
@@ -188,7 +187,7 @@ export const commands: Command = {
 	async 'ftpkr.download'(args: CommandArgs) {
 		const { workspace, server, files } = await getSelectedFiles(args);
 
-		const logger = workspace.query(Logger);
+		const logger = args.getLogger();
 		const config = workspace.query(Config);
 
 		logger.show();
@@ -228,24 +227,31 @@ export const commands: Command = {
 	async 'ftpkr.delete'(args: CommandArgs) {
 		const { workspace, server, files } = await getSelectedFiles(args);
 
-		const logger = workspace.query(Logger);
+		const logger = args.getLogger();
 		const config = workspace.query(Config);
 
 		logger.show();
 
 		await config.loadTest();
 
-		const opts: BatchOptions = {
+		const delOpts: BatchOptions = {
 			skipIgnoreChecking: true,
 		};
 		if (files.length === 1) {
 			const ftppath = server.toFtpPath(files[0]);
-			const ftpFile = await server.ftpStat(ftppath);
-			if (ftpFile === undefined) throw Error(`file not found: ${ftppath}`);
+			const statOpts: BatchOptions = {};
+			let ftpFile = await server.ftpStat(ftppath, undefined, statOpts);
+			if (ftpFile === undefined) {
+				if (statOpts.refreshed) return;
+				ftpFile = await server.ftpStat(ftppath, undefined, {
+					forceRefresh: true,
+				});
+				if (ftpFile === undefined) return;
+			}
 			if (ftpFile.type !== 'd') {
 				await config.reportTaskCompletionPromise(
 					'Delete',
-					server.ftpDelete(ftppath, null, opts)
+					server.ftpDelete(ftppath, null, delOpts)
 				);
 				return;
 			}
@@ -259,14 +265,14 @@ export const commands: Command = {
 		} else {
 			await config.reportTaskCompletionPromise(
 				'Delete',
-				server.deleteAll(files, null, opts)
+				server.deleteAll(files, null, delOpts)
 			);
 		}
 	},
 	async 'ftpkr.diff'(args: CommandArgs) {
 		const { workspace, server, file } = await getSelectedFiles(args);
 
-		const logger = workspace.query(Logger);
+		const logger = args.getLogger();
 		const config = workspace.query(Config);
 
 		logger.show();
@@ -377,10 +383,9 @@ export const commands: Command = {
 		const workspace = args.workspace;
 		const config = workspace.query(Config);
 		const ftp = workspace.query(FtpSyncManager);
+		await config.loadTest();
 		const selected = await ftp.selectServer();
 		if (selected === undefined) return;
-
-		await config.loadTest();
 		await selected.list(config.getBasePath());
 	},
 

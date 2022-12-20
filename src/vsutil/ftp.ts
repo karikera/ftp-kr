@@ -196,43 +196,32 @@ export class FtpConnection extends FileInterface {
 		);
 	}
 
-	_rmdir(ftppath: string, recursive: boolean): Promise<void> {
+	_rmdir(ftppath: string): Promise<void> {
 		const client = this.client;
 		if (!client) return Promise.reject(Error(NOT_CREATED));
 
 		return FtpConnection.wrapToPromise<void>((callback) =>
-			client.rmdir(ftppath, recursive, callback)
+			client.rmdir(ftppath, callback)
 		).catch((err) => {
 			if (err.code === 'ECONNRESET')
 				err.ftpCode = FtpErrorCode.REUQEST_RECONNECT_AND_RETRY_ONCE;
-			else if (err.code === 550) err.ftpCode = FtpErrorCode.FILE_NOT_FOUND;
+			else if (err.code === 550) err.ftpCode = FtpErrorCode.UNKNOWN;
 			throw err;
 		});
 	}
 
-	_mkdirSingle(ftppath: string): Promise<void> {
+	_mkdir(ftppath: string): Promise<void> {
 		const client = this.client;
 		if (!client) return Promise.reject(Error(NOT_CREATED));
 
 		return FtpConnection.wrapToPromise<void>((callback) =>
 			client.mkdir(ftppath, callback)
 		).catch((err) => {
-			if (err.code === 521) return;
+			if (err.code === 521 || err.code === 550) {
+				err.ftpCode = FtpErrorCode.UNKNOWN;
+			}
 			throw err;
 		});
-	}
-
-	async _mkdir(ftppath: string): Promise<void> {
-		let idx = 0;
-		for (;;) {
-			const find = ftppath.indexOf('/', idx);
-			if (find === -1) break;
-			idx = find + 1;
-			const parentpath = ftppath.substr(0, find);
-			if (!parentpath) continue;
-			await this._mkdirSingle(parentpath);
-		}
-		await this._mkdirSingle(ftppath);
 	}
 
 	_delete(ftppath: string): Promise<void> {
@@ -254,9 +243,9 @@ export class FtpConnection extends FileInterface {
 		).catch((err) => {
 			if (err.code === 'ECONNRESET')
 				err.ftpCode = FtpErrorCode.REUQEST_RECONNECT_AND_RETRY_ONCE;
-			else if (err.code === 451) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
-			else if (err.code === 553) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
-			else if (err.code === 550) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
+			else if (err.code === 451) err.ftpCode = FtpErrorCode.REQUEST_RECURSIVE;
+			else if (err.code === 553) err.ftpCode = FtpErrorCode.REQUEST_RECURSIVE;
+			else if (err.code === 550) err.ftpCode = FtpErrorCode.REQUEST_RECURSIVE;
 			throw err;
 		});
 	}
@@ -269,9 +258,9 @@ export class FtpConnection extends FileInterface {
 		).catch((err) => {
 			if (err.code === 'ECONNRESET')
 				err.ftpCode = FtpErrorCode.REUQEST_RECONNECT_AND_RETRY_ONCE;
-			else if (err.code === 451) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
-			else if (err.code === 553) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
-			else if (err.code === 550) err.ftpCode = FtpErrorCode.REQUEST_MKDIR;
+			else if (err.code === 451) err.ftpCode = FtpErrorCode.REQUEST_RECURSIVE;
+			else if (err.code === 553) err.ftpCode = FtpErrorCode.REQUEST_RECURSIVE;
+			else if (err.code === 550) err.ftpCode = FtpErrorCode.REQUEST_RECURSIVE;
 			throw err;
 		});
 	}

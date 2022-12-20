@@ -105,6 +105,8 @@ export class Logger implements WorkspaceItem {
 				if (stack !== null) {
 					const error = err as ErrorObject;
 					console.error(stack);
+					let extensionPathUsed = false;
+					const extensionPath = new File(__dirname).parent().parent().fsPath;
 					this.logRaw(LogLevelEnum.ERROR, stack);
 					const res = await window.showErrorMessage(
 						error.message,
@@ -117,10 +119,7 @@ export class Logger implements WorkspaceItem {
 						output += `Task: ${error.task}\n`;
 					}
 					const pathRemap: string[] = [];
-					pathRemap.push(
-						new File(__dirname).parent().parent().fsPath,
-						'[ftp-kr]'
-					);
+					pathRemap.push(extensionPath, '[ftp-kr]');
 					if (this.workspace) {
 						pathRemap.push(this.workspace.fsPath, '[workspace]');
 					}
@@ -138,6 +137,9 @@ export class Logger implements WorkspaceItem {
 						for (let i = 0; i < pathRemap.length; i += 2) {
 							const prevPath = pathRemap[i];
 							if (path.startsWith(prevPath)) {
+								if (i === 2) {
+									extensionPathUsed = true;
+								}
 								return pathRemap[i + 1] + path.substr(prevPath.length);
 							}
 						}
@@ -213,6 +215,9 @@ export class Logger implements WorkspaceItem {
 						}
 					}
 
+					if (!extensionPathUsed) {
+						output = extensionPath + '\n\n' + output;
+					}
 					vsutil.openNew(output);
 				} else {
 					console.error(err);

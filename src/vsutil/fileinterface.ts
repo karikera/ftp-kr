@@ -90,7 +90,7 @@ export abstract class FileInterface {
 				(err): T => {
 					this.stateBar.close();
 					if (err.ftpCode === ignorecode) return defVal;
-					this.log(name + ' fail: ' + ftppath);
+					this.log(`${name} fail: ${ftppath}, ${err.message || err}`);
 					throw err;
 				}
 			)
@@ -141,7 +141,7 @@ export abstract class FileInterface {
 				},
 				(err) => {
 					this.stateBar.close();
-					this.log('download fail: ' + ftppath);
+					this.log(`download fail: ${ftppath}, ${err.message || err}`);
 					throw err;
 				}
 			)
@@ -171,7 +171,7 @@ export abstract class FileInterface {
 				},
 				(err) => {
 					this.stateBar.close();
-					this.log('view fail: ' + ftppath);
+					this.log(`view fail: ${ftppath}, ${err.message || err}`);
 					throw err;
 				}
 			)
@@ -188,7 +188,7 @@ export abstract class FileInterface {
 				},
 				(err) => {
 					this.stateBar.close();
-					this.log('write fail: ' + ftppath);
+					this.log(`write fail: ${ftppath}, ${err.message || err}`);
 					throw err;
 				}
 			)

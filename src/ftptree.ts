@@ -28,10 +28,12 @@ toVSCodeFileType['l'] = VSCodeFileType.SymbolicLink;
 export class FtpTree
 	implements TreeDataProvider<FtpTreeItem>, FileSystemProvider
 {
-	private readonly _onDidChangeTreeData: EventEmitter<FtpTreeItem> =
-		new EventEmitter<FtpTreeItem>();
-	readonly onDidChangeTreeData: Event<FtpTreeItem> =
-		this._onDidChangeTreeData.event;
+	private readonly _onDidChangeTreeData: EventEmitter<
+		FtpTreeItem | FtpTreeItem[] | undefined | null | void
+	> = new EventEmitter<FtpTreeItem | FtpTreeItem[] | undefined | null | void>();
+	readonly onDidChangeTreeData: Event<
+		FtpTreeItem | FtpTreeItem[] | undefined | null | void
+	> = this._onDidChangeTreeData.event;
 
 	private readonly _onDidChangeFile = new EventEmitter<FileChangeEvent[]>();
 	readonly onDidChangeFile = this._onDidChangeFile.event;
@@ -146,7 +148,7 @@ export class FtpTree
 
 	public refreshTree(target?: VFSState): void {
 		defaultLogger.verbose('refreshTree ' + (target ? target.getUri() : 'all'));
-		if (!target) {
+		if (target === undefined) {
 			FtpTreeItem.clear();
 			this._onDidChangeTreeData.fire();
 			for (const server of this.map.values()) {

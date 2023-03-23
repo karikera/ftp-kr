@@ -84,10 +84,12 @@ export class FtpManager {
 
 	private _updateDestroyTimeout(): void {
 		this._cancelDestroyTimeout();
-		this.destroyTimeout = setTimeout(
-			() => this.disconnect(),
-			this.config.connectionTimeout
-		);
+		if (this.config.connectionTimeout !== 0) {
+			this.destroyTimeout = setTimeout(
+				() => this.disconnect(),
+				this.config.connectionTimeout
+			);
+		}
 	}
 
 	private _cancels(): void {
@@ -124,16 +126,20 @@ export class FtpManager {
 						`Multiple order at same time (previous: ${taskname}, current: ${task.name})`
 					);
 				}
-				let blockTimeout: NodeJS.Timer | null = setTimeout(() => {
-					if (blockTimeout) {
-						this.cancelBlockedCommand = null;
-						this.currentTask = null;
-						blockTimeout = null;
-						const timeoutError = Error('timeout');
-						timeoutError.ftpCode = FtpErrorCode.REUQEST_RECONNECT_AND_RETRY;
-						reject(timeoutError);
-					}
-				}, this.config.blockDetectingDuration);
+				let blockTimeout: NodeJS.Timer | null = null;
+
+				if (this.config.blockDetectingDuration !== 0) {
+					blockTimeout = setTimeout(() => {
+						if (blockTimeout) {
+							this.cancelBlockedCommand = null;
+							this.currentTask = null;
+							blockTimeout = null;
+							const timeoutError = Error('timeout');
+							timeoutError.ftpCode = FtpErrorCode.REUQEST_RECONNECT_AND_RETRY;
+							reject(timeoutError);
+						}
+					}, this.config.blockDetectingDuration);
+				}
 				const stopTimeout = () => {
 					if (blockTimeout) {
 						this.cancelBlockedCommand = null;

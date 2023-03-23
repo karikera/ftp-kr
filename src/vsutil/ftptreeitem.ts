@@ -1,4 +1,4 @@
-import { TreeItem, TreeItemCollapsibleState } from 'vscode';
+import { TreeItem, TreeItemCollapsibleState, TreeItemLabel } from 'vscode';
 
 import { VFSState, VFSSymLink } from '../util/filesystem';
 import { ServerConfig } from '../util/serverinfo';
@@ -9,6 +9,12 @@ import { Scheduler } from './work';
 import { Workspace } from './ws';
 
 const ftpTreeItemFromFile = new Map<VFSState, FtpTreeItem[]>();
+
+function getLabelName(name: string | TreeItemLabel | undefined): string {
+	if (name === undefined) return '';
+	if (typeof name === 'string') return name;
+	return name.label;
+}
 
 export class FtpTreeItem extends TreeItem {
 	public server: FtpTreeServer;
@@ -95,7 +101,7 @@ export class FtpTreeItem extends TreeItem {
 		return (
 			(other.collapsibleState || 0) - (this.collapsibleState || 0) ||
 			+(this.label != null) - +(other.label != null) ||
-			this.label!.localeCompare(other.label!)
+			getLabelName(this.label).localeCompare(getLabelName(other.label))
 		);
 	}
 
@@ -105,6 +111,12 @@ export class FtpTreeItem extends TreeItem {
 		if (this.ftpFile) this.ftpFile.treeCached = true;
 		this.children = items;
 		return items;
+	}
+
+	static *all(): IterableIterator<FtpTreeItem> {
+		for (const items of ftpTreeItemFromFile.values()) {
+			yield* items;
+		}
 	}
 }
 

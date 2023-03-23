@@ -1,11 +1,14 @@
+# it uses the absolute path always
 
-.vscode/**
+.vscode
 .gitignore
+.prettierignore
 tsconfig.json
+TODO
 
 ../if-tsb
 node_modules
-/ssh2
+ssh2
 src
 out/schema_to_md.js
 

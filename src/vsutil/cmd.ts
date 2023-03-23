@@ -47,7 +47,14 @@ async function runCommand(
 					cmdargs.file = new File(arg.fsPath);
 					const files = args[1];
 					if (files && files instanceof Array && files[0] instanceof Uri) {
-						cmdargs.files = files.map((uri: Uri) => new File(uri.fsPath));
+						cmdargs.files = [];
+						for (const uri of files) {
+							if (uri.scheme === 'file') {
+								cmdargs.files.push(new File(uri));
+							}
+						}
+						if (cmdargs.files.indexOf(cmdargs.file) === -1)
+							cmdargs.files.push(cmdargs.file);
 					} else {
 						cmdargs.files = [cmdargs.file];
 					}
@@ -59,9 +66,11 @@ async function runCommand(
 				const editor = window.activeTextEditor;
 				if (editor) {
 					const doc = editor.document;
-					cmdargs.file = new File(doc.uri.fsPath);
-					cmdargs.files = [cmdargs.file];
-					cmdargs.openedFile = true;
+					if (doc.uri.scheme === 'file') {
+						cmdargs.file = new File(doc.uri.fsPath);
+						cmdargs.files = [cmdargs.file];
+						cmdargs.openedFile = true;
+					}
 					await doc.save();
 				}
 			}

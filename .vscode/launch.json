@@ -19,6 +19,12 @@
 				"--extensionDevelopmentPath=${workspaceRoot}",
 				"--extensionTestsPath=${workspaceRoot}/test"
 			]
+		},{
+			"name": "if-tsb",
+			"type": "node",
+			"program": "./node_modules/if-tsb/cli.bundle.js",
+			"args": ["-w"],
+			"request": "launch"
 		}
 	]
 }

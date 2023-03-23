@@ -118,13 +118,14 @@ class FtpKrConfigClass extends ConfigContainer<FtpKrConfigProperties> {
 		config.keepPasswordInMemory = config.keepPasswordInMemory !== false;
 
 		if ('passphrase' in config) config.passphrase = config.passphrase + '';
-		config.connectionTimeout = Number(config.connectionTimeout || 60000);
+		config.connectionTimeout = Number(config.connectionTimeout);
+		if (isNaN(config.connectionTimeout)) config.connectionTimeout = 60000;
 		config.autoDownloadRefreshTime = config.refreshTime = Number(
 			config.refreshTime || config.autoDownloadRefreshTime || 1000
 		);
-		config.blockDetectingDuration = Number(
-			config.blockDetectingDuration || 8000
-		);
+		config.blockDetectingDuration = Number(config.blockDetectingDuration);
+		if (isNaN(config.blockDetectingDuration))
+			config.blockDetectingDuration = 8000;
 		if ('privateKey' in config) config.privateKey = config.privateKey + '';
 		config.showGreeting = config.showGreeting === true;
 		if (typeof config.ftpOverride !== 'object') delete config.ftpOverride;

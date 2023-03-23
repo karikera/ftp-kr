@@ -479,7 +479,7 @@ export class FtpCacher {
 
 						if (oldfile) {
 							if (oldfile instanceof VFSDirectory) {
-								oldfile.lmtimeWithThreshold = oldfile.lmtime = +stats.mtime;
+								oldfile.lmtimeWithThreshold = oldfile.lmtime = stats.mtimeMs;
 								report.file = oldfile;
 								return report;
 							}
@@ -488,7 +488,7 @@ export class FtpCacher {
 						await this._mkdir(task, ftppath);
 
 						const dir = this.fs.mkdir(ftppath);
-						dir.lmtimeWithThreshold = dir.lmtime = +stats.mtime;
+						dir.lmtimeWithThreshold = dir.lmtime = stats.mtimeMs;
 						dir.remoteModified = false;
 						report.file = dir;
 						return report;
@@ -505,7 +505,7 @@ export class FtpCacher {
 
 						const file = this.fs.createFromPath(ftppath);
 						file.date = 0;
-						file.lmtimeWithThreshold = file.lmtime = +stats.mtime;
+						file.lmtimeWithThreshold = file.lmtime = stats.mtimeMs;
 						file.remoteModified = false;
 						file.size = stats.size;
 						report.file = file;
@@ -527,7 +527,7 @@ export class FtpCacher {
 					return await next();
 				}
 
-				const mtime = +stats.mtime;
+				const mtime = stats.mtimeMs;
 				const isLatest =
 					mtime === oldfile.lmtime || mtime <= oldfile.lmtimeWithThreshold;
 
@@ -630,7 +630,7 @@ export class FtpCacher {
 				}
 				const stats = await path.stat();
 				file.size = stats.size;
-				file.lmtime = +stats.mtime;
+				file.lmtime = stats.mtimeMs;
 				file.lmtimeWithThreshold =
 					file.lmtime + this.mainConfig.downloadTimeExtraThreshold;
 				file.remoteModified = false;
@@ -700,7 +700,7 @@ export class FtpCacher {
 			throw e;
 		}
 		const file = await this.ftpStat(ftppath, task);
-		if (!file || (file.lmtime !== 0 && file.lmtime < +stats.mtime)) {
+		if (!file || (file.lmtime !== 0 && file.lmtime < stats.mtimeMs)) {
 			if (this.mainConfig === this.config && this.mainConfig.autoUpload) {
 				await this.ftpUpload(path, task, {
 					whenRemoteModed: this.mainConfig.ignoreRemoteModification
@@ -720,7 +720,7 @@ export class FtpCacher {
 			await this.ftpmgr.download(task, path, ftppath);
 		}
 		stats = await path.stat();
-		file.lmtime = +stats.mtime;
+		file.lmtime = stats.mtimeMs;
 		file.lmtimeWithThreshold =
 			file.lmtime + this.mainConfig.downloadTimeExtraThreshold;
 		file.remoteModified = false;
@@ -1206,7 +1206,6 @@ export class FtpCacher {
 		for (const p of path) {
 			const stat = await this.ftpStat(p, task);
 			if (await p.isDirectory()) {
-				if (stat instanceof VFSDirectory) continue;
 				const list: { [key: string]: Stats } = {};
 				try {
 					await this._getUpdatedFile(stat, p, list, options);
